@@ -7,6 +7,8 @@
 #define _ASM_ATOMIC_H
 
 #include <linux/types.h>
+/* Include barrier.h for smp_load_acquire / smp_store_release */
+#include <asm/barrier.h>
 
 /* atomic_t is defined in linux/types.h via asm-generic/atomic-types.h */
 

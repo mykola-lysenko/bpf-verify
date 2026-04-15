@@ -125,6 +125,17 @@ HARNESS_TEMPLATE = """\
  */
 
 /* ---------------------------------------------------------------
+ * Step 0: Override autoconf.h CONFIG_* settings that cause BPF
+ * compilation failures. kconfig.h (force-included via -include)
+ * pulls in generated/autoconf.h which may define these as 1.
+ * We undef them here so they take effect before kernel headers.
+ * --------------------------------------------------------------- */
+/* CONFIG_NUMA pulls in asm/sparsemem.h and NUMA-specific types */
+#undef CONFIG_NUMA
+/* CONFIG_PARAVIRT pulls in x86 inline asm in paravirt.h */
+#undef CONFIG_PARAVIRT
+
+/* ---------------------------------------------------------------
  * Step 1: Suppress kernel export / module metadata macros.
  * These produce non-BPF ELF sections that libbpf cannot handle.
  * --------------------------------------------------------------- */

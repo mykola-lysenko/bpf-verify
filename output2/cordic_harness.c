@@ -3,6 +3,17 @@
  */
 
 /* ---------------------------------------------------------------
+ * Step 0: Override autoconf.h CONFIG_* settings that cause BPF
+ * compilation failures. kconfig.h (force-included via -include)
+ * pulls in generated/autoconf.h which may define these as 1.
+ * We undef them here so they take effect before kernel headers.
+ * --------------------------------------------------------------- */
+/* CONFIG_NUMA pulls in asm/sparsemem.h and NUMA-specific types */
+#undef CONFIG_NUMA
+/* CONFIG_PARAVIRT pulls in x86 inline asm in paravirt.h */
+#undef CONFIG_PARAVIRT
+
+/* ---------------------------------------------------------------
  * Step 1: Suppress kernel export / module metadata macros.
  * These produce non-BPF ELF sections that libbpf cannot handle.
  * --------------------------------------------------------------- */
@@ -123,12 +134,39 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
+/* Step 1: define renamed struct tag BEFORE the function-rename macro. */
+struct __bpf_cordic_iq { s32 i; s32 q; };
+/* Step 2: rename function and inject internal_linkage.
+ * The macro also renames 'struct cordic_iq' -> 'struct __bpf_cordic_iq'. */
+#define cordic_iq       __bpf_cordic_iq
+#define cordic_calc_iq  __attribute__((internal_linkage)) __bpf_cordic_calc_iq
+/* Step 3: block linux/cordic.h — its struct/function declarations would conflict. */
+#define __CORDIC_H_
+/* Provide the macros that linux/cordic.h would have given us. */
+#define CORDIC_ANGLE_GEN        39797
+#define CORDIC_PRECISION_SHIFT  16
+#define CORDIC_NUM_ITER         (CORDIC_PRECISION_SHIFT + 2)
+#define CORDIC_FIXED(X)         ((s32)((X) << CORDIC_PRECISION_SHIFT))
+#define CORDIC_FLOAT(X)         (((X) >= 0)         ? ((((X) >> (CORDIC_PRECISION_SHIFT - 1)) + 1) >> 1)         : -((((-(X)) >> (CORDIC_PRECISION_SHIFT - 1)) + 1) >> 1))
 
 /* Include the kernel source file */
 #include "/home/ubuntu/linux-6.1.102/lib/math/cordic.c"
 
 /* Per-file extra preamble: stubs injected AFTER the source file include
  * (so they can reference types defined in the source). */
+/* Undef the rename macros so identifiers are clean in the harness body. */
+#undef cordic_iq
+#undef cordic_calc_iq
+/* Alias the original struct name to the renamed tag. */
+typedef struct __bpf_cordic_iq cordic_iq_t;
+/* Pointer-based wrapper: calls __bpf_cordic_calc_iq (renamed, internal-linkage
+ * version of cordic_calc_iq) and writes the result through a pointer,
+ * avoiding StructRet in the harness body. */
+static __attribute__((__noinline__))
+void cordic_calc_iq_to_ptr(s32 theta, struct __bpf_cordic_iq *out)
+{
+    *out = __bpf_cordic_calc_iq(theta);
+}
 
 
 /* Post-include fixups: redefine symbols that were declared as externs
@@ -155,8 +193,12 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 __attribute__((section("socket"), used))
 int bpf_prog_cordic(void *ctx)
 {
-    /* cordic_calc_iq computes i/q coordinate for a given angle */
-    struct cordic_iq result = cordic_calc_iq(45);
+    /* cordic_calc_iq computes i/q coordinate for a given angle.
+     * cordic_calc_iq() returns struct by value (StructRet) which BPF does not
+     * support. We use the pointer-based wrapper cordic_calc_iq_to_ptr() instead.
+     * The wrapper is defined in EXTRA_PREAMBLE after the source include. */
+    struct __bpf_cordic_iq result;
+    cordic_calc_iq_to_ptr(45, &result);
     return (int)(result.i + result.q);
     return 0;
 }

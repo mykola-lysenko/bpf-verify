@@ -8,6 +8,8 @@
 
 #include <linux/types.h>
 #include <asm/types.h>
+/* Include pgtable_types.h for pgtable_t, pgprot_t, pgd_t etc. needed by mm_types.h */
+#include <asm/pgtable_types.h>
 
 /* Define NCAPINTS/NBUGINTS directly (from asm/cpufeatures.h) to avoid circular include */
 #ifndef NCAPINTS
