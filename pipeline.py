@@ -15,6 +15,7 @@ SHIM = Path(__file__).parent / "shims"
 OUTPUT = Path("/home/ubuntu/bpf-verify/output2")
 VERISTAT = "/home/ubuntu/bpf-verify/veristat"
 CLANG = "/home/ubuntu/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/bin/clang-18"
+LLVM_OBJCOPY = "/home/ubuntu/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/bin/llvm-objcopy"
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
 
@@ -2224,6 +2225,19 @@ def compile_harness(src_name, src_path, harness_body, out_path):
     # including the DATASEC entry for .maps that libbpf requires.
     # Running pahole -J would overwrite this BTF and REMOVE the DATASEC,
     # causing libbpf to fail with "DATASEC '.maps' not found".
+
+    # Strip .BTF.ext (function-info / line-info) from the object.
+    # This section causes the BPF verifier to look up the program's ctx type
+    # in btf_vmlinux, which is absent on this kernel (no /sys/kernel/btf/).
+    # Without .BTF.ext the verifier skips that check entirely while the
+    # .BTF section (needed for map key/value types) is preserved.
+    strip_result = subprocess.run(
+        [LLVM_OBJCOPY, "--remove-section=.BTF.ext", str(out_path)],
+        capture_output=True, text=True
+    )
+    if strip_result.returncode != 0:
+        # Non-fatal: log but don't fail the compile step
+        errors.append(f"[warn] llvm-objcopy strip .BTF.ext failed: {strip_result.stderr.strip()}")
 
     return True, errors
 
