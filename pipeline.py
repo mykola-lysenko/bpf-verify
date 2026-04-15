@@ -681,8 +681,12 @@ HARNESS_BODIES = {
     return (int)r;""",
 
     "cordic": """\
-    /* cordic_calc_iq computes i/q coordinate for a given angle */
-    struct cordic_iq result = cordic_calc_iq(45);
+    /* cordic_calc_iq computes i/q coordinate for a given angle.
+     * cordic_calc_iq() returns struct by value (StructRet) which BPF does not
+     * support. We use the pointer-based wrapper cordic_calc_iq_to_ptr() instead.
+     * The wrapper is defined in EXTRA_PREAMBLE after the source include. */
+    struct __bpf_cordic_iq result;
+    cordic_calc_iq_to_ptr(45, &result);
     return (int)(result.i + result.q);""",
     # ---------------------------------------------------------------
     # Phase 2: 7 new high-priority targets
@@ -1532,6 +1536,28 @@ enum dump_prefix_type {
     "lib_sha256": """\
 #define sha256_finup_2x __attribute__((internal_linkage)) sha256_finup_2x
 """,
+    # cordic_calc_iq() returns struct cordic_iq by value — BPF does not allow
+    # aggregate (struct) returns (StructRet ABI).
+    # Fix: rename the function and mark it internal_linkage so the BPF backend
+    # accepts it; provide a pointer-based wrapper in EXTRA_PREAMBLE.
+    "cordic": """\
+/* Step 1: define renamed struct tag BEFORE the function-rename macro. */
+struct __bpf_cordic_iq { s32 i; s32 q; };
+/* Step 2: rename function and inject internal_linkage.
+ * The macro also renames 'struct cordic_iq' -> 'struct __bpf_cordic_iq'. */
+#define cordic_iq       __bpf_cordic_iq
+#define cordic_calc_iq  __attribute__((internal_linkage)) __bpf_cordic_calc_iq
+/* Step 3: block linux/cordic.h — its struct/function declarations would conflict. */
+#define __CORDIC_H_
+/* Provide the macros that linux/cordic.h would have given us. */
+#define CORDIC_ANGLE_GEN        39797
+#define CORDIC_PRECISION_SHIFT  16
+#define CORDIC_NUM_ITER         (CORDIC_PRECISION_SHIFT + 2)
+#define CORDIC_FIXED(X)         ((s32)((X) << CORDIC_PRECISION_SHIFT))
+#define CORDIC_FLOAT(X)         (((X) >= 0) \
+        ? ((((X) >> (CORDIC_PRECISION_SHIFT - 1)) + 1) >> 1) \
+        : -((((-(X)) >> (CORDIC_PRECISION_SHIFT - 1)) + 1) >> 1))
+""",
     "reciprocal_div": """\
 /* Step 1: define renamed struct tags BEFORE the function-rename macros. */
 struct __bpf_recip_rv  { unsigned int m; unsigned char sh1, sh2; };
@@ -1897,6 +1923,25 @@ EXTRA_PREAMBLE = {
     #      (__bpf_recip_rv) directly, avoiding StructRet in the harness body.
     #   3. Define 'struct reciprocal_value' as an alias for 'struct __bpf_recip_rv'
     #      so the harness body can use the familiar type name.
+    # cordic_calc_iq() was renamed to __bpf_cordic_calc_iq in EXTRA_PRE_INCLUDE.
+    # Here we:
+    #   1. Undef the rename macros so identifiers are clean in the harness body.
+    #   2. Provide a pointer-based wrapper to avoid StructRet in the harness body.
+    "cordic": """\
+/* Undef the rename macros so identifiers are clean in the harness body. */
+#undef cordic_iq
+#undef cordic_calc_iq
+/* Alias the original struct name to the renamed tag. */
+typedef struct __bpf_cordic_iq cordic_iq_t;
+/* Pointer-based wrapper: calls __bpf_cordic_calc_iq (renamed, internal-linkage
+ * version of cordic_calc_iq) and writes the result through a pointer,
+ * avoiding StructRet in the harness body. */
+static __attribute__((__noinline__))
+void cordic_calc_iq_to_ptr(s32 theta, struct __bpf_cordic_iq *out)
+{
+    *out = __bpf_cordic_calc_iq(theta);
+}
+""",
     "reciprocal_div": """\
 /* Undef the function-rename macros so identifiers are clean in the harness body. */
 #undef reciprocal_value
