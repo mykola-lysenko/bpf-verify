@@ -1,17 +1,17 @@
 Processing 'bcd.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/bcd.bpf.o/bpf_prog_bcd, DURATION US: 21, VERDICT: success, VERIFIER LOG:
-verification time 21 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/bcd.bpf.o/bpf_prog_bcd, DURATION US: 16, VERDICT: success, VERIFIER LOG:
+verification time 16 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'clz_tab.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/clz_tab.bpf.o/bpf_prog_clz_tab, DURATION US: 21, VERDICT: success, VERIFIER LOG:
-verification time 21 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/clz_tab.bpf.o/bpf_prog_clz_tab, DURATION US: 12, VERDICT: success, VERIFIER LOG:
+verification time 12 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'cmpdi2.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/cmpdi2.bpf.o/bpf_prog_cmpdi2, DURATION US: 280, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/cmpdi2.bpf.o/bpf_prog_cmpdi2, DURATION US: 223, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_cmpdi2#22
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -26,14 +26,14 @@ reg type unsupported for arg#0 function bpf_prog_cmpdi2#22
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *va = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff8880843fdc00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae2400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vb = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff8880843fdc00      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae2400      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!va || !vb) return 0;
 15: (15) if r7 == 0x0 goto pc+56      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -116,12 +116,12 @@ reg type unsupported for arg#0 function bpf_prog_cmpdi2#22
 ; BPF_ASSERT(r + rrev == 2);
 71: (63) *(u32 *)(r1 +0) = r1
 R1 invalid mem access 'scalar'
-verification time 280 usec
+verification time 223 usec
 stack depth 8
 processed 76 insns (limit 1000000) max_states_per_insn 0 total_states 6 peak_states 6 mark_read 2
 
 Processing 'muldi3.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/muldi3.bpf.o/bpf_prog_muldi3, DURATION US: 192, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/muldi3.bpf.o/bpf_prog_muldi3, DURATION US: 158, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_muldi3#20
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -136,14 +136,14 @@ reg type unsupported for arg#0 function bpf_prog_muldi3#20
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *va = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff8880843fe000       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae3400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vb = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff8880843fe000      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae3400      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!va || !vb) return 0;
 15: (15) if r7 == 0x0 goto pc+42      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -205,13 +205,13 @@ reg type unsupported for arg#0 function bpf_prog_muldi3#20
 ; BPF_ASSERT(r1 == r2);
 56: (63) *(u32 *)(r1 +0) = r1
 R1 invalid mem access 'scalar'
-verification time 192 usec
+verification time 158 usec
 stack depth 8
 processed 55 insns (limit 1000000) max_states_per_insn 0 total_states 2 peak_states 2 mark_read 1
 
 Processing 'ashldi3.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/ashldi3.bpf.o/bpf_prog_ashldi3, DURATION US: 12, VERDICT: success, VERIFIER LOG:
-verification time 12 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/ashldi3.bpf.o/bpf_prog_ashldi3, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -229,24 +229,25 @@ processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_stat
 
 Processing 'dynamic_queue_limits.bpf.o'...
 Processing 'memweight.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/memweight.bpf.o/bpf_prog_memweight, DURATION US: 28, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/memweight.bpf.o/bpf_prog_memweight, DURATION US: 24, VERDICT: failure, VERIFIER LOG:
 Validating memweight() func#1...
 btf_vmlinux is malformed
 arg#0 reference type('UNKNOWN ') size cannot be determined: -22
-verification time 28 usec
+verification time 24 usec
 stack depth 0+0
 processed 0 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'plist.bpf.o'...
+Processing 'find_bit.bpf.o'...
 Processing 'sort.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/sort.bpf.o/bpf_prog_sort, DURATION US: 32, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/sort.bpf.o/bpf_prog_sort, DURATION US: 31, VERDICT: failure, VERIFIER LOG:
 unknown opcode 8d
-verification time 32 usec
+verification time 31 usec
 stack depth 0+0
 processed 0 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'win_minmax.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/win_minmax.bpf.o/bpf_prog_win_minmax, DURATION US: 206, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/win_minmax.bpf.o/bpf_prog_win_minmax, DURATION US: 195, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_win_minmax#26
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -261,14 +262,14 @@ reg type unsupported for arg#0 function bpf_prog_win_minmax#26
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *vt   = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff8880843fe400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae2c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vmeas = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff8880843fe400      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae2c00      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!vt || !vmeas) return 0;
 15: (15) if r7 == 0x0 goto pc+66      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -337,12 +338,12 @@ reg type unsupported for arg#0 function bpf_prog_win_minmax#26
 ; BPF_ASSERT(v <= meas);
 77: (63) *(u32 *)(r3 +0) = r3
 R3 invalid mem access 'scalar'
-verification time 206 usec
+verification time 195 usec
 stack depth 8
 processed 62 insns (limit 1000000) max_states_per_insn 0 total_states 5 peak_states 5 mark_read 3
 
 Processing 'gcd.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/gcd.bpf.o/bpf_prog_gcd, DURATION US: 1732, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/gcd.bpf.o/bpf_prog_gcd, DURATION US: 1642, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_gcd#20
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -357,14 +358,14 @@ reg type unsupported for arg#0 function bpf_prog_gcd#20
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *va = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff8880843fc000       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae1c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vb = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff8880843fc000      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae1c00      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!va || !vb) return 0;
 15: (15) if r7 == 0x0 goto pc+62      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -1100,56 +1101,513 @@ reg type unsupported for arg#0 function bpf_prog_gcd#20
 55: (bf) r0 = r5
 ; a -= b;
 infinite loop detected at insn 56
-verification time 1732 usec
+verification time 1642 usec
 stack depth 24
 processed 505 insns (limit 1000000) max_states_per_insn 2 total_states 17 peak_states 17 mark_read 1
 
 Processing 'lcm.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/lcm.bpf.o/bpf_prog_lcm, DURATION US: 13, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/lcm.bpf.o/bpf_prog_lcm, DURATION US: 14, VERDICT: failure, VERIFIER LOG:
 42: a >>= 1;
 back-edge from insn 42 to 43
-verification time 13 usec
+verification time 14 usec
 stack depth 0
 processed 0 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'reciprocal_div.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/reciprocal_div.bpf.o/bpf_prog_reciprocal_div, DURATION US: 41, VERDICT: success, VERIFIER LOG:
-verification time 41 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/reciprocal_div.bpf.o/bpf_prog_reciprocal_div, DURATION US: 40, VERDICT: success, VERIFIER LOG:
+verification time 40 usec
 stack depth 8+0
 processed 10 insns (limit 1000000) max_states_per_insn 0 total_states 1 peak_states 1 mark_read 1
 
+Processing 'int_sqrt.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/int_sqrt.bpf.o/bpf_prog_int_sqrt, DURATION US: 728, VERDICT: failure, VERIFIER LOG:
+btf_vmlinux is malformed
+reg type unsupported for arg#0 function bpf_prog_int_sqrt#20
+0: R1=ctx(off=0,imm=0) R10=fp0
+; int bpf_prog_int_sqrt(void *ctx)
+0: (b7) r6 = 0                        ; R6_w=0
+; __u32 key0 = 0;
+1: (63) *(u32 *)(r10 -4) = r6         ; R6_w=0 R10=fp0 fp-8=0000????
+2: (bf) r2 = r10                      ; R2_w=fp0 R10=fp0
+3: (07) r2 += -4                      ; R2_w=fp-4
+; __u64 *vx = bpf_map_lookup_elem(&input_map, &key0);
+4: (18) r1 = 0xffff888065ae1000       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
+; if (!vx) return 0;
+7: (15) if r0 == 0x0 goto pc+81       ; R0_w=map_value(off=0,ks=4,vs=8,imm=0)
+; unsigned long x = (unsigned long)(*vx & 0xfffff);
+8: (79) r1 = *(u64 *)(r0 +0)          ; R0_w=map_value(off=0,ks=4,vs=8,imm=0) R1_w=scalar()
+; unsigned long x = (unsigned long)(*vx & 0xfffff);
+9: (57) r1 &= 1048575                 ; R1=scalar(umax=1048575,var_off=(0x0; 0xfffff))
+; if (x == 0) return 0;
+10: (15) if r1 == 0x0 goto pc+78      ; R1=scalar(umax=1048575,var_off=(0x0; 0xfffff))
+11: (bf) r6 = r1                      ; R1=scalar(id=2,umax=1048575,var_off=(0x0; 0xfffff)) R6_w=scalar(id=2,umax=1048575,var_off=(0x0; 0xfffff))
+12: (15) if r1 == 0x1 goto pc+55      ; R1=scalar(id=2,umax=1048575,var_off=(0x0; 0xfffff))
+13: (b7) r2 = 15                      ; R2_w=15
+14: (b7) r3 = 65536                   ; R3_w=65536
+; if (!(word & (~0UL << (BITS_PER_LONG - 16)))) { r -= 16; word <<= 16; }
+15: (2d) if r3 > r1 goto pc+1         ; R1=scalar(id=2,umin=65536,umax=1048575,var_off=(0x0; 0xfffff)) R3_w=65536
+16: (b7) r2 = 31                      ; R2_w=31
+17: (b7) r5 = 48                      ; R5=48
+18: (2d) if r3 > r1 goto pc+1         ; R1=scalar(id=2,umin=65536,umax=1048575,var_off=(0x0; 0xfffff)) R3=65536
+19: (b7) r5 = 32                      ; R5_w=32
+20: (bf) r4 = r1                      ; R1=scalar(id=2,umin=65536,umax=1048575,var_off=(0x0; 0xfffff)) R4_w=scalar(id=2,umin=65536,umax=1048575,var_off=(0x0; 0xfffff))
+21: (6f) r4 <<= r5                    ; R4_w=scalar(umin=281474976710656,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R5_w=32
+; if (!(word & (~0UL << (BITS_PER_LONG -  8)))) { r -=  8; word <<=  8; }
+22: (bf) r3 = r2                      ; R2=31 R3_w=31
+23: (07) r3 += -8                     ; R3_w=23
+24: (18) r5 = 0x100000000000000       ; R5_w=72057594037927936
+26: (2d) if r5 > r4 goto pc+1         ; R4_w=scalar(umin=72057594037927936,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R5_w=72057594037927936
+27: (bf) r3 = r2                      ; R2=31 R3=31
+28: (bf) r2 = r4                      ; R2_w=scalar(id=4,umin=72057594037927936,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R4=scalar(id=4,umin=72057594037927936,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0)
+29: (67) r2 <<= 8                     ; R2_w=scalar(umax=1152920405095219200,var_off=(0x0; 0xfffff0000000000),s32_max=0,u32_max=0)
+30: (2d) if r5 > r4 goto pc+1         ; R4=scalar(id=4,umin=72057594037927936,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R5=72057594037927936
+31: (bf) r2 = r4                      ; R2_w=scalar(id=4,umin=72057594037927936,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R4=scalar(id=4,umin=72057594037927936,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0)
+; if (!(word & (~0UL << (BITS_PER_LONG -  4)))) { r -=  4; word <<=  4; }
+32: (bf) r4 = r3                      ; R3=31 R4_w=31
+33: (07) r4 += -4                     ; R4_w=27
+34: (18) r5 = 0x1000000000000000      ; R5_w=1152921504606846976
+36: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(id=4,umin=1152921504606846976,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R5_w=1152921504606846976
+37: (bf) r4 = r3                      ; R3=31 R4=31
+38: (bf) r3 = r2                      ; R2=scalar(id=4,umin=1152921504606846976,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R3_w=scalar(id=4,umin=1152921504606846976,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0)
+39: (67) r3 <<= 4                     ; R3_w=scalar(umax=72057525318451200,var_off=(0x0; 0xfffff000000000),s32_max=0,u32_max=0)
+40: (2d) if r5 > r2 goto pc+1         ; R2=scalar(id=4,umin=1152921504606846976,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R5=1152921504606846976
+41: (bf) r3 = r2                      ; R2=scalar(id=4,umin=1152921504606846976,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R3_w=scalar(id=4,umin=1152921504606846976,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0)
+; if (!(word & (~0UL << (BITS_PER_LONG -  2)))) { r -=  2; word <<=  2; }
+42: (bf) r2 = r4                      ; R2_w=31 R4=31
+43: (07) r2 += 62                     ; R2_w=93
+44: (18) r5 = 0x4000000000000000      ; R5_w=4611686018427387904
+46: (2d) if r5 > r3 goto pc+1         ; R3_w=scalar(id=4,umin=4611686018427387904,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R5_w=4611686018427387904
+47: (bf) r2 = r4                      ; R2=31 R4=31
+48: (bf) r4 = r3                      ; R3=scalar(id=4,umin=4611686018427387904,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R4_w=scalar(id=4,umin=4611686018427387904,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0)
+49: (67) r4 <<= 2                     ; R4_w=scalar(umax=18014381329612800,var_off=(0x0; 0x3ffffc00000000),s32_max=0,u32_max=0)
+50: (2d) if r5 > r3 goto pc+1         ; R3=scalar(id=4,umin=4611686018427387904,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R5=4611686018427387904
+51: (bf) r4 = r3                      ; R3=scalar(id=4,umin=4611686018427387904,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0) R4_w=scalar(id=4,umin=4611686018427387904,umax=4503595332403200,var_off=(0x0; 0xfffff00000000),s32_min=0,s32_max=0,u32_max=0)
+; if (!(word & (~0UL << (BITS_PER_LONG -  1)))) { r -=  1; }
+52: (a7) r4 ^= -1                     ; R4_w=scalar(umin=18442240478377148415,var_off=(0xfff00000ffffffff; 0xfffff00000000),s32_min=-1,u32_min=-1)
+53: (c7) r4 s>>= 63                   ; R4_w=-1
+54: (0f) r2 += r4                     ; R2_w=30 R4_w=-1
+; m = 1UL << (__fls(x) & ~1UL);
+55: (57) r2 &= 62                     ; R2_w=30
+56: (b7) r5 = 1                       ; R5_w=1
+; m = 1UL << (__fls(x) & ~1UL);
+57: (6f) r5 <<= r2                    ; R2_w=30 R5_w=1073741824
+58: (b7) r3 = 0                       ; R3_w=0
+59: (bf) r2 = r1                      ; R1=scalar(id=2,umin=65536,umax=1048575,var_off=(0x0; 0xfffff)) R2_w=scalar(id=2,umin=65536,umax=1048575,var_off=(0x0; 0xfffff))
+60: (05) goto pc+13
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=1073741824 R5=1073741824
+; b = y + m;
+75: (0f) r5 += r3                     ; R3=0 R5_w=1073741824
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2=scalar(id=2,umin=1073741824,umax=1048575,var_off=(0x0; 0xfffff)) R5_w=1073741824
+78: (bf) r6 = r4                      ; R4_w=1073741824 R6_w=1073741824
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2=scalar(id=2,umin=1073741824,umax=1048575,var_off=(0x0; 0xfffff)) R5_w=1073741824
+81: (bf) r0 = r5                      ; R0_w=1073741824 R5_w=1073741824
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=0
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=0 R6_w=1073741824
+63: (1f) r2 -= r0                     ; R0=1073741824 R2_w=scalar(umin=18446744072635809792,umax=18446744072636858367,var_off=(0xffffffffc0000000; 0xfffff),u32_min=-1073741824,u32_max=-1072693249)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4=1073741824 R5_w=1073741824
+65: (77) r5 >>= 2                     ; R5_w=268435456
+66: (bf) r3 = r6                      ; R3_w=1073741824 R6_w=1073741824
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4=1073741824
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=268435456 R5_w=268435456
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=1073741824 R5_w=1342177280
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744072635809792,umax=18446744072636858367,var_off=(0xffffffffc0000000; 0xfffff),u32_min=-1073741824,u32_max=-1072693249) R5_w=1342177280
+78: (bf) r6 = r4                      ; R4=268435456 R6=268435456
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2=scalar(umin=18446744072635809792,umax=18446744072636858367,var_off=(0xffffffffc0000000; 0xfffff),u32_min=-1073741824,u32_max=-1072693249) R5=1342177280
+81: (bf) r0 = r5                      ; R0_w=1342177280 R5=1342177280
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=536870912
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=536870912 R6_w=805306368
+63: (1f) r2 -= r0                     ; R0_w=1342177280 R2_w=scalar(umin=18446744071293632512,umax=18446744071294681087,var_off=(0xffffffff70000000; 0xfffff),s32_min=1879048192,s32_max=1880096767,u32_min=1879048192,u32_max=1880096767)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4=268435456 R5_w=268435456
+65: (77) r5 >>= 2                     ; R5_w=67108864
+66: (bf) r3 = r6                      ; R3=805306368 R6=805306368
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4=268435456
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=67108864 R5=67108864
+; b = y + m;
+75: (0f) r5 += r3                     ; R3=805306368 R5_w=872415232
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2=scalar(umin=18446744071293632512,umax=18446744071294681087,var_off=(0xffffffff70000000; 0xfffff),s32_min=1879048192,s32_max=1880096767,u32_min=1879048192,u32_max=1880096767) R5_w=872415232
+78: (bf) r6 = r4                      ; R4_w=67108864 R6_w=67108864
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2=scalar(umin=18446744071293632512,umax=18446744071294681087,var_off=(0xffffffff70000000; 0xfffff),s32_min=1879048192,s32_max=1880096767,u32_min=1879048192,u32_max=1880096767) R5_w=872415232
+81: (bf) r0 = r5                      ; R0_w=872415232 R5_w=872415232
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=402653184
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=402653184 R6_w=469762048
+63: (1f) r2 -= r0                     ; R0_w=872415232 R2_w=scalar(umin=18446744070421217280,umax=18446744070422265855,var_off=(0xffffffff3c000000; 0xfffff),s32_min=1006632960,s32_max=1007681535,u32_min=1006632960,u32_max=1007681535)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=67108864 R5_w=67108864
+65: (77) r5 >>= 2                     ; R5_w=16777216
+66: (bf) r3 = r6                      ; R3_w=469762048 R6_w=469762048
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=67108864
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=16777216 R5_w=16777216
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=469762048 R5_w=486539264
+76: (b7) r6 = 0                       ; R6=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2=scalar(umin=18446744070421217280,umax=18446744070422265855,var_off=(0xffffffff3c000000; 0xfffff),s32_min=1006632960,s32_max=1007681535,u32_min=1006632960,u32_max=1007681535) R5=486539264
+78: (bf) r6 = r4                      ; R4=16777216 R6_w=16777216
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2=scalar(umin=18446744070421217280,umax=18446744070422265855,var_off=(0xffffffff3c000000; 0xfffff),s32_min=1006632960,s32_max=1007681535,u32_min=1006632960,u32_max=1007681535) R5=486539264
+81: (bf) r0 = r5                      ; R0_w=486539264 R5=486539264
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=234881024
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=234881024 R6_w=251658240
+63: (1f) r2 -= r0                     ; R0_w=486539264 R2_w=scalar(umin=18446744069934678016,umax=18446744069935726591,var_off=(0xffffffff1f000000; 0xfffff),s32_min=520093696,s32_max=521142271,u32_min=520093696,u32_max=521142271)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4=16777216 R5_w=16777216
+65: (77) r5 >>= 2                     ; R5_w=4194304
+66: (bf) r3 = r6                      ; R3_w=251658240 R6_w=251658240
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4=16777216
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=4194304 R5_w=4194304
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=251658240 R5_w=255852544
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069934678016,umax=18446744069935726591,var_off=(0xffffffff1f000000; 0xfffff),s32_min=520093696,s32_max=521142271,u32_min=520093696,u32_max=521142271) R5_w=255852544
+78: (bf) r6 = r4                      ; R4_w=4194304 R6_w=4194304
+79: (b7) r0 = 0                       ; R0=0
+80: (2d) if r5 > r2 goto pc-20        ; R2=scalar(umin=18446744069934678016,umax=18446744069935726591,var_off=(0xffffffff1f000000; 0xfffff),s32_min=520093696,s32_max=521142271,u32_min=520093696,u32_max=521142271) R5=255852544
+81: (bf) r0 = r5                      ; R0_w=255852544 R5=255852544
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=125829120
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=125829120 R6_w=130023424
+63: (1f) r2 -= r0                     ; R0_w=255852544 R2_w=scalar(umin=18446744069678825472,umax=18446744069679874047,var_off=(0xffffffff0fc00000; 0xfffff),s32_min=264241152,s32_max=265289727,u32_min=264241152,u32_max=265289727)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4=4194304 R5_w=4194304
+65: (77) r5 >>= 2                     ; R5_w=1048576
+66: (bf) r3 = r6                      ; R3_w=130023424 R6_w=130023424
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4=4194304
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=1048576 R5_w=1048576
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=130023424 R5_w=131072000
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069678825472,umax=18446744069679874047,var_off=(0xffffffff0fc00000; 0xfffff),s32_min=264241152,s32_max=265289727,u32_min=264241152,u32_max=265289727) R5_w=131072000
+78: (bf) r6 = r4                      ; R4_w=1048576 R6_w=1048576
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069678825472,umax=18446744069679874047,var_off=(0xffffffff0fc00000; 0xfffff),s32_min=264241152,s32_max=265289727,u32_min=264241152,u32_max=265289727) R5_w=131072000
+81: (bf) r0 = r5                      ; R0_w=131072000 R5_w=131072000
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=65011712
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=65011712 R6_w=66060288
+63: (1f) r2 -= r0                     ; R0_w=131072000 R2_w=scalar(umin=18446744069547753472,umax=18446744069548802047,var_off=(0xffffffff07f00000; 0xfffff),s32_min=133169152,s32_max=134217727,u32_min=133169152,u32_max=134217727)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=1048576 R5_w=1048576
+65: (77) r5 >>= 2                     ; R5_w=262144
+66: (bf) r3 = r6                      ; R3_w=66060288 R6_w=66060288
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=1048576
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=262144 R5_w=262144
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=66060288 R5_w=66322432
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069547753472,umax=18446744069548802047,var_off=(0xffffffff07f00000; 0xfffff),s32_min=133169152,s32_max=134217727,u32_min=133169152,u32_max=134217727) R5_w=66322432
+78: (bf) r6 = r4                      ; R4_w=262144 R6_w=262144
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069547753472,umax=18446744069548802047,var_off=(0xffffffff07f00000; 0xfffff),s32_min=133169152,s32_max=134217727,u32_min=133169152,u32_max=134217727) R5_w=66322432
+81: (bf) r0 = r5                      ; R0_w=66322432 R5_w=66322432
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=33030144
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=33030144 R6_w=33292288
+63: (1f) r2 -= r0                     ; R0_w=66322432 R2_w=scalar(umin=18446744069481431040,umax=18446744069482479615,var_off=(0xffffffff00000000; 0x7ffffff),s32_min=66846720,s32_max=67895295,u32_min=66846720,u32_max=67895295)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=262144 R5_w=262144
+65: (77) r5 >>= 2                     ; R5_w=65536
+66: (bf) r3 = r6                      ; R3_w=33292288 R6_w=33292288
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=262144
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=65536 R5_w=65536
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=33292288 R5_w=33357824
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069481431040,umax=18446744069482479615,var_off=(0xffffffff00000000; 0x7ffffff),s32_min=0,s32_max=134217727,u32_max=134217727) R5_w=33357824
+78: (bf) r6 = r4                      ; R4_w=65536 R6_w=65536
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069481431040,umax=18446744069482479615,var_off=(0xffffffff00000000; 0x7ffffff),s32_min=0,s32_max=134217727,u32_max=134217727) R5_w=33357824
+81: (bf) r0 = r5                      ; R0_w=33357824 R5_w=33357824
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=16646144
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=16646144 R6_w=16711680
+63: (1f) r2 -= r0                     ; R0_w=33357824 R2_w=scalar(umin=18446744069448073216,umax=18446744069449121791,var_off=(0xffffffff00000000; 0x3ffffff),s32_min=0,s32_max=67108863,u32_max=67108863)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=65536 R5_w=65536
+65: (77) r5 >>= 2                     ; R5_w=16384
+66: (bf) r3 = r6                      ; R3_w=16711680 R6_w=16711680
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=65536
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=16384 R5_w=16384
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=16711680 R5_w=16728064
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069448073216,umax=18446744069449121791,var_off=(0xffffffff00000000; 0x3ffffff),s32_min=0,s32_max=67108863,u32_max=67108863) R5_w=16728064
+78: (bf) r6 = r4                      ; R4_w=16384 R6_w=16384
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069448073216,umax=18446744069449121791,var_off=(0xffffffff00000000; 0x3ffffff),s32_min=0,s32_max=67108863,u32_max=67108863) R5_w=16728064
+81: (bf) r0 = r5                      ; R0_w=16728064 R5_w=16728064
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=8355840
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=8355840 R6_w=8372224
+63: (1f) r2 -= r0                     ; R0_w=16728064 R2_w=scalar(umin=18446744069431345152,umax=18446744069432393727,var_off=(0xffffffff00000000; 0x1ffffff),s32_min=0,s32_max=33554431,u32_max=33554431)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=16384 R5_w=16384
+65: (77) r5 >>= 2                     ; R5_w=4096
+66: (bf) r3 = r6                      ; R3_w=8372224 R6_w=8372224
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=16384
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=4096 R5_w=4096
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=8372224 R5_w=8376320
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069431345152,umax=18446744069432393727,var_off=(0xffffffff00000000; 0x1ffffff),s32_min=0,s32_max=33554431,u32_max=33554431) R5_w=8376320
+78: (bf) r6 = r4                      ; R4=4096 R6=4096
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2=scalar(umin=18446744069431345152,umax=18446744069432393727,var_off=(0xffffffff00000000; 0x1ffffff),s32_min=0,s32_max=33554431,u32_max=33554431) R5=8376320
+81: (bf) r0 = r5                      ; R0_w=8376320 R5=8376320
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=4186112
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=4186112 R6_w=4190208
+63: (1f) r2 -= r0                     ; R0_w=8376320 R2_w=scalar(umin=18446744069422968832,umax=18446744069424017407,var_off=(0xffffffff00000000; 0xffffff),s32_min=0,s32_max=16777215,u32_max=16777215)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4=4096 R5_w=4096
+65: (77) r5 >>= 2                     ; R5_w=1024
+66: (bf) r3 = r6                      ; R3_w=4190208 R6_w=4190208
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4=4096
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=1024 R5_w=1024
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=4190208 R5_w=4191232
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069422968832,umax=18446744069424017407,var_off=(0xffffffff00000000; 0xffffff),s32_min=0,s32_max=16777215,u32_max=16777215) R5_w=4191232
+78: (bf) r6 = r4                      ; R4_w=1024 R6_w=1024
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069422968832,umax=18446744069424017407,var_off=(0xffffffff00000000; 0xffffff),s32_min=0,s32_max=16777215,u32_max=16777215) R5_w=4191232
+81: (bf) r0 = r5                      ; R0_w=4191232 R5_w=4191232
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=2095104
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=2095104 R6_w=2096128
+63: (1f) r2 -= r0                     ; R0_w=4191232 R2_w=scalar(umin=18446744069418777600,umax=18446744069419826175,var_off=(0xffffffff00000000; 0x7fffff),s32_min=0,s32_max=8388607,u32_max=8388607)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=1024 R5_w=1024
+65: (77) r5 >>= 2                     ; R5_w=256
+66: (bf) r3 = r6                      ; R3_w=2096128 R6_w=2096128
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=1024
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=256 R5_w=256
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=2096128 R5_w=2096384
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069418777600,umax=18446744069419826175,var_off=(0xffffffff00000000; 0x7fffff),s32_min=0,s32_max=8388607,u32_max=8388607) R5_w=2096384
+78: (bf) r6 = r4                      ; R4_w=256 R6_w=256
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069418777600,umax=18446744069419826175,var_off=(0xffffffff00000000; 0x7fffff),s32_min=0,s32_max=8388607,u32_max=8388607) R5_w=2096384
+81: (bf) r0 = r5                      ; R0_w=2096384 R5_w=2096384
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=1048064
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=1048064 R6_w=1048320
+63: (1f) r2 -= r0                     ; R0_w=2096384 R2_w=scalar(umin=18446744069416681216,umax=18446744069417729791,var_off=(0xffffffff00000000; 0x3fffff),s32_min=0,s32_max=4194303,u32_max=4194303)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=256 R5_w=256
+65: (77) r5 >>= 2                     ; R5_w=64
+66: (bf) r3 = r6                      ; R3_w=1048320 R6_w=1048320
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=256
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=64 R5_w=64
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=1048320 R5_w=1048384
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069416681216,umax=18446744069417729791,var_off=(0xffffffff00000000; 0x3fffff),s32_min=0,s32_max=4194303,u32_max=4194303) R5_w=1048384
+78: (bf) r6 = r4                      ; R4_w=64 R6_w=64
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069416681216,umax=18446744069417729791,var_off=(0xffffffff00000000; 0x3fffff),s32_min=0,s32_max=4194303,u32_max=4194303) R5_w=1048384
+81: (bf) r0 = r5                      ; R0_w=1048384 R5_w=1048384
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=524160
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=524160 R6_w=524224
+63: (1f) r2 -= r0                     ; R0_w=1048384 R2_w=scalar(umin=18446744069415632832,umax=18446744069416681407,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=2097151,u32_max=2097151)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=64 R5_w=64
+65: (77) r5 >>= 2                     ; R5_w=16
+66: (bf) r3 = r6                      ; R3_w=524224 R6_w=524224
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=64
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=16 R5_w=16
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=524224 R5_w=524240
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069415632832,umax=18446744069416681407,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=2097151,u32_max=2097151) R5_w=524240
+78: (bf) r6 = r4                      ; R4_w=16 R6_w=16
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069415632832,umax=18446744069416681407,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=2097151,u32_max=2097151) R5_w=524240
+81: (bf) r0 = r5                      ; R0_w=524240 R5_w=524240
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=262112
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=262112 R6_w=262128
+63: (1f) r2 -= r0                     ; R0_w=524240 R2_w=scalar(umin=18446744069415108592,umax=18446744069416157167,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=1572911,u32_max=2097151)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=16 R5_w=16
+65: (77) r5 >>= 2                     ; R5_w=4
+66: (bf) r3 = r6                      ; R3_w=262128 R6_w=262128
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=16
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=4 R5_w=4
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=262128 R5_w=262132
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069415108592,umax=18446744069416157167,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=2097151,u32_max=2097151) R5_w=262132
+78: (bf) r6 = r4                      ; R4=4 R6=4
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2=scalar(umin=18446744069415108592,umax=18446744069416157167,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=2097151,u32_max=2097151) R5=262132
+81: (bf) r0 = r5                      ; R0_w=262132 R5=262132
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=131064
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=131064 R6_w=131068
+63: (1f) r2 -= r0                     ; R0_w=262132 R2_w=scalar(umin=18446744069414846460,umax=18446744069415895035,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=1835019,u32_max=2097151)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4=4 R5_w=4
+65: (77) r5 >>= 2                     ; R5_w=1
+66: (bf) r3 = r6                      ; R3_w=131068 R6_w=131068
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4=4
+; BPF_ASSERT(r * r <= x);
+74: (bf) r4 = r5                      ; R4_w=1 R5_w=1
+; b = y + m;
+75: (0f) r5 += r3                     ; R3_w=131068 R5_w=131069
+76: (b7) r6 = 0                       ; R6_w=0
+; if (x >= b) {
+77: (2d) if r5 > r2 goto pc+1         ; R2_w=scalar(umin=18446744069414846460,umax=18446744069415895035,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=2097151,u32_max=2097151) R5_w=131069
+78: (bf) r6 = r4                      ; R4_w=1 R6_w=1
+79: (b7) r0 = 0                       ; R0_w=0
+80: (2d) if r5 > r2 goto pc-20        ; R2_w=scalar(umin=18446744069414846460,umax=18446744069415895035,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=2097151,u32_max=2097151) R5_w=131069
+81: (bf) r0 = r5                      ; R0_w=131069 R5_w=131069
+82: (05) goto pc-22
+; 
+61: (77) r3 >>= 1                     ; R3_w=65534
+; if (x >= b) {
+62: (0f) r6 += r3                     ; R3_w=65534 R6_w=65535
+63: (1f) r2 -= r0                     ; R0_w=131069 R2_w=scalar(umin=18446744069414715391,umax=18446744069415763966,var_off=(0xffffffff00000000; 0x1fffff),s32_min=0,s32_max=1966082,u32_max=2097151)
+; m >>= 2;
+64: (bf) r5 = r4                      ; R4_w=1 R5_w=1
+65: (77) r5 >>= 2                     ; R5_w=0
+66: (bf) r3 = r6                      ; R3_w=65535 R6_w=65535
+; while (m != 0) {
+67: (25) if r4 > 0x3 goto pc+6        ; R4_w=1
+; BPF_ASSERT(r * r <= x);
+68: (bf) r2 = r6                      ; R2_w=65535 R6=65535
+69: (2f) r2 *= r2                     ; R2_w=4294836225
+; BPF_ASSERT(r * r <= x);
+70: (3d) if r1 >= r2 goto pc+12       ; R1=scalar(id=2,umin=1073741824,umax=1048575,var_off=(0x0; 0xfffff)) R2_w=4294836225
+71: (b7) r2 = 0                       ; R2_w=0
+; BPF_ASSERT(r * r <= x);
+72: (63) *(u32 *)(r2 +0) = r2
+R2 invalid mem access 'scalar'
+verification time 728 usec
+stack depth 4
+processed 318 insns (limit 1000000) max_states_per_insn 3 total_states 14 peak_states 14 mark_read 9
+
 Processing 'crc7.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc7.bpf.o/bpf_prog_crc7, DURATION US: 11, VERDICT: success, VERIFIER LOG:
-verification time 11 usec
-stack depth 0
-processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
-
-Processing 'crc8.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc8.bpf.o/bpf_prog_crc8, DURATION US: 7352, VERDICT: success, VERIFIER LOG:
-verification time 7352 usec
-stack depth 260
-processed 2734 insns (limit 1000000) max_states_per_insn 4 total_states 30 peak_states 30 mark_read 29
-
-Processing 'crc16.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc16.bpf.o/bpf_prog_crc16, DURATION US: 13, VERDICT: success, VERIFIER LOG:
-verification time 13 usec
-stack depth 0
-processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
-
-Processing 'crc-ccitt.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc-ccitt.bpf.o/bpf_prog_crc_ccitt, DURATION US: 12, VERDICT: success, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/crc7.bpf.o/bpf_prog_crc7, DURATION US: 12, VERDICT: success, VERIFIER LOG:
 verification time 12 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
+Processing 'crc8.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/crc8.bpf.o/bpf_prog_crc8, DURATION US: 7088, VERDICT: success, VERIFIER LOG:
+verification time 7088 usec
+stack depth 260
+processed 2734 insns (limit 1000000) max_states_per_insn 4 total_states 30 peak_states 30 mark_read 29
+
+Processing 'crc16.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/crc16.bpf.o/bpf_prog_crc16, DURATION US: 12, VERDICT: success, VERIFIER LOG:
+verification time 12 usec
+stack depth 0
+processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+
+Processing 'crc-ccitt.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/crc-ccitt.bpf.o/bpf_prog_crc_ccitt, DURATION US: 13, VERDICT: success, VERIFIER LOG:
+verification time 13 usec
+stack depth 0
+processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+
 Processing 'crc-itu-t.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc-itu-t.bpf.o/bpf_prog_crc_itu_t, DURATION US: 11, VERDICT: success, VERIFIER LOG:
-verification time 11 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/crc-itu-t.bpf.o/bpf_prog_crc_itu_t, DURATION US: 18, VERDICT: success, VERIFIER LOG:
+verification time 18 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'hweight.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/hweight.bpf.o/bpf_prog_hweight, DURATION US: 256, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/hweight.bpf.o/bpf_prog_hweight, DURATION US: 248, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_hweight#26
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -1160,7 +1618,7 @@ reg type unsupported for arg#0 function bpf_prog_hweight#26
 2: (bf) r2 = r10                      ; R2_w=fp0 R10=fp0
 3: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *vx = bpf_map_lookup_elem(&input_map, &key0);
-4: (18) r1 = 0xffff8880843ff400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+4: (18) r1 = 0xffff888065ae1c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 6: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 ; if (!vx) return 0;
 7: (15) if r0 == 0x0 goto pc+84       ; R0_w=map_value(off=0,ks=4,vs=8,imm=0)
@@ -1263,20 +1721,20 @@ reg type unsupported for arg#0 function bpf_prog_hweight#26
 ; BPF_ASSERT(w32 + wc32 == 32);
 86: (63) *(u32 *)(r1 +0) = r1
 R1 invalid mem access 'scalar'
-verification time 256 usec
+verification time 248 usec
 stack depth 4
 processed 81 insns (limit 1000000) max_states_per_insn 0 total_states 1 peak_states 1 mark_read 1
 
 Processing 'bitrev.bpf.o'...
 Processing 'cordic.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/cordic.bpf.o/bpf_prog_cordic, DURATION US: 970, VERDICT: success, VERIFIER LOG:
-verification time 970 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/cordic.bpf.o/bpf_prog_cordic, DURATION US: 900, VERDICT: success, VERIFIER LOG:
+verification time 900 usec
 stack depth 8+0
 processed 440 insns (limit 1000000) max_states_per_insn 2 total_states 8 peak_states 8 mark_read 8
 
 Processing 'bsearch.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/bsearch.bpf.o/bpf_prog_bsearch, DURATION US: 12, VERDICT: success, VERIFIER LOG:
-verification time 12 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/bsearch.bpf.o/bpf_prog_bsearch, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1286,9 +1744,21 @@ verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
-Processing 'crc4.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc4.bpf.o/bpf_prog_crc4, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+Processing 'clz_ctz.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/clz_ctz.bpf.o/bpf_prog_clz_ctz, DURATION US: 863, VERDICT: success, VERIFIER LOG:
+verification time 863 usec
+stack depth 0+0+0
+processed 328 insns (limit 1000000) max_states_per_insn 1 total_states 28 peak_states 28 mark_read 3
+
+Processing 'crc32.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/crc32.bpf.o/bpf_prog_crc32, DURATION US: 11, VERDICT: success, VERIFIER LOG:
 verification time 11 usec
+stack depth 0
+processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+
+Processing 'crc4.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/crc4.bpf.o/bpf_prog_crc4, DURATION US: 12, VERDICT: success, VERIFIER LOG:
+verification time 12 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1299,8 +1769,8 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'errname.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/errname.bpf.o/bpf_prog_errname, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/errname.bpf.o/bpf_prog_errname, DURATION US: 12, VERDICT: success, VERIFIER LOG:
+verification time 12 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1312,33 +1782,33 @@ processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_stat
 
 Processing 'kstrtox.bpf.o'...
 Processing 'linear_ranges.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/linear_ranges.bpf.o/bpf_prog_linear_ranges, DURATION US: 14, VERDICT: success, VERIFIER LOG:
-verification time 14 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/linear_ranges.bpf.o/bpf_prog_linear_ranges, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'list_debug.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/list_debug.bpf.o/bpf_prog_list_debug, DURATION US: 11, VERDICT: success, VERIFIER LOG:
-verification time 11 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/list_debug.bpf.o/bpf_prog_list_debug, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'lshrdi3.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/lshrdi3.bpf.o/bpf_prog_lshrdi3, DURATION US: 30, VERDICT: success, VERIFIER LOG:
-verification time 30 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/lshrdi3.bpf.o/bpf_prog_lshrdi3, DURATION US: 9, VERDICT: success, VERIFIER LOG:
+verification time 9 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'memneq.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/memneq.bpf.o/bpf_prog_memneq, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/memneq.bpf.o/bpf_prog_memneq, DURATION US: 14, VERDICT: success, VERIFIER LOG:
+verification time 14 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'oid_registry.bpf.o'...
 Processing 'rbtree.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/rbtree.bpf.o/bpf_prog_rbtree, DURATION US: 11, VERDICT: success, VERIFIER LOG:
-verification time 11 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/rbtree.bpf.o/bpf_prog_rbtree, DURATION US: 14, VERDICT: success, VERIFIER LOG:
+verification time 14 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1348,12 +1818,13 @@ verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
+Processing 'string.bpf.o'...
 Processing 'timerqueue.bpf.o'...
 Processing 'ts_fsm.bpf.o'...
 Processing 'ts_kmp.bpf.o'...
 Processing 'ucmpdi2.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/ucmpdi2.bpf.o/bpf_prog_ucmpdi2, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/ucmpdi2.bpf.o/bpf_prog_ucmpdi2, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1374,20 +1845,20 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'int_pow.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/int_pow.bpf.o/bpf_prog_int_pow, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/int_pow.bpf.o/bpf_prog_int_pow, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'rational.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/rational.bpf.o/bpf_prog_rational, DURATION US: 9, VERDICT: success, VERIFIER LOG:
-verification time 9 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/rational.bpf.o/bpf_prog_rational, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'lib_aes.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/lib_aes.bpf.o/bpf_prog_lib_aes, DURATION US: 16, VERDICT: success, VERIFIER LOG:
-verification time 16 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/lib_aes.bpf.o/bpf_prog_lib_aes, DURATION US: 12, VERDICT: success, VERIFIER LOG:
+verification time 12 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1404,8 +1875,8 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'zlib_inffast.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/zlib_inffast.bpf.o/bpf_prog_zlib_inffast, DURATION US: 14, VERDICT: success, VERIFIER LOG:
-verification time 14 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/zlib_inffast.bpf.o/bpf_prog_zlib_inffast, DURATION US: 13, VERDICT: success, VERIFIER LOG:
+verification time 13 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1419,14 +1890,14 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'mpih_add1.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/mpih_add1.bpf.o/bpf_prog_mpih_add1, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/mpih_add1.bpf.o/bpf_prog_mpih_add1, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'mpih_sub1.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/mpih_sub1.bpf.o/bpf_prog_mpih_sub1, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/mpih_sub1.bpf.o/bpf_prog_mpih_sub1, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1437,8 +1908,8 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'mpih_lshift.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/mpih_lshift.bpf.o/bpf_prog_mpih_lshift, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/mpih_lshift.bpf.o/bpf_prog_mpih_lshift, DURATION US: 9, VERDICT: success, VERIFIER LOG:
+verification time 9 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1449,15 +1920,15 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'dim.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/dim.bpf.o/bpf_prog_dim, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/dim.bpf.o/bpf_prog_dim, DURATION US: 9, VERDICT: success, VERIFIER LOG:
+verification time 9 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'net_dim.bpf.o'...
 Processing 'base64.bpf.o'...
 Processing 'rational_v2.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/rational_v2.bpf.o/bpf_prog_rational_v2, DURATION US: 366, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/rational_v2.bpf.o/bpf_prog_rational_v2, DURATION US: 357, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_rational_v2#17
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -1472,14 +1943,14 @@ reg type unsupported for arg#0 function bpf_prog_rational_v2#17
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *vn = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff8880843fc000       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae2c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vd = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff8880843fc000      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae2c00      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!vn || !vd) return 0;
 15: (15) if r7 == 0x0 goto pc+74      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -1624,62 +2095,65 @@ reg type unsupported for arg#0 function bpf_prog_rational_v2#17
 ; BPF_ASSERT(rd >= 1);
 89: (63) *(u32 *)(r1 +0) = r1
 R1 invalid mem access 'scalar'
-verification time 366 usec
+verification time 357 usec
 stack depth 32
 processed 117 insns (limit 1000000) max_states_per_insn 1 total_states 8 peak_states 8 mark_read 3
 
 File                  Program                  Verdict  Duration (us)  Total insns  Total states  Peak states
 --------------------  -----------------------  -------  -------------  -----------  ------------  -----------
-ashldi3.bpf.o         bpf_prog_ashldi3         success             12            2             0            0
+ashldi3.bpf.o         bpf_prog_ashldi3         success             11            2             0            0
 ashrdi3.bpf.o         bpf_prog_ashrdi3         success             11            2             0            0
-bcd.bpf.o             bpf_prog_bcd             success             21            2             0            0
-bsearch.bpf.o         bpf_prog_bsearch         success             12            2             0            0
+bcd.bpf.o             bpf_prog_bcd             success             16            2             0            0
+bsearch.bpf.o         bpf_prog_bsearch         success             11            2             0            0
 checksum.bpf.o        bpf_prog_checksum        success             10            2             0            0
-clz_tab.bpf.o         bpf_prog_clz_tab         success             21            2             0            0
-cmpdi2.bpf.o          bpf_prog_cmpdi2          failure            280           76             6            6
-cordic.bpf.o          bpf_prog_cordic          success            970          440             8            8
-crc-ccitt.bpf.o       bpf_prog_crc_ccitt       success             12            2             0            0
-crc-itu-t.bpf.o       bpf_prog_crc_itu_t       success             11            2             0            0
-crc16.bpf.o           bpf_prog_crc16           success             13            2             0            0
-crc4.bpf.o            bpf_prog_crc4            success             11            2             0            0
-crc7.bpf.o            bpf_prog_crc7            success             11            2             0            0
-crc8.bpf.o            bpf_prog_crc8            success           7352         2734            30           30
+clz_ctz.bpf.o         bpf_prog_clz_ctz         success            863          328            28           28
+clz_tab.bpf.o         bpf_prog_clz_tab         success             12            2             0            0
+cmpdi2.bpf.o          bpf_prog_cmpdi2          failure            223           76             6            6
+cordic.bpf.o          bpf_prog_cordic          success            900          440             8            8
+crc-ccitt.bpf.o       bpf_prog_crc_ccitt       success             13            2             0            0
+crc-itu-t.bpf.o       bpf_prog_crc_itu_t       success             18            2             0            0
+crc16.bpf.o           bpf_prog_crc16           success             12            2             0            0
+crc32.bpf.o           bpf_prog_crc32           success             11            2             0            0
+crc4.bpf.o            bpf_prog_crc4            success             12            2             0            0
+crc7.bpf.o            bpf_prog_crc7            success             12            2             0            0
+crc8.bpf.o            bpf_prog_crc8            success           7088         2734            30           30
 ctype.bpf.o           bpf_prog_ctype           success             11            2             0            0
-dim.bpf.o             bpf_prog_dim             success             10            2             0            0
+dim.bpf.o             bpf_prog_dim             success              9            2             0            0
 div64.bpf.o           bpf_prog_div64           success             11            2             0            0
-errname.bpf.o         bpf_prog_errname         success             10            2             0            0
-gcd.bpf.o             bpf_prog_gcd             failure           1732          505            17           17
+errname.bpf.o         bpf_prog_errname         success             12            2             0            0
+gcd.bpf.o             bpf_prog_gcd             failure           1642          505            17           17
 glob.bpf.o            bpf_prog_glob            success             10            2             0            0
-hweight.bpf.o         bpf_prog_hweight         failure            256           81             1            1
-int_pow.bpf.o         bpf_prog_int_pow         success             10            2             0            0
-lcm.bpf.o             bpf_prog_lcm             failure             13            0             0            0
-lib_aes.bpf.o         bpf_prog_lib_aes         success             16            2             0            0
-linear_ranges.bpf.o   bpf_prog_linear_ranges   success             14            2             0            0
-list_debug.bpf.o      bpf_prog_list_debug      success             11            2             0            0
+hweight.bpf.o         bpf_prog_hweight         failure            248           81             1            1
+int_pow.bpf.o         bpf_prog_int_pow         success             11            2             0            0
+int_sqrt.bpf.o        bpf_prog_int_sqrt        failure            728          318            14           14
+lcm.bpf.o             bpf_prog_lcm             failure             14            0             0            0
+lib_aes.bpf.o         bpf_prog_lib_aes         success             12            2             0            0
+linear_ranges.bpf.o   bpf_prog_linear_ranges   success             10            2             0            0
+list_debug.bpf.o      bpf_prog_list_debug      success             10            2             0            0
 list_sort.bpf.o       bpf_prog_list_sort       success             10            2             0            0
-lshrdi3.bpf.o         bpf_prog_lshrdi3         success             30            2             0            0
-memneq.bpf.o          bpf_prog_memneq          success             10            2             0            0
-memweight.bpf.o       bpf_prog_memweight       failure             28            0             0            0
-mpih_add1.bpf.o       bpf_prog_mpih_add1       success             10            2             0            0
+lshrdi3.bpf.o         bpf_prog_lshrdi3         success              9            2             0            0
+memneq.bpf.o          bpf_prog_memneq          success             14            2             0            0
+memweight.bpf.o       bpf_prog_memweight       failure             24            0             0            0
+mpih_add1.bpf.o       bpf_prog_mpih_add1       success             11            2             0            0
 mpih_cmp.bpf.o        bpf_prog_mpih_cmp        success             12            2             0            0
-mpih_lshift.bpf.o     bpf_prog_mpih_lshift     success             10            2             0            0
+mpih_lshift.bpf.o     bpf_prog_mpih_lshift     success              9            2             0            0
 mpih_mul1.bpf.o       bpf_prog_mpih_mul1       success             10            2             0            0
 mpih_rshift.bpf.o     bpf_prog_mpih_rshift     success              9            2             0            0
-mpih_sub1.bpf.o       bpf_prog_mpih_sub1       success             10            2             0            0
-muldi3.bpf.o          bpf_prog_muldi3          failure            192           55             2            2
-rational.bpf.o        bpf_prog_rational        success              9            2             0            0
-rational_v2.bpf.o     bpf_prog_rational_v2     failure            366          117             8            8
-rbtree.bpf.o          bpf_prog_rbtree          success             11            2             0            0
-reciprocal_div.bpf.o  bpf_prog_reciprocal_div  success             41           10             1            1
+mpih_sub1.bpf.o       bpf_prog_mpih_sub1       success             11            2             0            0
+muldi3.bpf.o          bpf_prog_muldi3          failure            158           55             2            2
+rational.bpf.o        bpf_prog_rational        success             11            2             0            0
+rational_v2.bpf.o     bpf_prog_rational_v2     failure            357          117             8            8
+rbtree.bpf.o          bpf_prog_rbtree          success             14            2             0            0
+reciprocal_div.bpf.o  bpf_prog_reciprocal_div  success             40           10             1            1
 siphash.bpf.o         bpf_prog_siphash         success             10            2             0            0
-sort.bpf.o            bpf_prog_sort            failure             32            0             0            0
-ucmpdi2.bpf.o         bpf_prog_ucmpdi2         success             10            2             0            0
+sort.bpf.o            bpf_prog_sort            failure             31            0             0            0
+ucmpdi2.bpf.o         bpf_prog_ucmpdi2         success             11            2             0            0
 ucs2_string.bpf.o     bpf_prog_ucs2_string     success             10            2             0            0
-win_minmax.bpf.o      bpf_prog_win_minmax      failure            206           62             5            5
-zlib_inffast.bpf.o    bpf_prog_zlib_inffast    success             14            2             0            0
+win_minmax.bpf.o      bpf_prog_win_minmax      failure            195           62             5            5
+zlib_inffast.bpf.o    bpf_prog_zlib_inffast    success             13            2             0            0
 zlib_inftrees.bpf.o   bpf_prog_zlib_inftrees   success             12            2             0            0
 --------------------  -----------------------  -------  -------------  -----------  ------------  -----------
-Done. Processed 48 files, 23 programs. Skipped 48 files, 0 programs.
+Done. Processed 51 files, 25 programs. Skipped 51 files, 0 programs.
 
 STDERR:
 libbpf: prog 'bpf_prog_cmpdi2': BPF program load failed: Permission denied
@@ -1695,6 +2169,8 @@ libbpf: prog 'bpf_prog_memweight': failed to load: -22
 libbpf: failed to load object '/home/ubuntu/bpf-verify/output2/memweight.bpf.o'
 libbpf: failed to find BTF for extern '__list_add_valid' [26] section: -2
 Failed to open '/home/ubuntu/bpf-verify/output2/plist.bpf.o': -2
+libbpf: failed to find BTF for extern '__sw_hweight64' [29] section: -2
+Failed to open '/home/ubuntu/bpf-verify/output2/find_bit.bpf.o': -2
 libbpf: prog 'bpf_prog_sort': BPF program load failed: Invalid argument
 libbpf: prog 'bpf_prog_sort': failed to load: -22
 libbpf: failed to load object '/home/ubuntu/bpf-verify/output2/sort.bpf.o'
@@ -1707,6 +2183,9 @@ libbpf: failed to load object '/home/ubuntu/bpf-verify/output2/gcd.bpf.o'
 libbpf: prog 'bpf_prog_lcm': BPF program load failed: Invalid argument
 libbpf: prog 'bpf_prog_lcm': failed to load: -22
 libbpf: failed to load object '/home/ubuntu/bpf-verify/output2/lcm.bpf.o'
+libbpf: prog 'bpf_prog_int_sqrt': BPF program load failed: Permission denied
+libbpf: prog 'bpf_prog_int_sqrt': failed to load: -13
+libbpf: failed to load object '/home/ubuntu/bpf-verify/output2/int_sqrt.bpf.o'
 libbpf: prog 'bpf_prog_hweight': BPF program load failed: Permission denied
 libbpf: prog 'bpf_prog_hweight': failed to load: -13
 libbpf: failed to load object '/home/ubuntu/bpf-verify/output2/hweight.bpf.o'
@@ -1717,6 +2196,8 @@ libbpf: failed to find BTF for extern '_ctype' [103] section: -2
 Failed to open '/home/ubuntu/bpf-verify/output2/kstrtox.bpf.o': -2
 libbpf: failed to find BTF for extern 'snprintf' [32] section: -2
 Failed to open '/home/ubuntu/bpf-verify/output2/oid_registry.bpf.o': -2
+libbpf: failed to find BTF for extern '_ctype' [100] section: -2
+Failed to open '/home/ubuntu/bpf-verify/output2/string.bpf.o': -2
 libbpf: failed to find BTF for extern 'rb_insert_color' [34] section: -2
 Failed to open '/home/ubuntu/bpf-verify/output2/timerqueue.bpf.o': -2
 libbpf: sec '.exit.text': program 'exit_fsm' is static and not supported

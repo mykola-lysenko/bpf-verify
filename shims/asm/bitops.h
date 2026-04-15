@@ -31,40 +31,65 @@
 #include <asm-generic/bitops/non-atomic.h>
 #include <asm-generic/bitops/lock.h>
 
-/* __ffs: find first set bit (undefined if word == 0) */
+/* __ffs: find first set bit (undefined if word == 0)
+ * Pure-C binary search — __builtin_ctz generates CTTZ (opcode 191),
+ * which this LLVM version does not support for BPF. */
 static __always_inline unsigned long __ffs(unsigned long word)
 {
-	return __builtin_ctzl(word);
+	unsigned long r = 0;
+#if BITS_PER_LONG == 64
+	if (!(word & 0xffffffffUL)) { r += 32; word >>= 32; }
+#endif
+	if (!(word & 0xffffU))     { r += 16; word >>= 16; }
+	if (!(word & 0xffU))       { r +=  8; word >>=  8; }
+	if (!(word & 0xfU))        { r +=  4; word >>=  4; }
+	if (!(word & 0x3U))        { r +=  2; word >>=  2; }
+	if (!(word & 0x1U))        { r +=  1; }
+	return r;
 }
 
-/* ffz: find first zero bit (undefined if word == ~0) */
+/* ffz: find first zero bit (undefined if word == ~0UL) */
 static __always_inline unsigned long ffz(unsigned long word)
 {
-	return __builtin_ctzl(~word);
+	return __ffs(~word);
 }
 
-/* __fls: find last set bit (undefined if word == 0) */
+/* __fls: find last set bit (undefined if word == 0)
+ * Pure-C binary search — __builtin_clz generates CTLZ (opcode 192),
+ * which this LLVM version does not support for BPF. */
 static __always_inline unsigned long __fls(unsigned long word)
 {
-	return (sizeof(word) * 8 - 1) - __builtin_clzl(word);
+	unsigned long r = BITS_PER_LONG - 1;
+#if BITS_PER_LONG == 64
+	if (!(word & (~0UL << 32))) { r -= 32; word <<= 32; }
+#endif
+	if (!(word & (~0UL << (BITS_PER_LONG - 16)))) { r -= 16; word <<= 16; }
+	if (!(word & (~0UL << (BITS_PER_LONG -  8)))) { r -=  8; word <<=  8; }
+	if (!(word & (~0UL << (BITS_PER_LONG -  4)))) { r -=  4; word <<=  4; }
+	if (!(word & (~0UL << (BITS_PER_LONG -  2)))) { r -=  2; word <<=  2; }
+	if (!(word & (~0UL << (BITS_PER_LONG -  1)))) { r -=  1; }
+	return r;
 }
 
-/* ffs: find first set bit, returns 0 if none */
+/* ffs: find first set bit, 1-indexed, returns 0 if none */
 static __always_inline int ffs(int x)
 {
-	return __builtin_ffs(x);
+	if (!x) return 0;
+	return (int)__ffs((unsigned long)(unsigned int)x) + 1;
 }
 
-/* fls: find last set bit, returns 0 if none */
+/* fls: find last set bit, 1-indexed, returns 0 if none */
 static __always_inline int fls(unsigned int x)
 {
-	return x ? (32 - __builtin_clz(x)) : 0;
+	if (!x) return 0;
+	return (int)__fls((unsigned long)x) + 1;
 }
 
-/* fls64: find last set bit in 64-bit word */
+/* fls64: find last set bit in 64-bit word, 1-indexed, returns 0 if none */
 static __always_inline int fls64(__u64 x)
 {
-	return x ? (64 - __builtin_clzll(x)) : 0;
+	if (!x) return 0;
+	return (int)__fls((unsigned long)x) + 1;
 }
 
 /* hweight variants - use builtins */

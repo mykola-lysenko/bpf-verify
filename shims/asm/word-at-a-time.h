@@ -6,35 +6,27 @@
  * entry that is not valid in BPF context.
  *
  * For BPF verification purposes, we replace load_unaligned_zeropad() with a
- * plain unaligned load. In BPF we are not executing on real hardware, so
- * there is no risk of page-fault on a cross-page access; the verifier will
- * reject any unsafe memory access before execution.
+ * plain unaligned load.
  *
- * All other word-at-a-time primitives (has_zero, find_zero, create_zero_mask,
- * count_masked_bytes, etc.) are pure C and are included from the real header
- * via #include_next after blocking the load_unaligned_zeropad definition.
+ * IMPORTANT: We use a DIFFERENT guard name (__BPF_WORD_AT_A_TIME_SHIM_H)
+ * instead of the real header's guard (_ASM_WORD_AT_A_TIME_H). This ensures
+ * that when we call #include_next, the real header's #ifndef _ASM_WORD_AT_A_TIME_H
+ * check is NOT pre-satisfied, so the real header's body (struct word_at_a_time,
+ * WORD_AT_A_TIME_CONSTANTS, has_zero, etc.) IS processed.
  */
-#ifndef _ASM_WORD_AT_A_TIME_H
-#define _ASM_WORD_AT_A_TIME_H
-
-/* Pre-define the include guard so the real header's #ifndef guard is false
- * when reached via #include_next — but we ARE the first include, so we use
- * #include_next to get the real content and then override the asm function.
- *
- * Strategy: rename load_unaligned_zeropad to a private symbol before
- * including the real header, then undefine the rename and provide our own
- * pure-C version.
- */
+#ifndef __BPF_WORD_AT_A_TIME_SHIM_H
+#define __BPF_WORD_AT_A_TIME_SHIM_H
 
 /* Step 1: Rename the asm function so it compiles to an unused symbol. */
 #define load_unaligned_zeropad __bpf_load_unaligned_zeropad_asm_unused
 
-/* Step 2: Include the real header (gets struct word_at_a_time, has_zero, etc.) */
+/* Step 2: Include the real header — provides struct word_at_a_time,
+ * WORD_AT_A_TIME_CONSTANTS, has_zero, find_zero, etc. The real header's
+ * own include guard (_ASM_WORD_AT_A_TIME_H) prevents double-inclusion. */
 #include_next <asm/word-at-a-time.h>
 
 /* Step 3: Undefine the rename and provide a pure-C replacement. */
 #undef load_unaligned_zeropad
-
 static __always_inline unsigned long load_unaligned_zeropad(const void *addr)
 {
 	/* Plain load — safe in BPF context where the verifier ensures
@@ -44,4 +36,4 @@ static __always_inline unsigned long load_unaligned_zeropad(const void *addr)
 	return val;
 }
 
-#endif /* _ASM_WORD_AT_A_TIME_H */
+#endif /* __BPF_WORD_AT_A_TIME_SHIM_H */

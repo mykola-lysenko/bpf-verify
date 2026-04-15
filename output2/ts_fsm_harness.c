@@ -12,6 +12,8 @@
 #undef CONFIG_NUMA
 /* CONFIG_PARAVIRT pulls in x86 inline asm in paravirt.h */
 #undef CONFIG_PARAVIRT
+/* CONFIG_MEMCG pulls in this_cpu_read/write (x86 percpu inline asm) in sched/mm.h */
+#undef CONFIG_MEMCG
 
 /* ---------------------------------------------------------------
  * Step 1: Suppress kernel export / module metadata macros.

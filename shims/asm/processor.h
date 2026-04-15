@@ -108,4 +108,15 @@ static __always_inline void native_swapgs(void) {}
 #define TASK_SIZE_MAX		((1UL << 47) - PAGE_SIZE)
 #define DEFAULT_MAP_WINDOW	((1UL << 47) - PAGE_SIZE)
 
+/* Minimal thread_struct: sched.h embeds this as the last field of task_struct.
+ * The real x86 thread_struct contains fpu, desc_struct, io_bitmap etc. which
+ * are all x86-specific and not needed for BPF lib/ verification. Provide an
+ * opaque placeholder so task_struct is a complete type. */
+struct thread_struct {
+	unsigned long		sp;		/* stack pointer */
+	unsigned long		cr2;		/* page fault address */
+	unsigned long		trap_nr;	/* trap number */
+	unsigned long		error_code;	/* trap error code */
+};
+
 #endif /* _ASM_X86_PROCESSOR_H */
