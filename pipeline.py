@@ -1186,15 +1186,41 @@ EXTRA_PRE_INCLUDE = {
 #define nodes_weight(nodemask) ((unsigned int)__nodes_weight(&(nodemask), MAX_NUMNODES))
 """,
     "dim": """/* Override DIV_ROUND_UP to use u64 casts to avoid sdiv instruction.
- * The BPF backend cannot select sdiv; all divisions must be unsigned. */
+ * The BPF backend cannot select sdiv; all divisions must be unsigned.
+ * ktime_divns/ktime_to_us/ktime_us_delta are overridden by shims/linux/ktime.h. */
 #undef DIV_ROUND_UP
 #define DIV_ROUND_UP(n, d) (((u64)(n) + (u64)(d) - 1) / (u64)(d))
-/* ktime_divns is overridden in the linux/ktime.h shim to use unsigned division. */
 """,
+
     # find_bit.c: in kernel v7.0+, _find_next_bit() was refactored to 3 args
     # (addr1, nbits, start). No internal_linkage needed anymore.
     "find_bit": """\
 /* New kernel: _find_next_bit has 3 args, no special treatment needed. */
+""",
+    # kstrtox.c uses ULLONG_MAX but does not include linux/limits.h.
+    # In a normal kernel build, ULLONG_MAX comes from the compiler's limits.h
+    # via linux/types.h, but BPF uses -nostdinc so it is not available.
+    # Define it here along with the other integer limits used by kstrtox.c.
+    "kstrtox": """\
+/* kstrtox.c uses ULLONG_MAX and INT_MAX but BPF -nostdinc omits limits.h. */
+#ifndef ULLONG_MAX
+#define ULLONG_MAX (~0ULL)
+#endif
+#ifndef LLONG_MAX
+#define LLONG_MAX  ((long long)(ULLONG_MAX >> 1))
+#endif
+#ifndef LLONG_MIN
+#define LLONG_MIN  (-LLONG_MAX - 1)
+#endif
+#ifndef INT_MAX
+#define INT_MAX    ((int)(~0U >> 1))
+#endif
+#ifndef INT_MIN
+#define INT_MIN    (-INT_MAX - 1)
+#endif
+#ifndef UINT_MAX
+#define UINT_MAX   (~0U)
+#endif
 """,
     # checksum.c defines ip_fast_csum() which asm/checksum_64.h also defines as
     # a static inline. Block the arch header to avoid the redefinition.
@@ -1983,10 +2009,12 @@ void reciprocal_value_to_ptr(__u32 d, struct __bpf_recip_rv *out)
     # The EXTRA_PRE_INCLUDE renamed ktime_divns to __bpf_ktime_divns_sdiv.
     # Now we provide the real ktime_divns using unsigned division.
     # dim: provide BPF-safe ktime_us_delta after the source include.
-    # The EXTRA_PRE_INCLUDE renamed ktime_us_delta to __bpf_ktime_us_delta_sdiv.
-    # Now we provide a BPF-safe version using unsigned subtraction.
-    # dim/net_dim: ktime_divns BPF-safe replacement is already in EXTRA_PRE_INCLUDE.
-    # No EXTRA_PREAMBLE needed for dim/net_dim.
+    # The EXTRA_PRE_INCLUDE renamed ktime_divns/ktime_to_us/ktime_to_ms/
+    # ktime_us_delta/ktime_ms_delta to unused symbols. Now provide BPF-safe
+    # unsigned versions as macros. These are defined after the source include
+    # so the renamed (unused) static inline functions have already been compiled.
+    # dim: ktime_divns/ktime_to_us/ktime_us_delta are handled by shims/linux/ktime.h.
+    # No EXTRA_PREAMBLE needed for dim.
     "memweight": """\
 unsigned int __bitmap_weight(const unsigned long *src, unsigned int nbits)
 {

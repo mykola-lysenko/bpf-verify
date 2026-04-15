@@ -135,10 +135,10 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
 /* Override DIV_ROUND_UP to use u64 casts to avoid sdiv instruction.
- * The BPF backend cannot select sdiv; all divisions must be unsigned. */
+ * The BPF backend cannot select sdiv; all divisions must be unsigned.
+ * ktime_divns/ktime_to_us/ktime_us_delta are overridden by shims/linux/ktime.h. */
 #undef DIV_ROUND_UP
 #define DIV_ROUND_UP(n, d) (((u64)(n) + (u64)(d) - 1) / (u64)(d))
-/* ktime_divns is overridden in the linux/ktime.h shim to use unsigned division. */
 
 /* Include the kernel source file */
 #include "/home/ubuntu/linux-6.1.102/lib/dim/dim.c"
