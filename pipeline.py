@@ -11,10 +11,10 @@ import sys
 from pathlib import Path
 
 KSRC = Path("/home/ubuntu/linux-6.1.102")
-SHIM = Path("/tmp/bpf-asm-shim2")
+SHIM = Path(__file__).parent / "shims"
 OUTPUT = Path("/home/ubuntu/bpf-verify/output2")
 VERISTAT = "/home/ubuntu/bpf-verify/veristat"
-CLANG = "/home/ubuntu/llvm-project/build/bin/clang"
+CLANG = "/home/ubuntu/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/bin/clang-18"
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
 
@@ -25,7 +25,7 @@ BPF_CFLAGS = [
     "-O2",
     "-g",   # Required for pahole to generate BTF debug info
     "-nostdinc",
-    "-isystem", "/home/ubuntu/llvm-project/build/lib/clang/23/include",
+    "-isystem", "/home/ubuntu/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/lib/clang/18/include",
     f"-I{SHIM}", f"-I{SHIM}/linux", f"-I{SHIM}/uapi",
     f"-I{KSRC}", f"-I{KSRC}/include",
     f"-I{KSRC}/include/uapi",
@@ -93,6 +93,10 @@ BPF_CFLAGS = [
     "-DTIF_NOTIFY_RESUME=1",
     # __latent_entropy is a GCC plugin attribute that Clang doesn't support.
     "-D__latent_entropy=",
+    # CONFIG_CPU_NO_EFFICIENT_FFS: BPF backend doesn't support CTTZ (opcode 191).
+    # This makes gcd.c, lcm.c, find_bit.c etc. use loop-based bit scanning
+    # instead of __ffs/__fls which expand to __builtin_ctzl/__builtin_clzl.
+    "-DCONFIG_CPU_NO_EFFICIENT_FFS",
     # __init/__exit/__initconst/__initdata expand to __section(".init.*") attributes
     # that the BPF backend doesn't support.
     "-D__init=", "-D__exit=", "-D__initconst=", "-D__initdata=",
@@ -677,10 +681,9 @@ HARNESS_BODIES = {
     return (int)r;""",
 
     "cordic": """\
-    /* cordic_calc_phase computes atan2 using CORDIC algorithm */
-    struct cordic_iq iq = {{.i = 1000, .q = 1000}};
-    s32 phase = cordic_calc_phase(iq);
-    return (int)phase;""",
+    /* cordic_calc_iq computes i/q coordinate for a given angle */
+    struct cordic_iq result = cordic_calc_iq(45);
+    return (int)(result.i + result.q);""",
     # ---------------------------------------------------------------
     # Phase 2: 7 new high-priority targets
     # ---------------------------------------------------------------
@@ -1054,7 +1057,7 @@ EXTRA_INCLUDES = {
     "lcm":       [KSRC / "lib/math/gcd.c"],
     # lzo_compress: pre-include headers used by lzo1x_compress.c so that
     # the #define static in EXTRA_PRE_INCLUDE doesn't affect them.
-    "lzo_compress": ["/tmp/bpf-lzo-shim.h"],
+    "lzo_compress": [str(SHIM / "lzo-shim.h")],
     # memweight needs hweight.c for __sw_hweight8 (used by hweight8 inline).
     # We do NOT include bitmap.c because it pulls in linux/rcupdate.h
     # -> linux/sched.h (the full scheduler type system).
@@ -1069,7 +1072,7 @@ EXTRA_INCLUDES = {
     # mpihelp_mul_karatsuba_case (defined in mpih-mul.c itself).
     # mpi_mul: include shim mpi-internal.h FIRST so mpihelp_mul_karatsuba_case
     # is declared as static before mpih-mul.c defines it.
-    "mpi_mul":   ["/tmp/bpf-mpi-shim/mpi-internal.h",
+    "mpi_mul":   [str(SHIM / "mpi-internal.h"),
                   next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul1.c", KSRC/"lib/mpi/generic_mpih-mul1.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpih-mul.c", KSRC/"lib/mpi/mpih-mul.c"] if p.exists())],
 
@@ -2151,21 +2154,21 @@ def main():
         # Skipped: rs_encode, rs_decode        # ---------------------------------------------------------------
         # Phase 2: 7 new high-priority targets
         # ---------------------------------------------------------------
-        "bitmap":                Path("/tmp/bpf-bitmap-shim.c"),
+        "bitmap":                SHIM / "bitmap-shim.c",
         "base64":                KSRC / "lib/base64.c",
-        "polynomial":            Path("/tmp/bpf-polynomial-shim.c"),
+        "polynomial":            SHIM / "polynomial-shim.c",
         "union_find":            KSRC / "lib/union_find.c",  # introduced after 6.1; skipped if missing
-        "hexdump":               Path("/tmp/bpf-hexdump-shim.c"),
+        "hexdump":               SHIM / "hexdump-shim.c",
         "min_heap":              KSRC / "lib/min_heap.c",  # introduced after 6.1; skipped if missing
         "rational_v2":           KSRC / "lib/math/rational.c",
 
 
     # Phase 3 targets
-    "string_helpers":       Path("/tmp/bpf-string-helpers-shim.c"),
-    "refcount":             Path("/tmp/bpf-refcount-shim.c"),
+    "string_helpers":       SHIM / "string-helpers-shim.c",
+    "refcount":             SHIM / "refcount-shim.c",
     "crc32":                next(p for p in [KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"] if p.exists()),
     "crc16":                next(p for p in [KSRC/"lib/crc/crc16.c",      KSRC/"lib/crc16.c"] if p.exists()),
-    "ratelimit":            Path("/tmp/bpf-ratelimit-shim.c"),
+    "ratelimit":            SHIM / "ratelimit-shim.c",
     # "bitmap_str": dropped - include chain too deep (bitmap.c -> device.h -> sched.h -> rwlock_t)
     # "scatterlist": dropped - too many deep dependencies (kmalloc, dma-mapping)
     # "kfifo": dropped - too many deep dependencies (dma-mapping.h)

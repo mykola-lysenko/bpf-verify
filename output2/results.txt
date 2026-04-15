@@ -1,0 +1,196 @@
+BPF Kernel Verification Pipeline Results
+======================================================================
+
+Compiled OK (46):
+  bcd
+  clz_tab
+  cmpdi2
+  muldi3
+  ashldi3
+  ashrdi3
+  list_sort
+  memweight
+  plist
+  sort
+  win_minmax
+  gcd
+  lcm
+  reciprocal_div
+  crc7
+  crc8
+  crc16
+  crc-ccitt
+  crc-itu-t
+  hweight
+  bitrev
+  bsearch
+  crc4
+  ctype
+  errname
+  glob
+  linear_ranges
+  lshrdi3
+  oid_registry
+  ucmpdi2
+  ucs2_string
+  xxhash
+  net_utils
+  div64
+  int_pow
+  rational
+  lib_sha256
+  lib_chacha
+  lib_blake2s
+  lzo_decompress
+  zlib_inflate
+  zlib_inftrees
+  zlib_inffast
+  zlib_deftree
+  base64
+  rational_v2
+
+Compiled FAIL (43):
+  llist: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  errseq: /home/ubuntu/linux-6.1.102/lib/errseq.c:74:2: error: statement requires expressi
+  dynamic_queue_limits: /home/ubuntu/linux-6.1.102/arch/x86/include/asm/tsc.h:24:27: error: use of undec
+  find_bit: fatal error: error in backend: unimplemented opcode: 191
+  int_sqrt: fatal error: error in backend: unimplemented opcode: 192
+  cordic: /home/ubuntu/linux-6.1.102/lib/math/cordic.c:46:18: error: aggregate returns are
+  checksum: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  clz_ctz: fatal error: error in backend: unimplemented opcode: 191
+  crc32: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  crc64: /home/ubuntu/linux-6.1.102/lib/crc64.c:39:10: fatal error: 'crc64table.h' file n
+  kstrtox: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  list_debug: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  memneq: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  rbtree: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  seq_buf: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  siphash: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  string: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  timerqueue: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  ts_fsm: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  ts_kmp: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  uuid: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  packing: /home/ubuntu/linux-6.1.102/lib/packing.c:89:5: error: stack arguments are not su
+  interval_tree: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  lib_aes: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  lib_poly1305: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  zstd_entropy_common: /home/ubuntu/linux-6.1.102/lib/zstd/common/entropy_common.c:224:8: error: stack 
+  zstd_fse_decompress: /home/ubuntu/linux-6.1.102/lib/zstd/common/fse_decompress.c:62:20: error: use of
+  zstd_huf_decompress: /home/ubuntu/linux-6.1.102/lib/zstd/decompress/huf_decompress.c:144:12: error: 0
+  zstd_decompress: /home/ubuntu/linux-6.1.102/lib/zstd/decompress/zstd_decompress.c:284:45: error: 
+  lz4_decompress: /home/ubuntu/linux-6.1.102/lib/lz4/lz4_decompress.c:510:12: error: stack argumen
+  lz4_compress: /home/ubuntu/linux-6.1.102/lib/lz4/lz4_compress.c:503:5: error: stack arguments 
+  lzo_compress: /home/ubuntu/bpf-verify/output2/lzo_compress_harness.c:123:10: fatal error: '/ho
+  mpi_add: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  mpi_cmp: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  mpi_mul: /home/ubuntu/bpf-verify/output2/mpi_mul_harness.c:123:10: fatal error: '/home/ub
+  mpih_cmp: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  mpih_add1: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  mpih_sub1: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  mpih_mul1: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  mpih_lshift: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  mpih_rshift: /home/ubuntu/linux-6.1.102/include/linux/llist.h:239:9: error: incompatible inte
+  dim: /home/ubuntu/linux-6.1.102/arch/x86/include/asm/tsc.h:24:27: error: use of undec
+  net_dim: /home/ubuntu/linux-6.1.102/arch/x86/include/asm/tsc.h:24:27: error: use of undec
+
+======================================================================
+Veristat Results:
+Processing 'bcd.bpf.o'...
+Processing 'clz_tab.bpf.o'...
+Processing 'cmpdi2.bpf.o'...
+Processing 'muldi3.bpf.o'...
+Processing 'ashldi3.bpf.o'...
+Processing 'ashrdi3.bpf.o'...
+Processing 'list_sort.bpf.o'...
+Processing 'memweight.bpf.o'...
+Processing 'plist.bpf.o'...
+Processing 'sort.bpf.o'...
+Processing 'win_minmax.bpf.o'...
+Processing 'gcd.bpf.o'...
+Processing 'lcm.bpf.o'...
+Processing 'reciprocal_div.bpf.o'...
+Processing 'crc7.bpf.o'...
+Processing 'crc8.bpf.o'...
+Processing 'crc16.bpf.o'...
+Processing 'crc-ccitt.bpf.o'...
+Processing 'crc-itu-t.bpf.o'...
+Processing 'hweight.bpf.o'...
+Processing 'bitrev.bpf.o'...
+Processing 'bsearch.bpf.o'...
+Processing 'crc4.bpf.o'...
+Processing 'ctype.bpf.o'...
+Processing 'errname.bpf.o'...
+Processing 'glob.bpf.o'...
+Processing 'linear_ranges.bpf.o'...
+Processing 'lshrdi3.bpf.o'...
+Processing 'oid_registry.bpf.o'...
+Processing 'ucmpdi2.bpf.o'...
+Processing 'ucs2_string.bpf.o'...
+Processing 'xxhash.bpf.o'...
+Processing 'net_utils.bpf.o'...
+Processing 'div64.bpf.o'...
+Processing 'int_pow.bpf.o'...
+Processing 'rational.bpf.o'...
+Processing 'lib_sha256.bpf.o'...
+Processing 'lib_chacha.bpf.o'...
+Processing 'lib_blake2s.bpf.o'...
+Processing 'lzo_decompress.bpf.o'...
+Processing 'zlib_inflate.bpf.o'...
+Processing 'zlib_inftrees.bpf.o'...
+Processing 'zlib_inffast.bpf.o'...
+Processing 'zlib_deftree.bpf.o'...
+Processing 'base64.bpf.o'...
+Processing 'rational_v2.bpf.o'...
+File                  Program                  Verdict  Duration (us)  Total insns  Total states  Peak states
+--------------------  -----------------------  -------  -------------  -----------  ------------  -----------
+ashldi3.bpf.o         bpf_prog_ashldi3         success              9            2             0            0
+ashrdi3.bpf.o         bpf_prog_ashrdi3         success              9            2             0            0
+bcd.bpf.o             bpf_prog_bcd             success              9            2             0            0
+bsearch.bpf.o         bpf_prog_bsearch         success            591            2             0            0
+clz_tab.bpf.o         bpf_prog_clz_tab         success              7            2             0            0
+cmpdi2.bpf.o          bpf_prog_cmpdi2          failure             51           76             6            6
+crc-ccitt.bpf.o       bpf_prog_crc_ccitt       success             11            2             0            0
+crc-itu-t.bpf.o       bpf_prog_crc_itu_t       success             16            2             0            0
+crc16.bpf.o           bpf_prog_crc16           success             11            2             0            0
+crc4.bpf.o            bpf_prog_crc4            success              7            2             0            0
+crc7.bpf.o            bpf_prog_crc7            success             11            2             0            0
+crc8.bpf.o            bpf_prog_crc8            success           1566         2734            30           30
+ctype.bpf.o           bpf_prog_ctype           success              6            2             0            0
+div64.bpf.o           bpf_prog_div64           success              6            2             0            0
+errname.bpf.o         bpf_prog_errname         success              7            2             0            0
+gcd.bpf.o             bpf_prog_gcd             failure            403          505            17           17
+glob.bpf.o            bpf_prog_glob            success              6            2             0            0
+hweight.bpf.o         bpf_prog_hweight         failure             58           81             1            1
+int_pow.bpf.o         bpf_prog_int_pow         success              6            2             0            0
+lcm.bpf.o             bpf_prog_lcm             failure             18            0             0            0
+linear_ranges.bpf.o   bpf_prog_linear_ranges   success              7            2             0            0
+list_sort.bpf.o       bpf_prog_list_sort       success              9            2             0            0
+lshrdi3.bpf.o         bpf_prog_lshrdi3         success              6            2             0            0
+memweight.bpf.o       bpf_prog_memweight       failure             35            0             0            0
+muldi3.bpf.o          bpf_prog_muldi3          failure             28           55             2            2
+rational.bpf.o        bpf_prog_rational        success              5            2             0            0
+rational_v2.bpf.o     bpf_prog_rational_v2     failure             74          117             8            8
+reciprocal_div.bpf.o  bpf_prog_reciprocal_div  success             20           10             1            1
+sort.bpf.o            bpf_prog_sort            failure             58            0             0            0
+ucmpdi2.bpf.o         bpf_prog_ucmpdi2         success              7            2             0            0
+ucs2_string.bpf.o     bpf_prog_ucs2_string     success              6            2             0            0
+win_minmax.bpf.o      bpf_prog_win_minmax      failure             59           62             5            5
+zlib_inffast.bpf.o    bpf_prog_zlib_inffast    success              7            2             0            0
+zlib_inftrees.bpf.o   bpf_prog_zlib_inftrees   success              6            2             0            0
+--------------------  -----------------------  -------  -------------  -----------  ------------  -----------
+Done. Processed 34 files, 12 programs. Skipped 34 files, 0 programs.
+
+Veristat STDERR:
+Failed to open '/home/ubuntu/bpf-verify/output2/plist.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/bitrev.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/oid_registry.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/xxhash.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/net_utils.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/lib_sha256.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/lib_chacha.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/lib_blake2s.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/lzo_decompress.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/zlib_inflate.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/zlib_deftree.bpf.o': -2
+Failed to open '/home/ubuntu/bpf-verify/output2/base64.bpf.o': -2
