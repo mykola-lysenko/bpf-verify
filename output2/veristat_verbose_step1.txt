@@ -11,7 +11,7 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'cmpdi2.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/cmpdi2.bpf.o/bpf_prog_cmpdi2, DURATION US: 223, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/cmpdi2.bpf.o/bpf_prog_cmpdi2, DURATION US: 225, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_cmpdi2#22
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -26,14 +26,14 @@ reg type unsupported for arg#0 function bpf_prog_cmpdi2#22
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *va = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff888065ae2400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae1000       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vb = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff888065ae2400      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae1000      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!va || !vb) return 0;
 15: (15) if r7 == 0x0 goto pc+56      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -116,12 +116,12 @@ reg type unsupported for arg#0 function bpf_prog_cmpdi2#22
 ; BPF_ASSERT(r + rrev == 2);
 71: (63) *(u32 *)(r1 +0) = r1
 R1 invalid mem access 'scalar'
-verification time 223 usec
+verification time 225 usec
 stack depth 8
 processed 76 insns (limit 1000000) max_states_per_insn 0 total_states 6 peak_states 6 mark_read 2
 
 Processing 'muldi3.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/muldi3.bpf.o/bpf_prog_muldi3, DURATION US: 158, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/muldi3.bpf.o/bpf_prog_muldi3, DURATION US: 171, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_muldi3#20
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -136,14 +136,14 @@ reg type unsupported for arg#0 function bpf_prog_muldi3#20
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *va = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff888065ae3400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae1000       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vb = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff888065ae3400      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae1000      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!va || !vb) return 0;
 15: (15) if r7 == 0x0 goto pc+42      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -205,7 +205,7 @@ reg type unsupported for arg#0 function bpf_prog_muldi3#20
 ; BPF_ASSERT(r1 == r2);
 56: (63) *(u32 *)(r1 +0) = r1
 R1 invalid mem access 'scalar'
-verification time 158 usec
+verification time 171 usec
 stack depth 8
 processed 55 insns (limit 1000000) max_states_per_insn 0 total_states 2 peak_states 2 mark_read 1
 
@@ -222,32 +222,32 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'list_sort.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/list_sort.bpf.o/bpf_prog_list_sort, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/list_sort.bpf.o/bpf_prog_list_sort, DURATION US: 15, VERDICT: success, VERIFIER LOG:
+verification time 15 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'dynamic_queue_limits.bpf.o'...
 Processing 'memweight.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/memweight.bpf.o/bpf_prog_memweight, DURATION US: 24, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/memweight.bpf.o/bpf_prog_memweight, DURATION US: 23, VERDICT: failure, VERIFIER LOG:
 Validating memweight() func#1...
 btf_vmlinux is malformed
 arg#0 reference type('UNKNOWN ') size cannot be determined: -22
-verification time 24 usec
+verification time 23 usec
 stack depth 0+0
 processed 0 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'plist.bpf.o'...
 Processing 'find_bit.bpf.o'...
 Processing 'sort.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/sort.bpf.o/bpf_prog_sort, DURATION US: 31, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/sort.bpf.o/bpf_prog_sort, DURATION US: 39, VERDICT: failure, VERIFIER LOG:
 unknown opcode 8d
-verification time 31 usec
+verification time 39 usec
 stack depth 0+0
 processed 0 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'win_minmax.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/win_minmax.bpf.o/bpf_prog_win_minmax, DURATION US: 195, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/win_minmax.bpf.o/bpf_prog_win_minmax, DURATION US: 197, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_win_minmax#26
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -262,14 +262,14 @@ reg type unsupported for arg#0 function bpf_prog_win_minmax#26
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *vt   = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff888065ae2c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae2800       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vmeas = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff888065ae2c00      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae2800      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!vt || !vmeas) return 0;
 15: (15) if r7 == 0x0 goto pc+66      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -338,12 +338,12 @@ reg type unsupported for arg#0 function bpf_prog_win_minmax#26
 ; BPF_ASSERT(v <= meas);
 77: (63) *(u32 *)(r3 +0) = r3
 R3 invalid mem access 'scalar'
-verification time 195 usec
+verification time 197 usec
 stack depth 8
 processed 62 insns (limit 1000000) max_states_per_insn 0 total_states 5 peak_states 5 mark_read 3
 
 Processing 'gcd.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/gcd.bpf.o/bpf_prog_gcd, DURATION US: 1642, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/gcd.bpf.o/bpf_prog_gcd, DURATION US: 1676, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_gcd#20
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -358,14 +358,14 @@ reg type unsupported for arg#0 function bpf_prog_gcd#20
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *va = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff888065ae1c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888065ae2400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vb = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff888065ae1c00      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888065ae2400      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!va || !vb) return 0;
 15: (15) if r7 == 0x0 goto pc+62      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -1101,26 +1101,26 @@ reg type unsupported for arg#0 function bpf_prog_gcd#20
 55: (bf) r0 = r5
 ; a -= b;
 infinite loop detected at insn 56
-verification time 1642 usec
+verification time 1676 usec
 stack depth 24
 processed 505 insns (limit 1000000) max_states_per_insn 2 total_states 17 peak_states 17 mark_read 1
 
 Processing 'lcm.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/lcm.bpf.o/bpf_prog_lcm, DURATION US: 14, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/lcm.bpf.o/bpf_prog_lcm, DURATION US: 13, VERDICT: failure, VERIFIER LOG:
 42: a >>= 1;
 back-edge from insn 42 to 43
-verification time 14 usec
+verification time 13 usec
 stack depth 0
 processed 0 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'reciprocal_div.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/reciprocal_div.bpf.o/bpf_prog_reciprocal_div, DURATION US: 40, VERDICT: success, VERIFIER LOG:
-verification time 40 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/reciprocal_div.bpf.o/bpf_prog_reciprocal_div, DURATION US: 41, VERDICT: success, VERIFIER LOG:
+verification time 41 usec
 stack depth 8+0
 processed 10 insns (limit 1000000) max_states_per_insn 0 total_states 1 peak_states 1 mark_read 1
 
 Processing 'int_sqrt.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/int_sqrt.bpf.o/bpf_prog_int_sqrt, DURATION US: 728, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/int_sqrt.bpf.o/bpf_prog_int_sqrt, DURATION US: 764, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_int_sqrt#20
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -1131,7 +1131,7 @@ reg type unsupported for arg#0 function bpf_prog_int_sqrt#20
 2: (bf) r2 = r10                      ; R2_w=fp0 R10=fp0
 3: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *vx = bpf_map_lookup_elem(&input_map, &key0);
-4: (18) r1 = 0xffff888065ae1000       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+4: (18) r1 = 0xffff888065ae0400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 6: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 ; if (!vx) return 0;
 7: (15) if r0 == 0x0 goto pc+81       ; R0_w=map_value(off=0,ks=4,vs=8,imm=0)
@@ -1572,7 +1572,7 @@ reg type unsupported for arg#0 function bpf_prog_int_sqrt#20
 ; BPF_ASSERT(r * r <= x);
 72: (63) *(u32 *)(r2 +0) = r2
 R2 invalid mem access 'scalar'
-verification time 728 usec
+verification time 764 usec
 stack depth 4
 processed 318 insns (limit 1000000) max_states_per_insn 3 total_states 14 peak_states 14 mark_read 9
 
@@ -1583,31 +1583,31 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'crc8.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc8.bpf.o/bpf_prog_crc8, DURATION US: 7088, VERDICT: success, VERIFIER LOG:
-verification time 7088 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/crc8.bpf.o/bpf_prog_crc8, DURATION US: 7571, VERDICT: success, VERIFIER LOG:
+verification time 7571 usec
 stack depth 260
 processed 2734 insns (limit 1000000) max_states_per_insn 4 total_states 30 peak_states 30 mark_read 29
 
 Processing 'crc16.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc16.bpf.o/bpf_prog_crc16, DURATION US: 12, VERDICT: success, VERIFIER LOG:
-verification time 12 usec
-stack depth 0
-processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
-
-Processing 'crc-ccitt.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc-ccitt.bpf.o/bpf_prog_crc_ccitt, DURATION US: 13, VERDICT: success, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/crc16.bpf.o/bpf_prog_crc16, DURATION US: 13, VERDICT: success, VERIFIER LOG:
 verification time 13 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
+Processing 'crc-ccitt.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/crc-ccitt.bpf.o/bpf_prog_crc_ccitt, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
+stack depth 0
+processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+
 Processing 'crc-itu-t.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc-itu-t.bpf.o/bpf_prog_crc_itu_t, DURATION US: 18, VERDICT: success, VERIFIER LOG:
-verification time 18 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/crc-itu-t.bpf.o/bpf_prog_crc_itu_t, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'hweight.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/hweight.bpf.o/bpf_prog_hweight, DURATION US: 248, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/hweight.bpf.o/bpf_prog_hweight, DURATION US: 301, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_hweight#26
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -1618,7 +1618,7 @@ reg type unsupported for arg#0 function bpf_prog_hweight#26
 2: (bf) r2 = r10                      ; R2_w=fp0 R10=fp0
 3: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *vx = bpf_map_lookup_elem(&input_map, &key0);
-4: (18) r1 = 0xffff888065ae1c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+4: (18) r1 = 0xffff888019640c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 6: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 ; if (!vx) return 0;
 7: (15) if r0 == 0x0 goto pc+84       ; R0_w=map_value(off=0,ks=4,vs=8,imm=0)
@@ -1721,38 +1721,38 @@ reg type unsupported for arg#0 function bpf_prog_hweight#26
 ; BPF_ASSERT(w32 + wc32 == 32);
 86: (63) *(u32 *)(r1 +0) = r1
 R1 invalid mem access 'scalar'
-verification time 248 usec
+verification time 301 usec
 stack depth 4
 processed 81 insns (limit 1000000) max_states_per_insn 0 total_states 1 peak_states 1 mark_read 1
 
 Processing 'bitrev.bpf.o'...
 Processing 'cordic.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/cordic.bpf.o/bpf_prog_cordic, DURATION US: 900, VERDICT: success, VERIFIER LOG:
-verification time 900 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/cordic.bpf.o/bpf_prog_cordic, DURATION US: 904, VERDICT: success, VERIFIER LOG:
+verification time 904 usec
 stack depth 8+0
 processed 440 insns (limit 1000000) max_states_per_insn 2 total_states 8 peak_states 8 mark_read 8
 
 Processing 'bsearch.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/bsearch.bpf.o/bpf_prog_bsearch, DURATION US: 11, VERDICT: success, VERIFIER LOG:
-verification time 11 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/bsearch.bpf.o/bpf_prog_bsearch, DURATION US: 12, VERDICT: success, VERIFIER LOG:
+verification time 12 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'checksum.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/checksum.bpf.o/bpf_prog_checksum, DURATION US: 10, VERDICT: success, VERIFIER LOG:
-verification time 10 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/checksum.bpf.o/bpf_prog_checksum, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'clz_ctz.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/clz_ctz.bpf.o/bpf_prog_clz_ctz, DURATION US: 863, VERDICT: success, VERIFIER LOG:
-verification time 863 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/clz_ctz.bpf.o/bpf_prog_clz_ctz, DURATION US: 895, VERDICT: success, VERIFIER LOG:
+verification time 895 usec
 stack depth 0+0+0
 processed 328 insns (limit 1000000) max_states_per_insn 1 total_states 28 peak_states 28 mark_read 3
 
 Processing 'crc32.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/crc32.bpf.o/bpf_prog_crc32, DURATION US: 11, VERDICT: success, VERIFIER LOG:
-verification time 11 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/crc32.bpf.o/bpf_prog_crc32, DURATION US: 12, VERDICT: success, VERIFIER LOG:
+verification time 12 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1762,15 +1762,21 @@ verification time 12 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
-Processing 'ctype.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/ctype.bpf.o/bpf_prog_ctype, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+Processing 'crc64.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/crc64.bpf.o/bpf_prog_crc64, DURATION US: 11, VERDICT: success, VERIFIER LOG:
 verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
+Processing 'ctype.bpf.o'...
+PROCESSING /home/ubuntu/bpf-verify/output2/ctype.bpf.o/bpf_prog_ctype, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
+stack depth 0
+processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+
 Processing 'errname.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/errname.bpf.o/bpf_prog_errname, DURATION US: 12, VERDICT: success, VERIFIER LOG:
-verification time 12 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/errname.bpf.o/bpf_prog_errname, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1794,21 +1800,21 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'lshrdi3.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/lshrdi3.bpf.o/bpf_prog_lshrdi3, DURATION US: 9, VERDICT: success, VERIFIER LOG:
-verification time 9 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/lshrdi3.bpf.o/bpf_prog_lshrdi3, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'memneq.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/memneq.bpf.o/bpf_prog_memneq, DURATION US: 14, VERDICT: success, VERIFIER LOG:
-verification time 14 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/memneq.bpf.o/bpf_prog_memneq, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'oid_registry.bpf.o'...
 Processing 'rbtree.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/rbtree.bpf.o/bpf_prog_rbtree, DURATION US: 14, VERDICT: success, VERIFIER LOG:
-verification time 14 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/rbtree.bpf.o/bpf_prog_rbtree, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1845,20 +1851,20 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'int_pow.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/int_pow.bpf.o/bpf_prog_int_pow, DURATION US: 11, VERDICT: success, VERIFIER LOG:
-verification time 11 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/int_pow.bpf.o/bpf_prog_int_pow, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'rational.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/rational.bpf.o/bpf_prog_rational, DURATION US: 11, VERDICT: success, VERIFIER LOG:
-verification time 11 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/rational.bpf.o/bpf_prog_rational, DURATION US: 9, VERDICT: success, VERIFIER LOG:
+verification time 9 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'lib_aes.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/lib_aes.bpf.o/bpf_prog_lib_aes, DURATION US: 12, VERDICT: success, VERIFIER LOG:
-verification time 12 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/lib_aes.bpf.o/bpf_prog_lib_aes, DURATION US: 13, VERDICT: success, VERIFIER LOG:
+verification time 13 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1869,8 +1875,8 @@ Processing 'lib_poly1305.bpf.o'...
 Processing 'lzo_decompress.bpf.o'...
 Processing 'zlib_inflate.bpf.o'...
 Processing 'zlib_inftrees.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/zlib_inftrees.bpf.o/bpf_prog_zlib_inftrees, DURATION US: 12, VERDICT: success, VERIFIER LOG:
-verification time 12 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/zlib_inftrees.bpf.o/bpf_prog_zlib_inftrees, DURATION US: 11, VERDICT: success, VERIFIER LOG:
+verification time 11 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1884,8 +1890,8 @@ Processing 'zlib_deftree.bpf.o'...
 Processing 'mpi_add.bpf.o'...
 Processing 'mpi_cmp.bpf.o'...
 Processing 'mpih_cmp.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/mpih_cmp.bpf.o/bpf_prog_mpih_cmp, DURATION US: 12, VERDICT: success, VERIFIER LOG:
-verification time 12 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/mpih_cmp.bpf.o/bpf_prog_mpih_cmp, DURATION US: 13, VERDICT: success, VERIFIER LOG:
+verification time 13 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
@@ -1908,27 +1914,27 @@ stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'mpih_lshift.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/mpih_lshift.bpf.o/bpf_prog_mpih_lshift, DURATION US: 9, VERDICT: success, VERIFIER LOG:
-verification time 9 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/mpih_lshift.bpf.o/bpf_prog_mpih_lshift, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'mpih_rshift.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/mpih_rshift.bpf.o/bpf_prog_mpih_rshift, DURATION US: 9, VERDICT: success, VERIFIER LOG:
-verification time 9 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/mpih_rshift.bpf.o/bpf_prog_mpih_rshift, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'dim.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/dim.bpf.o/bpf_prog_dim, DURATION US: 9, VERDICT: success, VERIFIER LOG:
-verification time 9 usec
+PROCESSING /home/ubuntu/bpf-verify/output2/dim.bpf.o/bpf_prog_dim, DURATION US: 10, VERDICT: success, VERIFIER LOG:
+verification time 10 usec
 stack depth 0
 processed 2 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 
 Processing 'net_dim.bpf.o'...
 Processing 'base64.bpf.o'...
 Processing 'rational_v2.bpf.o'...
-PROCESSING /home/ubuntu/bpf-verify/output2/rational_v2.bpf.o/bpf_prog_rational_v2, DURATION US: 357, VERDICT: failure, VERIFIER LOG:
+PROCESSING /home/ubuntu/bpf-verify/output2/rational_v2.bpf.o/bpf_prog_rational_v2, DURATION US: 359, VERDICT: failure, VERIFIER LOG:
 btf_vmlinux is malformed
 reg type unsupported for arg#0 function bpf_prog_rational_v2#17
 0: R1=ctx(off=0,imm=0) R10=fp0
@@ -1943,14 +1949,14 @@ reg type unsupported for arg#0 function bpf_prog_rational_v2#17
 ; __u32 key0 = 0, key1 = 1;
 5: (07) r2 += -4                      ; R2_w=fp-4
 ; __u64 *vn = bpf_map_lookup_elem(&input_map, &key0);
-6: (18) r1 = 0xffff888065ae2c00       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+6: (18) r1 = 0xffff888019640400       ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 8: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 9: (bf) r7 = r0                       ; R0_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0) R7_w=map_value_or_null(id=1,off=0,ks=4,vs=8,imm=0)
 10: (bf) r2 = r10                     ; R2_w=fp0 R10=fp0
 ; __u32 key0 = 0, key1 = 1;
 11: (07) r2 += -8                     ; R2_w=fp-8
 ; __u64 *vd = bpf_map_lookup_elem(&input_map, &key1);
-12: (18) r1 = 0xffff888065ae2c00      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
+12: (18) r1 = 0xffff888019640400      ; R1_w=map_ptr(off=0,ks=4,vs=8,imm=0)
 14: (85) call bpf_map_lookup_elem#1   ; R0=map_value_or_null(id=2,off=0,ks=4,vs=8,imm=0)
 ; if (!vn || !vd) return 0;
 15: (15) if r7 == 0x0 goto pc+74      ; R7=map_value(off=0,ks=4,vs=8,imm=0)
@@ -2095,7 +2101,7 @@ reg type unsupported for arg#0 function bpf_prog_rational_v2#17
 ; BPF_ASSERT(rd >= 1);
 89: (63) *(u32 *)(r1 +0) = r1
 R1 invalid mem access 'scalar'
-verification time 357 usec
+verification time 359 usec
 stack depth 32
 processed 117 insns (limit 1000000) max_states_per_insn 1 total_states 8 peak_states 8 mark_read 3
 
@@ -2104,56 +2110,57 @@ File                  Program                  Verdict  Duration (us)  Total ins
 ashldi3.bpf.o         bpf_prog_ashldi3         success             11            2             0            0
 ashrdi3.bpf.o         bpf_prog_ashrdi3         success             11            2             0            0
 bcd.bpf.o             bpf_prog_bcd             success             16            2             0            0
-bsearch.bpf.o         bpf_prog_bsearch         success             11            2             0            0
-checksum.bpf.o        bpf_prog_checksum        success             10            2             0            0
-clz_ctz.bpf.o         bpf_prog_clz_ctz         success            863          328            28           28
+bsearch.bpf.o         bpf_prog_bsearch         success             12            2             0            0
+checksum.bpf.o        bpf_prog_checksum        success             11            2             0            0
+clz_ctz.bpf.o         bpf_prog_clz_ctz         success            895          328            28           28
 clz_tab.bpf.o         bpf_prog_clz_tab         success             12            2             0            0
-cmpdi2.bpf.o          bpf_prog_cmpdi2          failure            223           76             6            6
-cordic.bpf.o          bpf_prog_cordic          success            900          440             8            8
-crc-ccitt.bpf.o       bpf_prog_crc_ccitt       success             13            2             0            0
-crc-itu-t.bpf.o       bpf_prog_crc_itu_t       success             18            2             0            0
-crc16.bpf.o           bpf_prog_crc16           success             12            2             0            0
-crc32.bpf.o           bpf_prog_crc32           success             11            2             0            0
+cmpdi2.bpf.o          bpf_prog_cmpdi2          failure            225           76             6            6
+cordic.bpf.o          bpf_prog_cordic          success            904          440             8            8
+crc-ccitt.bpf.o       bpf_prog_crc_ccitt       success             11            2             0            0
+crc-itu-t.bpf.o       bpf_prog_crc_itu_t       success             11            2             0            0
+crc16.bpf.o           bpf_prog_crc16           success             13            2             0            0
+crc32.bpf.o           bpf_prog_crc32           success             12            2             0            0
 crc4.bpf.o            bpf_prog_crc4            success             12            2             0            0
+crc64.bpf.o           bpf_prog_crc64           success             11            2             0            0
 crc7.bpf.o            bpf_prog_crc7            success             12            2             0            0
-crc8.bpf.o            bpf_prog_crc8            success           7088         2734            30           30
-ctype.bpf.o           bpf_prog_ctype           success             11            2             0            0
-dim.bpf.o             bpf_prog_dim             success              9            2             0            0
+crc8.bpf.o            bpf_prog_crc8            success           7571         2734            30           30
+ctype.bpf.o           bpf_prog_ctype           success             10            2             0            0
+dim.bpf.o             bpf_prog_dim             success             10            2             0            0
 div64.bpf.o           bpf_prog_div64           success             11            2             0            0
-errname.bpf.o         bpf_prog_errname         success             12            2             0            0
-gcd.bpf.o             bpf_prog_gcd             failure           1642          505            17           17
+errname.bpf.o         bpf_prog_errname         success             11            2             0            0
+gcd.bpf.o             bpf_prog_gcd             failure           1676          505            17           17
 glob.bpf.o            bpf_prog_glob            success             10            2             0            0
-hweight.bpf.o         bpf_prog_hweight         failure            248           81             1            1
-int_pow.bpf.o         bpf_prog_int_pow         success             11            2             0            0
-int_sqrt.bpf.o        bpf_prog_int_sqrt        failure            728          318            14           14
-lcm.bpf.o             bpf_prog_lcm             failure             14            0             0            0
-lib_aes.bpf.o         bpf_prog_lib_aes         success             12            2             0            0
+hweight.bpf.o         bpf_prog_hweight         failure            301           81             1            1
+int_pow.bpf.o         bpf_prog_int_pow         success             10            2             0            0
+int_sqrt.bpf.o        bpf_prog_int_sqrt        failure            764          318            14           14
+lcm.bpf.o             bpf_prog_lcm             failure             13            0             0            0
+lib_aes.bpf.o         bpf_prog_lib_aes         success             13            2             0            0
 linear_ranges.bpf.o   bpf_prog_linear_ranges   success             10            2             0            0
 list_debug.bpf.o      bpf_prog_list_debug      success             10            2             0            0
-list_sort.bpf.o       bpf_prog_list_sort       success             10            2             0            0
-lshrdi3.bpf.o         bpf_prog_lshrdi3         success              9            2             0            0
-memneq.bpf.o          bpf_prog_memneq          success             14            2             0            0
-memweight.bpf.o       bpf_prog_memweight       failure             24            0             0            0
+list_sort.bpf.o       bpf_prog_list_sort       success             15            2             0            0
+lshrdi3.bpf.o         bpf_prog_lshrdi3         success             10            2             0            0
+memneq.bpf.o          bpf_prog_memneq          success             10            2             0            0
+memweight.bpf.o       bpf_prog_memweight       failure             23            0             0            0
 mpih_add1.bpf.o       bpf_prog_mpih_add1       success             11            2             0            0
-mpih_cmp.bpf.o        bpf_prog_mpih_cmp        success             12            2             0            0
-mpih_lshift.bpf.o     bpf_prog_mpih_lshift     success              9            2             0            0
+mpih_cmp.bpf.o        bpf_prog_mpih_cmp        success             13            2             0            0
+mpih_lshift.bpf.o     bpf_prog_mpih_lshift     success             10            2             0            0
 mpih_mul1.bpf.o       bpf_prog_mpih_mul1       success             10            2             0            0
-mpih_rshift.bpf.o     bpf_prog_mpih_rshift     success              9            2             0            0
+mpih_rshift.bpf.o     bpf_prog_mpih_rshift     success             10            2             0            0
 mpih_sub1.bpf.o       bpf_prog_mpih_sub1       success             11            2             0            0
-muldi3.bpf.o          bpf_prog_muldi3          failure            158           55             2            2
-rational.bpf.o        bpf_prog_rational        success             11            2             0            0
-rational_v2.bpf.o     bpf_prog_rational_v2     failure            357          117             8            8
-rbtree.bpf.o          bpf_prog_rbtree          success             14            2             0            0
-reciprocal_div.bpf.o  bpf_prog_reciprocal_div  success             40           10             1            1
+muldi3.bpf.o          bpf_prog_muldi3          failure            171           55             2            2
+rational.bpf.o        bpf_prog_rational        success              9            2             0            0
+rational_v2.bpf.o     bpf_prog_rational_v2     failure            359          117             8            8
+rbtree.bpf.o          bpf_prog_rbtree          success             11            2             0            0
+reciprocal_div.bpf.o  bpf_prog_reciprocal_div  success             41           10             1            1
 siphash.bpf.o         bpf_prog_siphash         success             10            2             0            0
-sort.bpf.o            bpf_prog_sort            failure             31            0             0            0
+sort.bpf.o            bpf_prog_sort            failure             39            0             0            0
 ucmpdi2.bpf.o         bpf_prog_ucmpdi2         success             11            2             0            0
 ucs2_string.bpf.o     bpf_prog_ucs2_string     success             10            2             0            0
-win_minmax.bpf.o      bpf_prog_win_minmax      failure            195           62             5            5
+win_minmax.bpf.o      bpf_prog_win_minmax      failure            197           62             5            5
 zlib_inffast.bpf.o    bpf_prog_zlib_inffast    success             13            2             0            0
-zlib_inftrees.bpf.o   bpf_prog_zlib_inftrees   success             12            2             0            0
+zlib_inftrees.bpf.o   bpf_prog_zlib_inftrees   success             11            2             0            0
 --------------------  -----------------------  -------  -------------  -----------  ------------  -----------
-Done. Processed 51 files, 25 programs. Skipped 51 files, 0 programs.
+Done. Processed 52 files, 25 programs. Skipped 52 files, 0 programs.
 
 STDERR:
 libbpf: prog 'bpf_prog_cmpdi2': BPF program load failed: Permission denied

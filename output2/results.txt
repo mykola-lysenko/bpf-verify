@@ -1,7 +1,7 @@
 BPF Kernel Verification Pipeline Results
 ======================================================================
 
-Compiled OK (76):
+Compiled OK (77):
   bcd
   clz_tab
   cmpdi2
@@ -32,6 +32,7 @@ Compiled OK (76):
   clz_ctz
   crc32
   crc4
+  crc64
   ctype
   errname
   glob
@@ -79,10 +80,9 @@ Compiled OK (76):
   base64
   rational_v2
 
-Compiled FAIL (13):
+Compiled FAIL (12):
   llist: /home/ubuntu/linux-6.1.102/lib/llist.c:33:12: error: incompatible integer to poi
   errseq: /home/ubuntu/linux-6.1.102/lib/errseq.c:74:2: error: statement requires expressi
-  crc64: /home/ubuntu/linux-6.1.102/lib/crc64.c:39:10: fatal error: 'crc64table.h' file n
   seq_buf: /home/ubuntu/linux-6.1.102/lib/seq_buf.c:83:5: error: variadic functions are not
   packing: /home/ubuntu/linux-6.1.102/lib/packing.c:89:5: error: stack arguments are not su
   zstd_entropy_common: /home/ubuntu/linux-6.1.102/lib/zstd/common/entropy_common.c:224:8: error: stack 
@@ -126,6 +126,7 @@ Processing 'checksum.bpf.o'...
 Processing 'clz_ctz.bpf.o'...
 Processing 'crc32.bpf.o'...
 Processing 'crc4.bpf.o'...
+Processing 'crc64.bpf.o'...
 Processing 'ctype.bpf.o'...
 Processing 'errname.bpf.o'...
 Processing 'glob.bpf.o'...
@@ -176,57 +177,58 @@ File                  Program                  Verdict  Duration (us)  Total ins
 --------------------  -----------------------  -------  -------------  -----------  ------------  -----------
 ashldi3.bpf.o         bpf_prog_ashldi3         success              6            2             0            0
 ashrdi3.bpf.o         bpf_prog_ashrdi3         success              6            2             0            0
-bcd.bpf.o             bpf_prog_bcd             success              8            2             0            0
-bsearch.bpf.o         bpf_prog_bsearch         success              7            2             0            0
+bcd.bpf.o             bpf_prog_bcd             success              7            2             0            0
+bsearch.bpf.o         bpf_prog_bsearch         success              6            2             0            0
 checksum.bpf.o        bpf_prog_checksum        success              6            2             0            0
-clz_ctz.bpf.o         bpf_prog_clz_ctz         success            156          328            28           28
-clz_tab.bpf.o         bpf_prog_clz_tab         success              7            2             0            0
-cmpdi2.bpf.o          bpf_prog_cmpdi2          failure             48           76             6            6
+clz_ctz.bpf.o         bpf_prog_clz_ctz         success            124          328            28           28
+clz_tab.bpf.o         bpf_prog_clz_tab         success              6            2             0            0
+cmpdi2.bpf.o          bpf_prog_cmpdi2          failure             46           76             6            6
 cordic.bpf.o          bpf_prog_cordic          success             99          440             8            8
-crc-ccitt.bpf.o       bpf_prog_crc_ccitt       success              7            2             0            0
-crc-itu-t.bpf.o       bpf_prog_crc_itu_t       success              6            2             0            0
+crc-ccitt.bpf.o       bpf_prog_crc_ccitt       success              8            2             0            0
+crc-itu-t.bpf.o       bpf_prog_crc_itu_t       success              7            2             0            0
 crc16.bpf.o           bpf_prog_crc16           success              7            2             0            0
 crc32.bpf.o           bpf_prog_crc32           success              7            2             0            0
 crc4.bpf.o            bpf_prog_crc4            success              7            2             0            0
+crc64.bpf.o           bpf_prog_crc64           success              6            2             0            0
 crc7.bpf.o            bpf_prog_crc7            success              7            2             0            0
-crc8.bpf.o            bpf_prog_crc8            success            914         2734            30           30
-ctype.bpf.o           bpf_prog_ctype           success              7            2             0            0
+crc8.bpf.o            bpf_prog_crc8            success            916         2734            30           30
+ctype.bpf.o           bpf_prog_ctype           success              6            2             0            0
 dim.bpf.o             bpf_prog_dim             success              6            2             0            0
 div64.bpf.o           bpf_prog_div64           success              6            2             0            0
 errname.bpf.o         bpf_prog_errname         success              6            2             0            0
-gcd.bpf.o             bpf_prog_gcd             failure            223          505            17           17
-glob.bpf.o            bpf_prog_glob            success              7            2             0            0
-hweight.bpf.o         bpf_prog_hweight         failure             29           81             1            1
+gcd.bpf.o             bpf_prog_gcd             failure            240          505            17           17
+glob.bpf.o            bpf_prog_glob            success              6            2             0            0
+hweight.bpf.o         bpf_prog_hweight         failure             30           81             1            1
 int_pow.bpf.o         bpf_prog_int_pow         success              6            2             0            0
-int_sqrt.bpf.o        bpf_prog_int_sqrt        failure            105          318            14           14
-lcm.bpf.o             bpf_prog_lcm             failure             12            0             0            0
-lib_aes.bpf.o         bpf_prog_lib_aes         success              8            2             0            0
+int_sqrt.bpf.o        bpf_prog_int_sqrt        failure            104          318            14           14
+lcm.bpf.o             bpf_prog_lcm             failure             14            0             0            0
+lib_aes.bpf.o         bpf_prog_lib_aes         success              6            2             0            0
 linear_ranges.bpf.o   bpf_prog_linear_ranges   success              6            2             0            0
 list_debug.bpf.o      bpf_prog_list_debug      success              6            2             0            0
-list_sort.bpf.o       bpf_prog_list_sort       success              6            2             0            0
-lshrdi3.bpf.o         bpf_prog_lshrdi3         success              5            2             0            0
-memneq.bpf.o          bpf_prog_memneq          success              7            2             0            0
-memweight.bpf.o       bpf_prog_memweight       failure             23            0             0            0
+list_sort.bpf.o       bpf_prog_list_sort       success              7            2             0            0
+lshrdi3.bpf.o         bpf_prog_lshrdi3         success              6            2             0            0
+memneq.bpf.o          bpf_prog_memneq          success              6            2             0            0
+memweight.bpf.o       bpf_prog_memweight       failure             22            0             0            0
 mpih_add1.bpf.o       bpf_prog_mpih_add1       success              6            2             0            0
-mpih_cmp.bpf.o        bpf_prog_mpih_cmp        success              7            2             0            0
+mpih_cmp.bpf.o        bpf_prog_mpih_cmp        success              6            2             0            0
 mpih_lshift.bpf.o     bpf_prog_mpih_lshift     success              6            2             0            0
 mpih_mul1.bpf.o       bpf_prog_mpih_mul1       success              6            2             0            0
 mpih_rshift.bpf.o     bpf_prog_mpih_rshift     success              6            2             0            0
 mpih_sub1.bpf.o       bpf_prog_mpih_sub1       success              6            2             0            0
-muldi3.bpf.o          bpf_prog_muldi3          failure             21           55             2            2
+muldi3.bpf.o          bpf_prog_muldi3          failure             22           55             2            2
 rational.bpf.o        bpf_prog_rational        success              6            2             0            0
-rational_v2.bpf.o     bpf_prog_rational_v2     failure             63          117             8            8
+rational_v2.bpf.o     bpf_prog_rational_v2     failure             58          117             8            8
 rbtree.bpf.o          bpf_prog_rbtree          success              6            2             0            0
-reciprocal_div.bpf.o  bpf_prog_reciprocal_div  success             12           10             1            1
-siphash.bpf.o         bpf_prog_siphash         success              6            2             0            0
-sort.bpf.o            bpf_prog_sort            failure             32            0             0            0
+reciprocal_div.bpf.o  bpf_prog_reciprocal_div  success             19           10             1            1
+siphash.bpf.o         bpf_prog_siphash         success              5            2             0            0
+sort.bpf.o            bpf_prog_sort            failure             31            0             0            0
 ucmpdi2.bpf.o         bpf_prog_ucmpdi2         success              6            2             0            0
 ucs2_string.bpf.o     bpf_prog_ucs2_string     success              6            2             0            0
 win_minmax.bpf.o      bpf_prog_win_minmax      failure             38           62             5            5
 zlib_inffast.bpf.o    bpf_prog_zlib_inffast    success              8            2             0            0
 zlib_inftrees.bpf.o   bpf_prog_zlib_inftrees   success              6            2             0            0
 --------------------  -----------------------  -------  -------------  -----------  ------------  -----------
-Done. Processed 51 files, 25 programs. Skipped 51 files, 0 programs.
+Done. Processed 52 files, 25 programs. Skipped 52 files, 0 programs.
 
 Veristat STDERR:
 Failed to open '/home/ubuntu/bpf-verify/output2/dynamic_queue_limits.bpf.o': -95
