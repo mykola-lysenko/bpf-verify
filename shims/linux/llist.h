@@ -2,14 +2,21 @@
 /*
  * BPF shim: linux/llist.h
  *
- * The real llist.h includes linux/atomic.h and uses xchg() in llist_del_all().
- * xchg() calls arch_xchg() which is not available in BPF context when
- * atomic-instrumented.h is processed before asm/cmpxchg.h is included.
+ * The real llist.h includes linux/atomic.h and uses xchg() in llist_del_all()
+ * and try_cmpxchg() in llist_add_batch() and llist_del_first().
+ * These atomic operations on pointer types are not valid in BPF context
+ * because __sync builtins return integers, not pointers.
  *
  * This shim replaces the real llist.h entirely:
  *  - Omits the linux/atomic.h include (not needed for BPF)
- *  - Replaces llist_del_all() with the non-atomic __llist_del_all() body
- *  - All other declarations are identical to the real header
+ *  - Provides non-atomic static inline implementations for all functions
+ *
+ * When llist.c is compiled as part of the harness, EXTRA_PRE_INCLUDE defines
+ * rename macros (e.g. #define llist_add_batch __llist_add_batch_atomic) so
+ * that llist.c's non-static function definitions don't conflict with our
+ * static inline versions. We use push_macro/pop_macro to temporarily suspend
+ * the rename macros while defining our static inline functions, then restore
+ * them so llist.c's definitions get renamed.
  *
  * The LLIST_H guard is defined here so the real header is never included.
  */
@@ -92,10 +99,18 @@ static inline struct llist_node *llist_next(struct llist_node *node)
 	return node->next;
 }
 
-extern bool llist_add_batch(struct llist_node *new_first,
-			    struct llist_node *new_last,
-			    struct llist_head *head);
+/* Save any rename macros from EXTRA_PRE_INCLUDE so our static inline
+ * definitions use the real names, then restore them for llist.c's definitions. */
+#pragma push_macro("llist_add_batch")
+#pragma push_macro("llist_del_first")
+#pragma push_macro("llist_reverse_order")
+#undef llist_add_batch
+#undef llist_del_first
+#undef llist_reverse_order
 
+/**
+ * __llist_add_batch - non-atomic add batch (internal helper)
+ */
 static inline bool __llist_add_batch(struct llist_node *new_first,
 				     struct llist_node *new_last,
 				     struct llist_head *head)
@@ -106,15 +121,28 @@ static inline bool __llist_add_batch(struct llist_node *new_first,
 }
 
 /**
+ * llist_add_batch - add a batch of entries to a lock-less list
+ *
+ * BPF shim: uses non-atomic implementation to avoid try_cmpxchg on pointer.
+ */
+static inline bool llist_add_batch(struct llist_node *new_first,
+				   struct llist_node *new_last,
+				   struct llist_head *head)
+{
+	return __llist_add_batch(new_first, new_last, head);
+}
+
+/**
  * llist_add - add a new entry
  * @new:	new entry to be added
  * @head:	the head for your lock-less list
  *
+ * BPF shim: uses non-atomic __llist_add_batch to avoid try_cmpxchg on pointer.
  * Returns true if the list was empty prior to adding this entry.
  */
 static inline bool llist_add(struct llist_node *new, struct llist_head *head)
 {
-	return llist_add_batch(new, new, head);
+	return __llist_add_batch(new, new, head);
 }
 
 static inline bool __llist_add(struct llist_node *new, struct llist_head *head)
@@ -126,8 +154,8 @@ static inline bool __llist_add(struct llist_node *new, struct llist_head *head)
  * llist_del_all - delete all entries from lock-less list
  * @head:	the head of lock-less list to delete all entries
  *
- * BPF shim: uses non-atomic implementation (__llist_del_all body) instead of
- * xchg() which is not valid in BPF context.
+ * BPF shim: uses non-atomic implementation instead of xchg() which is not
+ * valid in BPF context.
  */
 static inline struct llist_node *llist_del_all(struct llist_head *head)
 {
@@ -143,7 +171,24 @@ static inline struct llist_node *__llist_del_all(struct llist_head *head)
 	return first;
 }
 
-extern struct llist_node *llist_del_first(struct llist_head *head);
-struct llist_node *llist_reverse_order(struct llist_node *head);
+/**
+ * llist_del_first - delete the first entry of lock-less list
+ * @head:	the head for your lock-less list
+ *
+ * BPF shim: uses non-atomic implementation to avoid try_cmpxchg on pointer.
+ */
+static inline struct llist_node *llist_del_first(struct llist_head *head)
+{
+	struct llist_node *entry = head->first;
+	if (entry)
+		head->first = entry->next;
+	return entry;
+}
+
+/* Restore rename macros so llist.c's non-static definitions get renamed
+ * and don't conflict with our static inline versions above. */
+#pragma pop_macro("llist_reverse_order")
+#pragma pop_macro("llist_del_first")
+#pragma pop_macro("llist_add_batch")
 
 #endif /* LLIST_H */

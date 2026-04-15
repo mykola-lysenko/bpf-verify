@@ -34,10 +34,10 @@ struct bug_entry {
 #define BUG_ON(cond)		do { if (cond) { } } while (0)
 #define WARN_ON(cond)		(!!(cond))
 #define WARN_ON_ONCE(cond)	(!!(cond))
-#define WARN(cond, fmt...)	((void)(cond))
-#define WARN_ONCE(cond, fmt...)	((void)(cond))
-#define WARN_TAINT(cond, taint, fmt...)	((void)(cond))
-#define WARN_TAINT_ONCE(cond, taint, fmt...)	((void)(cond))
+#define WARN(cond, fmt...)	(!!(cond))
+#define WARN_ONCE(cond, fmt...)	(!!(cond))
+#define WARN_TAINT(cond, taint, fmt...)	(!!(cond))
+#define WARN_TAINT_ONCE(cond, taint, fmt...)	(!!(cond))
 
 /* __WARN_FLAGS needed by asm-generic/bug.h */
 #define __WARN_FLAGS(flags)	do { } while (0)
