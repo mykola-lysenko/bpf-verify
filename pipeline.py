@@ -1086,6 +1086,28 @@ HARNESS_BODIES = {
     if (out != 42) { *(volatile int *)0 = 0; }
     return 0;
 """,
+    # seq_buf: test the non-variadic, non-VFS, non-user-space functions.
+    # seq_buf_printf, seq_buf_hex_dump, seq_buf_path, seq_buf_to_user are
+    # renamed+DCE'd; we only test seq_buf_puts, seq_buf_putc, seq_buf_putmem,
+    # seq_buf_has_overflowed, and seq_buf_used.
+    "seq_buf": """\
+    char buf[32];
+    struct seq_buf s;
+    seq_buf_init(&s, buf, sizeof(buf));
+    /* Test seq_buf_puts: write a short string */
+    seq_buf_puts(&s, "hi");
+    BPF_ASSERT(!seq_buf_has_overflowed(&s));
+    BPF_ASSERT(seq_buf_used(&s) == 2);
+    /* Test seq_buf_putc: append a single character */
+    seq_buf_putc(&s, '!');
+    BPF_ASSERT(seq_buf_used(&s) == 3);
+    /* Test overflow detection: fill the buffer */
+    unsigned int i;
+    for (i = 0; i < 30; i++)
+        seq_buf_putc(&s, 'x');
+    BPF_ASSERT(seq_buf_has_overflowed(&s));
+    return 0;
+""",
 }
 
 # Default harness body for files without a specific one
@@ -1670,26 +1692,13 @@ static __inline__ void *memcpy(void *dst, const void *src, __SIZE_TYPE__ n)
     # ucs2_string.c:61 uses E2BIG but ucs2_string.h does not include linux/errno.h.
     # Fix: include linux/errno.h before the source file.
     "ucs2_string": "#include <linux/errno.h>\n",
-    # seq_buf.c:422 uses DUMP_PREFIX_ADDRESS which is defined in linux/printk.h.
-    # linux/printk.h is blocked by -D__KERNEL_PRINTK__ (to avoid function declaration
-    # conflicts). Define the DUMP_PREFIX enum here instead.
-    # seq_buf.c:93 defines seq_buf_printf() which is variadic. BPF does not support
-    # variadic functions unless they have internal_linkage (static). The attribute
-    # is patched directly into seq_buf.c. The DUMP_PREFIX enum is defined
-    # here because linux/printk.h (which defines it) is blocked by -D__KERNEL_PRINTK__.
-    "seq_buf": """\
-enum dump_prefix_type {
-    DUMP_PREFIX_NONE,
-    DUMP_PREFIX_ADDRESS,
-    DUMP_PREFIX_OFFSET
-};
-/* seq_buf_printf is variadic. BPF (clang-23) does not support variadic functions.
- * Define BPF_STUB_SEQ_BUF_PRINTF to:
- * 1. Skip the variadic definition in seq_buf.c (guarded by #ifndef).
- * 2. Trigger the shim linux/seq_buf.h to redefine seq_buf_printf as a
- *    non-variadic macro that calls seq_buf_vprintf with an empty va_list. */
-#define BPF_STUB_SEQ_BUF_PRINTF
-""",
+    # seq_buf: the shim source file (shims/seq_buf-shim.c) replaces lib/seq_buf.c.
+    # It provides only the BPF-safe functions (seq_buf_puts, seq_buf_putc,
+    # seq_buf_putmem, seq_buf_putmem_hex, seq_buf_vprintf) and omits the four
+    # BPF-incompatible ones (seq_buf_printf variadic, seq_buf_hex_dump,
+    # seq_buf_path VFS, seq_buf_to_user user-space). No EXTRA_PRE_INCLUDE needed.
+    # "seq_buf": "",  # No pre-include needed; shim handles everything
+
     # lib/crypto/sha256.c defines sha256_finup_2x() which has 6 parameters.
     # BPF only supports functions with at most 5 parameters for non-static functions.
     # Fix: rename sha256_finup_2x to __bpf_sha256_finup_2x and inject internal_linkage
@@ -2550,6 +2559,8 @@ void reciprocal_value_to_ptr(__u32 d, struct __bpf_recip_rv *out)
     # so the renamed (unused) static inline functions have already been compiled.
     # dim: ktime_divns/ktime_to_us/ktime_us_delta are handled by shims/linux/ktime.h.
     # No EXTRA_PREAMBLE needed for dim.
+    # seq_buf: close the #pragma clang attribute push scope opened in EXTRA_PRE_INCLUDE.
+    # seq_buf: no EXTRA_PREAMBLE needed; the shim source handles everything.
     "memweight": """\
 unsigned int __bitmap_weight(const unsigned long *src, unsigned int nbits)
 {
@@ -2752,7 +2763,7 @@ def main():
         # nodemask.c removed from lib/ in kernel v7.0 - skip
         "oid_registry":          KSRC / "lib/oid_registry.c",
         "rbtree":                KSRC / "lib/rbtree.c",
-        "seq_buf":               KSRC / "lib/seq_buf.c",
+        "seq_buf":                SHIM / "seq_buf-shim.c",
         "siphash":               KSRC / "lib/siphash.c",
         "string":                KSRC / "lib/string.c",
         "timerqueue":            KSRC / "lib/timerqueue.c",

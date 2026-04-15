@@ -101,4 +101,19 @@ During this phase, we also discovered that the BPF verifier's precision limitati
 
 ## Summary
 
-After resolving the BTF extern failures and BPF_ASSERT precision issues, the pipeline now successfully compiles and verifies **70 modules** (up from 56). The remaining 19 modules fail compilation due to BPF architectural limitations (e.g., variadic functions, stack arguments, unsupported builtins).
+After resolving the BTF extern failures, BPF_ASSERT precision issues, and `seq_buf` variadic function compilation errors, the pipeline now successfully compiles and verifies **71 modules** (up from 56). The remaining 18 modules fail compilation due to BPF architectural limitations (e.g., stack arguments, unsupported builtins).
+
+### `seq_buf` Variadic Function Resolution
+
+The `seq_buf` module initially failed to compile because BPF strictly rejects variadic function definitions (functions using `...` and `va_list`), even if they are marked `static inline` or have internal linkage. `seq_buf.c` defines `seq_buf_printf(struct seq_buf *s, const char *fmt, ...)`.
+
+**The Root Cause**: LLVM's BPF backend checks for variadic definitions *before* performing Dead Code Elimination (DCE). Even if the function is never called by the BPF program, the mere presence of its definition causes a hard compilation error.
+
+**The Initial Attempt**: We tried to use `#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)` to force all functions in `seq_buf.c` to have internal linkage, hoping the BPF backend would DCE the variadic function. However, this failed because `seq_buf.c` transitively includes headers (like `linux/string.h`) that declare functions without internal linkage. The compiler then throws an error: `internal_linkage attribute does not appear on the first declaration`.
+
+**The Ultimate Fix**: We abandoned the pragma approach and instead created a shim source file (`shims/seq_buf-shim.c`) that replaces `lib/seq_buf.c` entirely during BPF compilation. This shim:
+1. Provides the exact implementations of all BPF-safe functions (`seq_buf_puts`, `seq_buf_putc`, `seq_buf_putmem`, `seq_buf_putmem_hex`, and `seq_buf_vprintf`).
+2. Intentionally omits the BPF-incompatible functions (`seq_buf_printf`, `seq_buf_hex_dump`, `seq_buf_path`, `seq_buf_to_user`).
+3. Stubs out `vsnprintf` as a no-op so that `seq_buf_vprintf` can compile without pulling in the massive kernel `printf` machinery.
+
+This approach successfully bypasses the variadic function restriction, allowing the core `seq_buf` logic to be compiled to BPF and verified by `veristat`.
