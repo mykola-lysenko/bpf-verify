@@ -59,7 +59,7 @@ typedef _Bool              bool;
 /* -----------------------------------------------------------------------
  * fls / fls64 (find last set bit, 1-indexed, 0 if none)
  * ----------------------------------------------------------------------- */
-static __attribute__((always_inline)) int fls(unsigned int x)
+static inline int fls(unsigned int x)
 {
     int r = 32;
     if (!x) return 0;
@@ -71,7 +71,7 @@ static __attribute__((always_inline)) int fls(unsigned int x)
     return r;
 }
 
-static __attribute__((always_inline)) int fls64(u64 x)
+static inline int fls64(u64 x)
 {
     u32 hi = (u32)(x >> 32);
     if (hi) return fls(hi) + 32;
@@ -81,16 +81,16 @@ static __attribute__((always_inline)) int fls64(u64 x)
 /* -----------------------------------------------------------------------
  * Byte-order helpers (big-endian to CPU, for x86 little-endian)
  * ----------------------------------------------------------------------- */
-static __attribute__((always_inline)) u32 be32_to_cpu(u32 x)
+static inline u32 be32_to_cpu(u32 x)
 {
     return ((x & 0xff000000u) >> 24) | ((x & 0x00ff0000u) >> 8) |
            ((x & 0x0000ff00u) <<  8) | ((x & 0x000000ffu) << 24);
 }
-static __attribute__((always_inline)) u16 be16_to_cpu(u16 x)
+static inline u16 be16_to_cpu(u16 x)
 {
     return (u16)((x >> 8) | (x << 8));
 }
-static __attribute__((always_inline)) u64 be64_to_cpu(u64 x)
+static inline u64 be64_to_cpu(u64 x)
 {
     return ((u64)be32_to_cpu((u32)(x >> 32))) |
            (((u64)be32_to_cpu((u32)(x & 0xffffffffull))) << 32);
@@ -120,7 +120,7 @@ static __attribute__((always_inline)) u64 be64_to_cpu(u64 x)
 #define ENOSPC              28
 #define KMALLOC_MAX_SIZE    (1u << 22)
 
-static __attribute__((always_inline)) void *__lpm_memcpy(void *d, const void *s, size_t n)
+static inline void *__lpm_memcpy(void *d, const void *s, size_t n)
 {
     u8 *dd = (u8 *)d;
     const u8 *ss = (const u8 *)s;
@@ -160,9 +160,9 @@ struct rcu_head { void *next; void (*func)(struct rcu_head *); };
 /* -----------------------------------------------------------------------
  * ERR_PTR / IS_ERR
  * ----------------------------------------------------------------------- */
-static __attribute__((always_inline)) void *ERR_PTR(long error)
+static inline void *ERR_PTR(long error)
 { return (void *)error; }
-static __attribute__((always_inline)) bool IS_ERR(const void *ptr)
+static inline bool IS_ERR(const void *ptr)
 { return (unsigned long)ptr >= (unsigned long)-4095; }
 
 /* -----------------------------------------------------------------------

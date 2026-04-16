@@ -41,7 +41,7 @@ struct bpf_bloom_filter {
 };
 
 /* Initialise a bloom filter with a fixed 256-bit bitset */
-static __attribute__((always_inline))
+static inline
 void bloom_filter_init(struct bpf_bloom_filter *bloom,
                        u32 value_size, u32 nr_hash_funcs, u32 seed)
 {
@@ -58,7 +58,7 @@ void bloom_filter_init(struct bpf_bloom_filter *bloom,
 }
 
 /* BPF-verifier-friendly bit test: word index is bounded to 0..3 */
-static __attribute__((always_inline))
+static inline
 int bloom_test_bit(u64 *bitset, u32 bit)
 {
     u32 word = (bit >> 6) & 3U;  /* 0..3, compile-time bounded */
@@ -67,7 +67,7 @@ int bloom_test_bit(u64 *bitset, u32 bit)
 }
 
 /* BPF-verifier-friendly bit set: word index is bounded to 0..3 */
-static __attribute__((always_inline))
+static inline
 void bloom_set_bit(u64 *bitset, u32 bit)
 {
     u32 word = (bit >> 6) & 3U;  /* 0..3, compile-time bounded */

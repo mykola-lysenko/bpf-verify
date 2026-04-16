@@ -79,18 +79,18 @@ struct list_head {
 };
 #endif /* _LINUX_TYPES_H */
 
-static __attribute__((always_inline)) void INIT_LIST_HEAD(struct list_head *list)
+static inline void INIT_LIST_HEAD(struct list_head *list)
 {
     list->next = list;
     list->prev = list;
 }
 
-static __attribute__((always_inline)) int list_empty(const struct list_head *head)
+static inline int list_empty(const struct list_head *head)
 {
     return head->next == head;
 }
 
-static __attribute__((always_inline)) void __list_add(struct list_head *new_,
+static inline void __list_add(struct list_head *new_,
     struct list_head *prev, struct list_head *next)
 {
     next->prev = new_;
@@ -99,33 +99,33 @@ static __attribute__((always_inline)) void __list_add(struct list_head *new_,
     prev->next = new_;
 }
 
-static __attribute__((always_inline)) void list_add(struct list_head *new_,
+static inline void list_add(struct list_head *new_,
     struct list_head *head)
 {
     __list_add(new_, head, head->next);
 }
 
-static __attribute__((always_inline)) void list_add_tail(struct list_head *new_,
+static inline void list_add_tail(struct list_head *new_,
     struct list_head *head)
 {
     __list_add(new_, head->prev, head);
 }
 
-static __attribute__((always_inline)) void __list_del(struct list_head *prev,
+static inline void __list_del(struct list_head *prev,
     struct list_head *next)
 {
     next->prev = prev;
     prev->next = next;
 }
 
-static __attribute__((always_inline)) void list_del(struct list_head *entry)
+static inline void list_del(struct list_head *entry)
 {
     __list_del(entry->prev, entry->next);
     entry->next = NULL;
     entry->prev = NULL;
 }
 
-static __attribute__((always_inline)) void list_move(struct list_head *list,
+static inline void list_move(struct list_head *list,
     struct list_head *head)
 {
     __list_del(list->prev, list->next);
@@ -218,7 +218,7 @@ struct bpf_lru {
     bool               percpu;
 };
 
-static __attribute__((always_inline)) void bpf_lru_node_set_ref(
+static inline void bpf_lru_node_set_ref(
     struct bpf_lru_node *node)
 {
     if (!READ_ONCE(node->ref))
@@ -242,31 +242,31 @@ static __attribute__((always_inline)) void bpf_lru_node_set_ref(
  * Core algorithm functions -- copied verbatim from bpf_lru_list.c (Linux 6.1)
  * ----------------------------------------------------------------------- */
 
-static __attribute__((always_inline))
+static inline
 struct list_head *local_free_list(struct bpf_lru_locallist *loc_l)
 {
     return &loc_l->lists[LOCAL_FREE_LIST_IDX];
 }
 
-static __attribute__((always_inline))
+static inline
 struct list_head *local_pending_list(struct bpf_lru_locallist *loc_l)
 {
     return &loc_l->lists[LOCAL_PENDING_LIST_IDX];
 }
 
-static __attribute__((always_inline))
+static inline
 bool bpf_lru_node_is_ref(const struct bpf_lru_node *node)
 {
     return READ_ONCE(node->ref);
 }
 
-static __attribute__((always_inline))
+static inline
 void bpf_lru_node_clear_ref(struct bpf_lru_node *node)
 {
     WRITE_ONCE(node->ref, 0);
 }
 
-static __attribute__((always_inline))
+static inline
 void bpf_lru_list_count_inc(struct bpf_lru_list *l,
                              enum bpf_lru_list_type type)
 {
@@ -274,7 +274,7 @@ void bpf_lru_list_count_inc(struct bpf_lru_list *l,
         l->counts[type]++;
 }
 
-static __attribute__((always_inline))
+static inline
 void bpf_lru_list_count_dec(struct bpf_lru_list *l,
                              enum bpf_lru_list_type type)
 {
@@ -337,7 +337,7 @@ void __bpf_lru_node_move(struct bpf_lru_list *l,
     list_move(&node->list, &l->lists[tgt_type]);
 }
 
-static __attribute__((always_inline))
+static inline
 bool bpf_lru_list_inactive_low(const struct bpf_lru_list *l)
 {
     return l->counts[BPF_LRU_LIST_T_INACTIVE] <
@@ -429,7 +429,7 @@ unsigned int __bpf_lru_list_shrink_inactive(struct bpf_lru *lru,
     return nshrinked;
 }
 
-static __attribute__((always_inline))
+static inline
 void __bpf_lru_list_rotate(struct bpf_lru *lru, struct bpf_lru_list *l)
 {
     if (bpf_lru_list_inactive_low(l))
@@ -456,7 +456,7 @@ void __local_list_flush(struct bpf_lru_list *l,
 /* -----------------------------------------------------------------------
  * Initialisation helpers (simplified single-CPU versions)
  * ----------------------------------------------------------------------- */
-static __attribute__((always_inline))
+static inline
 void bpf_lru_list_init(struct bpf_lru_list *l)
 {
     int i;
@@ -468,7 +468,7 @@ void bpf_lru_list_init(struct bpf_lru_list *l)
     raw_spin_lock_init(&l->lock);
 }
 
-static __attribute__((always_inline))
+static inline
 void bpf_lru_locallist_init(struct bpf_lru_locallist *loc_l, int cpu)
 {
     int i;
@@ -493,7 +493,7 @@ void bpf_lru_list_populate(struct bpf_lru_list *l,
 }
 
 /* Move the first node from the free list to inactive (simulate "use") */
-static __attribute__((always_inline))
+static inline
 struct bpf_lru_node *bpf_lru_list_alloc(struct bpf_lru_list *l)
 {
     struct list_head *free = &l->lists[BPF_LRU_LIST_T_FREE];
