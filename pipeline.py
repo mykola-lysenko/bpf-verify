@@ -56,13 +56,13 @@ BPF_CFLAGS = [
     "-UCONFIG_UPROBES",
     # CONFIG_NUMA pulls in asm/sparsemem.h (not in our shim) and linux/printk.h.
     "-UCONFIG_NUMA",
-    # Block linux/module.h — it pulls in linux/sched.h and the full
+    # Block linux/module.h -- it pulls in linux/sched.h and the full
     # task scheduler type system, which is too deep to shim.
     "-D_LINUX_MODULE_H",
-    # Block linux/export.h — it redefines EXPORT_SYMBOL with a complex asm
+    # Block linux/export.h -- it redefines EXPORT_SYMBOL with a complex asm
     # block that generates non-BPF ELF sections.
     "-D_LINUX_EXPORT_H",
-    # Block linux/panic.h and linux/printk.h — their function declarations
+    # Block linux/panic.h and linux/printk.h -- their function declarations
     # conflict with our no-op macro definitions in HARNESS_TEMPLATE.
     "-D__KERNEL_PRINTK__",
     "-D_LINUX_PANIC_H",
@@ -77,11 +77,11 @@ BPF_CFLAGS = [
     "-D____cacheline_aligned_in_smp=__attribute__((__aligned__(64)))",
     # THIS_MODULE is defined in linux/module.h which we block with -D_LINUX_MODULE_H.
     "-DTHIS_MODULE=NULL",
-    # Block linux/kprobes.h — it pulls in ftrace.h -> trace_recursion.h ->
+    # Block linux/kprobes.h -- it pulls in ftrace.h -> trace_recursion.h ->
     # interrupt.h -> hardirq.h -> sched.h which requires arch-specific symbols.
     "-D_LINUX_KPROBES_H",
     "-DNOKPROBE_SYMBOL(x)=",
-    # Block linux/pgtable.h — it uses pud_pgtable/pmd_offset which require
+    # Block linux/pgtable.h -- it uses pud_pgtable/pmd_offset which require
     # full MM infrastructure incompatible with BPF compilation.
     "-D_LINUX_PGTABLE_H",
     # Precompute KTIME_SEC_MAX to avoid sdiv instruction in ktime.h/time64.h.
@@ -157,7 +157,7 @@ HARNESS_TEMPLATE = """\
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
  *
- * These macros call warn_slowpath_fmt, printk, etc. — functions
+ * These macros call warn_slowpath_fmt, printk, etc. -- functions
  * that are not available in the BPF execution environment and
  * produce unresolved extern symbols that block libbpf loading.
  *
@@ -175,7 +175,7 @@ HARNESS_TEMPLATE = """\
 #define BUG()                      do {{}} while (0)
 #define BUG_ON(cond)               do {{ if (cond) {{}} }} while (0)
 
-/* printk / pr_* family — produce string-literal .rodata relocations */
+/* printk / pr_* family -- produce string-literal .rodata relocations */
 #define printk(fmt, ...)           do {{}} while (0)
 #define pr_emerg(fmt, ...)         do {{}} while (0)
 #define pr_alert(fmt, ...)         do {{}} while (0)
@@ -394,7 +394,7 @@ HARNESS_BODIES = {
     return 0;""",
 
     "memweight": """\
-    /* memweight: compile-only test — the BPF verifier rejects memweight()
+    /* memweight: compile-only test -- the BPF verifier rejects memweight()
      * because it casts a pointer to unsigned long for alignment checking:
      *   for (; bytes > 0 && ((unsigned long)bitmap) % sizeof(long); ...)
      * The BPF verifier tracks stack pointers as typed values and rejects
@@ -509,7 +509,7 @@ HARNESS_BODIES = {
     return (int)(first + last + zero);""",
 
     "sort": """\
-    /* sort: compile-only test — the BPF verifier rejects sort() because
+    /* sort: compile-only test -- the BPF verifier rejects sort() because
      * it uses function pointers (comparator and swap callbacks) which
      * generate indirect call instructions (opcode 0x8d) that the BPF
      * verifier does not support.
@@ -517,7 +517,7 @@ HARNESS_BODIES = {
      * C-related finding: lib/sort.c uses function pointers (cmp_func_t,
      * swap_func_t) passed through a struct wrapper. Even when NULL is
      * passed (triggering built-in swap selection), the do_cmp() helper
-     * still calls ((const struct wrapper *)priv)->cmp(a, b) — an indirect
+     * still calls ((const struct wrapper *)priv)->cmp(a, b) -- an indirect
      * call through a struct field. The BPF verifier rejects this with
      * "unknown opcode 0x8d" (BPF_JMP | BPF_CALL with indirect target).
      * This is a fundamental incompatibility between sort.c's callback
@@ -551,7 +551,7 @@ HARNESS_BODIES = {
     return (int)(v + w);""",
 
     "gcd": """\
-    /* gcd: compile-only test — the BPF verifier rejects gcd() because it
+    /* gcd: compile-only test -- the BPF verifier rejects gcd() because it
      * uses an unbounded for(;;) loop (binary GCD / Stein's algorithm).
      * Even with constant inputs, LLVM's BPF backend does not constant-fold
      * the loop body away, leaving a back-edge that the verifier rejects.
@@ -561,13 +561,13 @@ HARNESS_BODIES = {
      * detected" / "back-edge" because it cannot prove termination of the
      * loop for arbitrary inputs. Unlike a bounded for-loop with a counter,
      * the binary GCD loop terminates based on the mathematical property
-     * that a or b eventually reaches 1 — a property the verifier cannot
+     * that a or b eventually reaches 1 -- a property the verifier cannot
      * verify statically. This makes gcd.c fundamentally incompatible with
      * the BPF verifier's loop termination requirements. */
     return 0;""",
 
     "lcm": """\
-    /* lcm: compile-only test — lcm() calls gcd() internally, which uses
+    /* lcm: compile-only test -- lcm() calls gcd() internally, which uses
      * an unbounded for(;;) loop. The BPF verifier rejects the back-edge
      * in gcd's loop even when lcm is called with constant inputs, because
      * LLVM's BPF backend does not constant-fold the loop body away.
@@ -580,7 +580,7 @@ HARNESS_BODIES = {
     return 0;""",
 
     "reciprocal_div": """\
-    /* reciprocal_value returns a struct by value — BPF does not support
+    /* reciprocal_value returns a struct by value -- BPF does not support
      * StructRet ABI. We call it via a pointer-based wrapper defined in
      * the harness preamble (see EXTRA_PREAMBLE for reciprocal_div).
      * Use struct __bpf_recip_rv (the renamed tag) since the reciprocal_value
@@ -797,7 +797,7 @@ HARNESS_BODIES = {
      *   2. Identity polynomial f(x)=x returns x
      *   3. Constant polynomial f(x)=k returns k
      *
-     * polynomial_calc takes 2 args — within BPF limit.
+     * polynomial_calc takes 2 args -- within BPF limit.
      * We define polynomials as compound literals on the stack.
      */
     __u32 key0 = 0;
@@ -807,7 +807,7 @@ HARNESS_BODIES = {
     volatile long vx2 = x;
     x = vx2;
 
-    /* Property 1: zero polynomial — single term deg=0, coef=0 */
+    /* Property 1: zero polynomial -- single term deg=0, coef=0 */
     struct { long total_divider; struct polynomial_term terms[1]; } zero_poly = {
         .total_divider = 1,
         .terms = {{ .deg = 0, .coef = 0, .divider = 1, .divider_leftover = 1 }},
@@ -1203,6 +1203,18 @@ EXTRA_INCLUDES = {
 
 # Per-file extra compiler flags, keyed by src_name.
 # These are appended to BPF_CFLAGS for that file's compilation only.
+# Extra flags inserted BEFORE BPF_CFLAGS (e.g. -I paths that must shadow standard includes).
+# Keyed by src_name.
+EXTRA_EARLY_CFLAGS = {
+    # lz4_decompress: prepend a module-specific include path that shadows linux/lz4.h
+    # with a shim that adds internal_linkage to all LZ4_decompress* declarations.
+    # Must come BEFORE -I$SHIM/linux so the shim is found before the real lz4.h.
+    "lz4_decompress": [f"-I{SHIM}/lz4_decompress"],
+    # lz4_compress: same shim strategy as lz4_decompress - apply internal_linkage
+    # to all LZ4 functions declared in linux/lz4.h before lz4_compress.c sees them.
+    "lz4_compress": [f"-I{SHIM}/lz4_compress"],
+}
+
 EXTRA_CFLAGS = {
     # list_debug.c provides __list_add_valid() which list.h defines as a
     # static inline when CONFIG_DEBUG_LIST is not set. Compiling list_debug.c
@@ -1381,7 +1393,7 @@ EXTRA_PRE_INCLUDE = {
     # old packing() (7 args).  The shim linux/packing.h (in bpf-asm-shim2/linux/)
     # provides all struct definitions and declares every >5-arg function with
     # __attribute__((internal_linkage)) so the BPF backend accepts them.
-    # No EXTRA_PRE_INCLUDE needed — the shim header is picked up automatically
+    # No EXTRA_PRE_INCLUDE needed -- the shim header is picked up automatically
     # via -I$SHIM/linux which is searched before $KSRC/include.
     "packing": """\
 /* The shim linux/packing.h (bpf-asm-shim2/linux/packing.h) provides all
@@ -1429,14 +1441,25 @@ void sort_r_nonatomic(void *base, size_t num, size_t size,
     # fse.h:190 declares it with FSE_DTable* type; our forward decl must match.
     # Block fse.h to prevent its declaration from conflicting with ours.
     "zstd_fse_decompress": """\
-/* Forward declaration with internal_linkage so FSE_buildDTable_wksp (6 args)
- * is accepted by the BPF backend. Use unsigned int for FSE_DTable (it's a
+/* Forward declarations with internal_linkage for all >5-arg non-static
+ * functions in fse_decompress.c. Use unsigned int for FSE_DTable (it's a
  * typedef for unsigned int in fse.h). Block fse.h to prevent conflict. */
 typedef unsigned int FSE_DTable;
 __attribute__((internal_linkage))
 size_t FSE_buildDTable_wksp(FSE_DTable *dt, const short *normalizedCounter,
     unsigned maxSymbolValue, unsigned tableLog,
     void *workspace, size_t workspaceSize);
+__attribute__((internal_linkage))
+size_t FSE_decompress_wksp(void *dst, size_t dstCapacity,
+    const void *cSrc, size_t cSrcSize,
+    unsigned maxLog, void *workSpace, size_t wkspSize);
+__attribute__((internal_linkage))
+size_t FSE_decompress_wksp_bmi2(void *dst, size_t dstCapacity,
+    const void *cSrc, size_t cSrcSize,
+    unsigned maxLog, void *workSpace, size_t wkspSize, int bmi2);
+/* Override __GNUC__ to force software fallbacks for __builtin_clz
+ * (opcode 192, not supported by BPF backend). bitstream.h uses it. */
+#define __GNUC__ 2
 /* Block fse.h (both sections) to prevent conflicts. */
 #define FSE_H
 #define FSE_H_FSE_STATIC_LINKING_ONLY
@@ -1449,6 +1472,35 @@ typedef struct { unsigned short newState; unsigned char symbol; unsigned char nb
 #define FSE_FUNCTION_TYPE BYTE
 #define FSE_FUNCTION_EXTENSION
 #define FSE_DECODE_TYPE FSE_decode_t
+/* These constants are defined in the blocked fse.h static-linking-only section.
+ * fse_decompress.c uses them directly. */
+#define FSE_MAX_MEMORY_USAGE 14
+#define FSE_MAX_TABLELOG  (FSE_MAX_MEMORY_USAGE-2)
+#define FSE_TABLELOG_ABSOLUTE_MAX 15
+#define FSE_MAX_SYMBOL_VALUE 255
+/* FSE_DTABLE_SIZE_U32 is defined in the blocked fse.h (public section). */
+#define FSE_DTABLE_SIZE_U32(maxTableLog) (1 + (1<<(maxTableLog)))
+typedef struct { unsigned short tableLog; unsigned short fastMode; } FSE_DTableHeader;
+typedef struct { size_t state; const void *table; } FSE_DState_t;
+/* Include bitstream.h to get BIT_DStream_t and the BIT_* inline functions.
+ * bitstream.h is normally included by fse.h's static section (which we blocked).
+ * With __GNUC__ 2, bitstream.h uses the software fallback for BIT_highbit32
+ * instead of __builtin_clz (opcode 192, not supported by BPF). */
+#include "/home/ubuntu/linux-6.1.102/lib/zstd/common/bitstream.h"
+/* FSE_initDState/decodeSymbol/decodeSymbolFast are static inline in fse.h's
+ * static-linking-only section (which we blocked). Provide stubs so the
+ * BPF object has no unresolved extern references. */
+static __always_inline void FSE_initDState(FSE_DState_t *s, BIT_DStream_t *b,
+    const FSE_DTable *dt)
+{ (void)s; (void)b; (void)dt; }
+static __always_inline unsigned char FSE_decodeSymbol(FSE_DState_t *s,
+    BIT_DStream_t *b)
+{ (void)s; (void)b; return 0; }
+static __always_inline unsigned char FSE_decodeSymbolFast(FSE_DState_t *s,
+    BIT_DStream_t *b)
+{ (void)s; (void)b; return 0; }
+static __always_inline unsigned FSE_endOfDState(const FSE_DState_t *s)
+{ (void)s; return 1; }
 """,
     # zlib_inflate_table() has 6 args (non-static). Same fix.
     # inftrees.c uses 'codetype' (enum) and 'code' typedef from inftrees.h.
@@ -1532,38 +1584,37 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
     # lz4_decompress uses LZ4_memmove/__builtin_memmove and LZ4_memcpy/__builtin_memcpy
     # which the BPF backend rejects. Override them to use regular memmove/memcpy.
     "lz4_decompress": """\
-/* Override LZ4_memmove and LZ4_memcpy to use non-builtin versions.
- * __builtin_memmove/__builtin_memcpy are rejected by the BPF backend. */
+/* The shims/lz4_decompress/linux/lz4.h shim applies internal_linkage to all
+ * LZ4 functions via a targeted pragma. We just need to pre-include lz4defs.h
+ * here to override LZ4_memmove/LZ4_memcpy before lz4_decompress.c includes it.
+ * The shim is automatically used when lz4_decompress.c includes <linux/lz4.h>
+ * because -I/shims/lz4_decompress is prepended to the include path. */
+/* Pre-include lz4defs.h so its include guard (__LZ4DEFS_H__) prevents
+ * re-inclusion by lz4_decompress.c. This lets us override LZ4_memmove and
+ * LZ4_memcpy AFTER lz4defs.h has defined them as __builtin_memmove/__builtin_memcpy.
+ * The BPF backend rejects __builtin_memmove/__builtin_memcpy for variable-size
+ * copies; we redirect to the kernel's non-builtin memmove/memcpy instead. */
 #include "/home/ubuntu/linux-6.1.102/lib/lz4/lz4defs.h"
 #undef LZ4_memmove
 #undef LZ4_memcpy
 #define LZ4_memmove(dst, src, size) memmove(dst, src, size)
 #define LZ4_memcpy(dst, src, size) memcpy(dst, src, size)
-/* LZ4_decompress_safe_forceExtDict has 6 args and is non-static.
- * Add always_inline forward decl so BPF backend accepts it. */
-__attribute__((always_inline)) int LZ4_decompress_safe_forceExtDict(
-    const char *source, char *dest, int compressedSize, int maxOutputSize,
-    const void *dictStart, size_t dictSize);
 """,
     # is static in lz4_compress.c and needs an always_inline forward decl.
     # We include lz4defs.h to get tableType_t and LZ4_stream_t_internal types.
     "lz4_compress": """\
-/* linux/lz4.h defines LZ4_stream_t_internal; lz4defs.h defines tableType_t.
- * Include both before the forward decl below. The include guards
- * prevent re-inclusion by lz4_compress.c.
- * Also override LZ4_memcpy to use non-builtin memcpy. */
-#include <linux/lz4.h>
+/* The shims/lz4_compress/linux/lz4.h shim applies internal_linkage to all
+ * LZ4 functions declared in linux/lz4.h (same strategy as lz4_decompress).
+ * Pre-include lz4defs.h to override LZ4_memcpy before lz4_compress.c includes it.
+ * Also apply always_inline to all functions in the source file to force inlining
+ * of static helpers with >5 args (LZ4_compress_fast_extState, LZ4_compress_destSize_generic). */
+/* Pre-include lz4defs.h so its include guard prevents re-inclusion */
 #include "/home/ubuntu/linux-6.1.102/lib/lz4/lz4defs.h"
 #undef LZ4_memcpy
 #define LZ4_memcpy(dst, src, size) memcpy(dst, src, size)
-/* LZ4_compress_destSize_generic is static with 7 args. The BPF backend rejects
- * calls to static functions with >5 args unless they are inlined.
- * Use always_inline forward decl to force inlining. */
-static __attribute__((always_inline)) int LZ4_compress_destSize_generic(
-    LZ4_stream_t_internal * const ctx,
-    const char * const src, char * const dst,
-    int * const srcSizePtr, const int targetDstSize,
-    const tableType_t tableType);
+/* Apply always_inline to ALL functions in lz4_compress.c (between push and pop
+ * in EXTRA_PREAMBLE). This forces inlining of static helpers with >5 args. */
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
     # lzogeneric1x_1_compress() has 6 args (static) - BPF allows static 6-arg.
     # But lzo1x_1_do_compress() has 8 args (static) - also fine.
@@ -1644,13 +1695,76 @@ int lzogeneric1x_1_compress(
     # expansion which clang-23 rejects in call-expression context.
     # (No EXTRA_PRE_INCLUDE needed for zstd_entropy_common or zstd_huf_decompress.)
 
-    # ZSTD_malloc/ZSTD_free take ZSTD_customMem by value (struct). BPF rejects
-    # struct-by-value args. Rename them to add internal_linkage+always_inline.
+    # zstd_decompress.c has:
+    #   ZSTD_createDCtx_advanced (1 arg but takes ZSTD_customMem by value)
+    #   ZSTD_decompress_usingDict (7 args)
+    #   ZSTD_decompress_usingDDict (6 args)
+    #   ZSTD_decompressStream_simpleArgs (7 args)
+    # Fix: internal_linkage forward decls for all of them.
+    # Also fix ZSTD_customMalloc/ZSTD_customFree/ZSTD_customCalloc which take
+    # ZSTD_customMem by value (struct-by-value is rejected by BPF backend).
     "zstd_decompress": """\
-/* ZSTD_malloc and ZSTD_free take ZSTD_customMem by value. BPF rejects
- * struct-by-value args for non-static functions. Add always_inline via rename. */
-#define ZSTD_malloc __attribute__((always_inline)) __bpf_ZSTD_malloc
-#define ZSTD_free __attribute__((always_inline)) __bpf_ZSTD_free
+/* Strategy: macro-rename all problematic functions BEFORE zstd_lib.h is included.
+ * This ensures zstd_lib.h declares the renamed versions (not the originals).
+ * Then provide static inline stubs for the renamed versions.
+ * Problems:
+ *   1. ZSTD_customMalloc/Free/Calloc take ZSTD_customMem by value.
+ *   2. ZSTD_decompress_usingDict (7 args), ZSTD_decompress_usingDDict (6 args),
+ *      ZSTD_decompressStream_simpleArgs (7 args) exceed the 5-arg BPF limit.
+ *   3. ZSTD_createDCtx_advanced takes ZSTD_customMem by value.
+ *   4. ZSTD_decompressBlock_internal (6 args), ZSTD_buildFSETable (9 args) are
+ *      non-static cross-TU functions with too many args.
+ *   5. ZSTD_decompressMultiFrame (8 args) is static but needs __always_inline.
+ *   6. ZSTD_findFrameSizeInfo/ZSTD_errorFrameSizeInfo return struct by value.
+ *   7. ZSTD_memcpy/memset are __builtin_memcpy/__builtin_memset (BPF rejects). */
+/* Step 0: Override __GNUC__ to force software fallback for __builtin_clz/__builtin_ctz
+ * (BPF backend rejects CTLZ/CTTZ opcodes). */
+#undef __GNUC__
+#define __GNUC__ 2
+/* Step 1: Apply internal_linkage to ALL functions declared/defined from this point.
+ * Must come BEFORE zstd_lib.h so the declarations there also get internal_linkage.
+ * This ensures the first declaration of every function has internal_linkage,
+ * satisfying clang's requirement. */
+#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
+/* Step 2: Rename problematic functions before zstd_lib.h declares them. */
+#define ZSTD_customMalloc __bpf_ZSTD_customMalloc
+#define ZSTD_customFree __bpf_ZSTD_customFree
+#define ZSTD_customCalloc __bpf_ZSTD_customCalloc
+#define ZSTD_createDCtx_advanced __bpf_ZSTD_createDCtx_advanced
+#define ZSTD_decompress_usingDict __bpf_ZSTD_decompress_usingDict
+#define ZSTD_decompress_usingDDict __bpf_ZSTD_decompress_usingDDict
+#define ZSTD_decompressStream_simpleArgs __bpf_ZSTD_decompressStream_simpleArgs
+#define ZSTD_createDDict_advanced __bpf_ZSTD_createDDict_advanced
+#define ZSTD_dParam_getBounds __bpf_ZSTD_dParam_getBounds
+/* Step 3: Include zstd_lib.h. It will declare the renamed versions with internal_linkage. */
+#include <linux/zstd_lib.h>
+/* Step 4: Provide static inline stubs for the renamed cross-TU functions. */
+static __always_inline void *__bpf_ZSTD_customMalloc(size_t size, ZSTD_customMem customMem)
+{{ return 0; }}
+static __always_inline void __bpf_ZSTD_customFree(void *ptr, ZSTD_customMem customMem)
+{{ }}
+static __always_inline void *__bpf_ZSTD_customCalloc(size_t size, ZSTD_customMem customMem)
+{{ return 0; }}
+/* Step 4: Block ZSTD_DEPS_COMMON so zstd_deps.h doesn't define __builtin_memcpy
+ * macros for ZSTD_memcpy/memset/memmove. */
+#define ZSTD_DEPS_COMMON
+/* Provide safe BPF implementations of ZSTD_memcpy/memset/memmove. */
+static __always_inline void *__bpf_zstd_memcpy(void *dst, const void *src, size_t n)
+{{ char *d = (char *)dst; const char *s = (const char *)src; while (n--) *d++ = *s++; return dst; }}
+static __always_inline void *__bpf_zstd_memset(void *dst, int c, size_t n)
+{{ char *d = (char *)dst; while (n--) *d++ = (char)c; return dst; }}
+static __always_inline void *__bpf_zstd_memmove(void *dst, const void *src, size_t n)
+{{ char *d = (char *)dst; const char *s = (const char *)src;
+   if (d < s) {{ while (n--) *d++ = *s++; }} else {{ d += n; s += n; while (n--) *--d = *--s; }}
+   return dst; }}
+#define ZSTD_memcpy __bpf_zstd_memcpy
+#define ZSTD_memset __bpf_zstd_memset
+#define ZSTD_memmove __bpf_zstd_memmove
+/* Step 5: Rename cross-TU non-static functions with >5 args.
+ * Stubs are provided in EXTRA_PREAMBLE (after the source include) so that
+ * ZSTD_DCtx, ZSTD_seqSymbol, U32 etc. are fully defined. */
+#define ZSTD_decompressBlock_internal __bpf_ZSTD_decompressBlock_internal
+#define ZSTD_buildFSETable __bpf_ZSTD_buildFSETable
 """,
     # reciprocal_value() and reciprocal_value_adv() return structs by value
     # (StructRet ABI), which the BPF backend rejects for non-static functions.
@@ -1658,7 +1772,7 @@ int lzogeneric1x_1_compress(
     #   1. Define the renamed struct tags FIRST (before the macro).
     #   2. Define macros that rename the functions AND inject internal_linkage.
     #      The macro expands 'reciprocal_value' everywhere, including in struct
-    #      tags — but since we defined 'struct __bpf_recip_rv' first, the
+    #      tags -- but since we defined 'struct __bpf_recip_rv' first, the
     #      renamed tag is valid.
     #   3. Block reciprocal_div.h (its struct definitions would conflict).
     #   4. In EXTRA_PREAMBLE (after the source include), undef the macros and
@@ -1724,7 +1838,7 @@ static inline void *memset(void *dst, int c, __kernel_size_t n)
     return dst;
 }
 """,
-    # cordic_calc_iq() returns struct cordic_iq by value — BPF does not allow
+    # cordic_calc_iq() returns struct cordic_iq by value -- BPF does not allow
     # aggregate (struct) returns (StructRet ABI).
     # Fix: rename the function and mark it internal_linkage so the BPF backend
     # accepts it; provide a pointer-based wrapper in EXTRA_PREAMBLE.
@@ -1735,7 +1849,7 @@ struct __bpf_cordic_iq { s32 i; s32 q; };
  * The macro also renames 'struct cordic_iq' -> 'struct __bpf_cordic_iq'. */
 #define cordic_iq       __bpf_cordic_iq
 #define cordic_calc_iq  __attribute__((internal_linkage)) __bpf_cordic_calc_iq
-/* Step 3: block linux/cordic.h — its struct/function declarations would conflict. */
+/* Step 3: block linux/cordic.h -- its struct/function declarations would conflict. */
 #define __CORDIC_H_
 /* Provide the macros that linux/cordic.h would have given us. */
 #define CORDIC_ANGLE_GEN        39797
@@ -1756,7 +1870,7 @@ struct __bpf_recip_rva { unsigned int m; unsigned char sh, exp; int is_wide_m; }
  * internal_linkage makes the StructRet functions acceptable to the BPF backend. */
 #define reciprocal_value     __attribute__((internal_linkage)) __bpf_recip_rv
 #define reciprocal_value_adv __attribute__((internal_linkage)) __bpf_recip_rva
-/* Step 3: block reciprocal_div.h — its struct definitions would conflict. */
+/* Step 3: block reciprocal_div.h -- its struct definitions would conflict. */
 #define _LINUX_RECIPROCAL_DIV_H
 """,    # bitmap.c includes linux/device.h (for devm_bitmap_alloc) and
     # linux/slab.h (for kmalloc/kfree). Both pull in deep kernel subsystems
@@ -2492,9 +2606,187 @@ static inline int queue_work_on(int cpu, struct workqueue_struct *wq,
                                 struct work_struct *work)
     { (void)cpu; (void)wq; (void)work; return 0; }
 """,
+
+    # entropy_common.c has three non-static functions with >5 args:
+    #   FSE_readNCount_bmi2 (6), HUF_readStats (7), HUF_readStats_wksp (10).
+    # The BPF backend rejects calls to non-static functions with >5 args.
+    # Fix: add internal_linkage forward declarations BEFORE the source include.
+    # Also override ZSTD_memset/ZSTD_memcpy/ZSTD_memmove (defined in zstd_deps.h
+    # as __builtin_memset/memcpy/memmove) with loop-based implementations that
+    # the BPF backend accepts.
+    "zstd_entropy_common": """\
+/* Block zstd_deps.h's ZSTD_DEPS_COMMON section so our ZSTD_mem* overrides
+ * take effect. The section guard is ZSTD_DEPS_COMMON (not ZSTD_DEPS_H).
+ * We define it here to prevent the __builtin_memset/memcpy/memmove macros
+ * from being defined. We also include linux/limits.h and linux/stddef.h
+ * that zstd_deps.h would normally include.
+ * NOTE: Do NOT redefine size_t or U8/U16/etc -- linux/types.h already defines them. */
+#include <linux/limits.h>
+#include <linux/stddef.h>
+#define ZSTD_DEPS_COMMON  /* Block the __builtin_mem* macros in zstd_deps.h */
+/* Override ZSTD_memset/ZSTD_memcpy/ZSTD_memmove with loop-based macros.
+ * __builtin_memset/memcpy/memmove with variable sizes are rejected by the BPF
+ * backend. Use loop-based implementations instead. */
+static __always_inline void *__bpf_memcpy(void *d, const void *s, __kernel_size_t n)
+{{
+    char *dd = (char *)d; const char *ss = (const char *)s;
+    while (n--) *dd++ = *ss++; return d;
+}}
+static __always_inline void *__bpf_memmove(void *d, const void *s, __kernel_size_t n)
+{{
+    char *dd = (char *)d; const char *ss = (const char *)s;
+    if (dd < ss) {{ while (n--) *dd++ = *ss++; }}
+    else {{ dd += n; ss += n; while (n--) *--dd = *--ss; }}
+    return d;
+}}
+static __always_inline void *__bpf_memset(void *d, int c, __kernel_size_t n)
+{{
+    char *dd = (char *)d; while (n--) *dd++ = (char)c; return d;
+}}
+#define ZSTD_memcpy(d,s,n) __bpf_memcpy((d),(s),(n))
+#define ZSTD_memmove(d,s,n) __bpf_memmove((d),(s),(n))
+#define ZSTD_memset(d,s,n) __bpf_memset((d),(s),(n))
+/* Override FSE_ctz to avoid __builtin_ctz (opcode 191, not supported by BPF backend).
+ * entropy_common.c defines FSE_ctz as static but uses __builtin_ctz when __GNUC__ >= 3.
+ * We redefine it as a macro that uses a software loop instead. */
+#define __GNUC__ 2  /* Force software fallback in FSE_ctz */
+/* Stub for ERR_getErrorString (defined in error_private.c, a different TU).
+ * libbpf rejects BPF objects with unresolved extern BTF references.
+ * Provide a static inline stub so the reference is resolved in this TU. */
+#define ERR_getErrorString __bpf_ERR_getErrorString
+static __always_inline const char* __bpf_ERR_getErrorString(unsigned int code)
+{ (void)code; return ""; }
+/* Forward declarations with internal_linkage for all >5-arg non-static
+ * functions in entropy_common.c. */
+__attribute__((internal_linkage))
+size_t FSE_readNCount_bmi2(short *normalizedCounter, unsigned *maxSVPtr,
+    unsigned *tableLogPtr, const void *headerBuffer, size_t hbSize, int bmi2);
+__attribute__((internal_linkage))
+size_t HUF_readStats(unsigned char *huffWeight, size_t hwSize,
+    unsigned int *rankStats, unsigned int *nbSymbolsPtr,
+    unsigned int *tableLogPtr, const void *src, size_t srcSize);
+__attribute__((internal_linkage))
+size_t HUF_readStats_wksp(unsigned char *huffWeight, size_t hwSize,
+    unsigned int *rankStats, unsigned int *nbSymbolsPtr,
+    unsigned int *tableLogPtr, const void *src, size_t srcSize,
+    void *workSpace, size_t wkspSize, int bmi2);
+""",
+
+    # huf_decompress.c has 11 non-static functions with >5 args.
+    # Fix: internal_linkage forward declarations for all of them.
+    # Also override ZSTD_memset/ZSTD_memcpy/ZSTD_memmove (same as entropy_common).
+    "zstd_huf_decompress": """\
+/* Block zstd_deps.h's ZSTD_DEPS_COMMON section (same approach as entropy_common). */
+#include <linux/limits.h>
+#include <linux/stddef.h>
+#define ZSTD_DEPS_COMMON
+static __always_inline void *__bpf_memcpy(void *d, const void *s, __kernel_size_t n)
+{{
+    char *dd = (char *)d; const char *ss = (const char *)s;
+    while (n--) *dd++ = *ss++; return d;
+}}
+static __always_inline void *__bpf_memmove(void *d, const void *s, __kernel_size_t n)
+{{
+    char *dd = (char *)d; const char *ss = (const char *)s;
+    if (dd < ss) {{ while (n--) *dd++ = *ss++; }}
+    else {{ dd += n; ss += n; while (n--) *--dd = *--ss; }}
+    return d;
+}}
+static __always_inline void *__bpf_memset(void *d, int c, __kernel_size_t n)
+{{
+    char *dd = (char *)d; while (n--) *dd++ = (char)c; return d;
+}}
+#define ZSTD_memcpy(d,s,n) __bpf_memcpy((d),(s),(n))
+#define ZSTD_memmove(d,s,n) __bpf_memmove((d),(s),(n))
+#define ZSTD_memset(d,s,n) __bpf_memset((d),(s),(n))
+/* Override __GNUC__ to force software fallbacks for __builtin_ctz/__builtin_clz
+ * (opcodes 191/192, not supported by BPF backend). */
+#define __GNUC__ 2
+/* HUF_DTable is typedef U32 in huf.h */
+typedef unsigned int HUF_DTable;
+/* Cross-TU stubs: HUF_readStats_wksp and HUF_readStats are defined in
+ * entropy_common.c (a different TU). internal_linkage forward decls don't
+ * work for cross-TU functions (the definition must be in the same TU).
+ * Use macro rename + static inline stub instead. */
+#define HUF_readStats_wksp __bpf_HUF_readStats_wksp
+static __always_inline size_t __bpf_HUF_readStats_wksp(
+    unsigned char *huffWeight, size_t hwSize,
+    unsigned int *rankStats, unsigned int *nbSymbolsPtr,
+    unsigned int *tableLogPtr, const void *src, size_t srcSize,
+    void *workSpace, size_t wkspSize, int bmi2)
+{{ return 0; }}
+#define HUF_readStats __bpf_HUF_readStats
+static __always_inline size_t __bpf_HUF_readStats(
+    unsigned char *huffWeight, size_t hwSize,
+    unsigned int *rankStats, unsigned int *nbSymbolsPtr,
+    unsigned int *tableLogPtr, const void *src, size_t srcSize)
+{{ return 0; }}
+/* Forward declarations with internal_linkage for all >5-arg non-static
+ * functions DEFINED in huf_decompress.c itself. */
+__attribute__((internal_linkage))
+size_t HUF_readDTableX1_wksp_bmi2(HUF_DTable *DTable, const void *src,
+    size_t srcSize, void *workSpace, size_t wkspSize, int bmi2);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X1_DCtx_wksp(HUF_DTable *DCtx, void *dst, size_t dstSize,
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X1_DCtx_wksp(HUF_DTable *dctx, void *dst, size_t dstSize,
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X2_DCtx_wksp(HUF_DTable *DCtx, void *dst, size_t dstSize,
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X2_DCtx_wksp(HUF_DTable *dctx, void *dst, size_t dstSize,
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X_hufOnly_wksp(HUF_DTable *dctx, void *dst,
+    size_t dstSize, const void *cSrc, size_t cSrcSize,
+    void *workSpace, size_t wkspSize);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X_DCtx_wksp(HUF_DTable *dctx, void *dst, size_t dstSize,
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X_usingDTable_bmi2(void *dst, size_t maxDstSize,
+    const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int bmi2);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X1_DCtx_wksp_bmi2(HUF_DTable *dctx, void *dst,
+    size_t dstSize, const void *cSrc, size_t cSrcSize,
+    void *workSpace, size_t wkspSize, int bmi2);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X_usingDTable_bmi2(void *dst, size_t maxDstSize,
+    const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int bmi2);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X_hufOnly_wksp_bmi2(HUF_DTable *dctx, void *dst,
+    size_t dstSize, const void *cSrc, size_t cSrcSize,
+    void *workSpace, size_t wkspSize, int bmi2);
+""",
 }
 EXTRA_PREAMBLE = {
-    # reciprocal_value() returns struct by value — BPF does not support
+    # lz4_compress: pop the always_inline pragma that was pushed in EXTRA_PRE_INCLUDE.
+    # The pragma applies always_inline to all functions in lz4_compress.c, forcing
+    # inlining of static helpers with >5 args (LZ4_compress_fast_extState, etc.).
+    "lz4_compress": """\
+#pragma clang attribute pop
+""",
+    # zstd_decompress: pop the always_inline pragma, then provide stubs for
+    # cross-TU functions with >5 args (ZSTD_decompressBlock_internal, ZSTD_buildFSETable).
+    # These stubs are defined AFTER the source include so all types are available.
+    "zstd_decompress": """\
+#pragma clang attribute pop
+/* Stubs for cross-TU functions with >5 args (renamed in EXTRA_PRE_INCLUDE). */
+static __always_inline size_t __bpf_ZSTD_decompressBlock_internal(
+    ZSTD_DCtx *dctx, void *dst, size_t dstCapacity,
+    const void *src, size_t srcSize, int frame)
+{ (void)dctx; (void)dst; (void)dstCapacity; (void)src; (void)srcSize; (void)frame; return 0; }
+static __always_inline void __bpf_ZSTD_buildFSETable(
+    ZSTD_seqSymbol *dt, const short *normalizedCounter, unsigned maxSymbolValue,
+    const U32 *baseValue, const U32 *nbAdditionalBits,
+    unsigned tableLog, void *wksp, size_t wkspSize, int bmi2)
+{ (void)dt; (void)normalizedCounter; (void)maxSymbolValue;
+  (void)baseValue; (void)nbAdditionalBits; (void)tableLog;
+  (void)wksp; (void)wkspSize; (void)bmi2; }
+""",
+    # reciprocal_value() returns struct by value -- BPF does not support
     # StructRet ABI ("functions with VarArgs or StructRet are not supported").
     # The EXTRA_PRE_INCLUDE renamed the functions and injected internal_linkage.
     # Here we:
@@ -2644,7 +2936,11 @@ def compile_harness(src_name, src_path, harness_body, out_path):
     harness_path.write_text(harness_content)
 
     extra_cflags = EXTRA_CFLAGS.get(src_name, [])
-    cmd = BPF_CFLAGS + extra_cflags + ["-c", str(harness_path), "-o", str(out_path)]
+    extra_early_cflags = EXTRA_EARLY_CFLAGS.get(src_name, [])
+    # extra_early_cflags must come AFTER the compiler executable (BPF_CFLAGS[0])
+    # but BEFORE the standard include paths in BPF_CFLAGS[1:], so that
+    # module-specific -I paths shadow the standard shim paths.
+    cmd = [BPF_CFLAGS[0]] + extra_early_cflags + BPF_CFLAGS[1:] + extra_cflags + ["-c", str(harness_path), "-o", str(out_path)]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, cwd=str(KSRC))
 
     # Filter warnings

@@ -130,3 +130,44 @@ The `dim` target failed with an "unsupported sign extension" error at `ktime.h:1
 ### Conclusion of Phase 4
 
 The 16-target regression was entirely an artifact of the build environment and header inclusion chains, rather than fundamental BPF verifier limitations. By carefully managing the include paths, dynamically resolving source files, and providing minimal shims for complex kernel subsystems (NUMA, MM, per-CPU), the pipeline successfully isolated the target algorithms for BPF verification. The remaining 18 failures represent genuine boundaries of the BPF ecosystem, such as the inability to use `memcpy` on stack buffers or reference global function pointers.
+
+## Phase 5: Compression Modules (ZSTD and LZ4)
+
+In Phase 5, the focus shifted to verifying the Linux kernel's compression modules, specifically ZSTD and LZ4. These modules are complex, highly optimized, and contain numerous functions that violate BPF's architectural constraints (e.g., more than 5 arguments, struct-by-value passing, and heavy use of built-in memory operations).
+
+### Phase 5 Results Summary
+
+By applying targeted patches and overrides, we successfully compiled and verified 6 major compression targets, increasing the overall pass count from 71 to 77 modules:
+
+| Target | Status | Notes |
+|--------|--------|-------|
+| `lz4_compress` | **Success** | Fixed >5 arg functions and struct-by-value passing |
+| `lz4_decompress` | **Success** | Fixed >5 arg functions and struct-by-value passing |
+| `zstd_entropy_common` | **Success** | Overrode built-ins and fixed >5 arg functions |
+| `zstd_fse_decompress` | **Success** | Fixed struct-by-value and >5 arg functions |
+| `zstd_huf_decompress` | **Success** | Fixed 15+ non-static functions with >5 args |
+| `zstd_decompress` | **Success** | Fixed struct-by-value (`ZSTD_customMalloc`) and provided stubs |
+
+### Detailed Findings and Fixes
+
+#### 1. Functions with More Than 5 Arguments
+The BPF architecture strictly limits function calls to a maximum of 5 arguments. The ZSTD and LZ4 codebases frequently use 6+ arguments for internal helper functions.
+* **Finding:** When these functions are cross-translation-unit (non-static), the BPF backend cannot inline them and throws an error: `too many arguments, bpf only supports 5 arguments`.
+* **Resolution:** We used the `__attribute__((internal_linkage))` on forward declarations for these specific functions (e.g., `FSE_readNCount_bmi2`, `HUF_readStats`, `ZSTD_decompressBlock_internal`). This forces the LLVM backend to treat them as internal to the translation unit, allowing it to inline them or use custom calling conventions that bypass the 5-argument limit.
+
+#### 2. Struct-by-Value Parameter Passing
+BPF does not support passing structs by value as function arguments.
+* **Finding:** Functions like `ZSTD_customMalloc(size_t size, ZSTD_customMem customMem)` pass the `ZSTD_customMem` struct by value, causing compilation errors.
+* **Resolution:** We modified the function signatures and call sites via macros/patches to pass these structs by pointer instead (e.g., `ZSTD_customMem *customMem`).
+
+#### 3. Built-in Memory Operations (`memset`, `memcpy`, `memmove`)
+The kernel's compression modules heavily rely on memory operations, which are often lowered to compiler built-ins.
+* **Finding:** The BPF backend sometimes struggles with these built-ins, especially when they are used in complex loops or with variable sizes, leading to unresolved externs or verifier rejections.
+* **Resolution:** We provided custom, non-builtin overrides for `ZSTD_memset`, `ZSTD_memcpy`, and `ZSTD_memmove` using simple loops. We also used `#define __builtin_memcpy ZSTD_memcpy` to force the compiler to use our BPF-safe implementations.
+
+#### 4. Macro Expansion and Missing Constants
+* **Finding:** Some modules (like `zstd_fse_decompress`) failed because they relied on constants or structs defined in headers that were not properly included in the isolated BPF build environment (e.g., `fse.h`).
+* **Resolution:** We explicitly provided the missing definitions (like `FSE_DTableHeader`) in the patch files to ensure the modules could compile independently.
+
+### Conclusion of Phase 5
+The successful verification of the ZSTD and LZ4 modules demonstrates that even highly complex, optimized kernel code can be adapted for BPF verification. The primary barriers are BPF's architectural constraints (5 arguments, no struct-by-value) rather than the verifier's inability to prove the safety of the compression algorithms themselves. By using `internal_linkage` attributes and pointer-based parameter passing, we can bypass these constraints without altering the core logic of the algorithms.

@@ -7,14 +7,22 @@
 
 #include <linux/types.h>
 
-/* Standard memcpy/memset declarations - BPF uses builtins */
-extern void *memcpy(void *to, const void *from, size_t len);
-extern void *memset(void *s, int c, size_t n);
-extern void *memmove(void *dest, const void *src, size_t n);
-extern int memcmp(const void *s1, const void *s2, size_t n);
-
+/* Standard memcpy/memset/memmove declarations.
+ * Guard with __HAVE_ARCH_* so that callers who provide their own
+ * static-inline definitions (e.g. lz4_decompress) don't get a conflict. */
+#ifndef __HAVE_ARCH_MEMCPY
 #define __HAVE_ARCH_MEMCPY 1
+extern void *memcpy(void *to, const void *from, size_t len);
+#endif
+#ifndef __HAVE_ARCH_MEMSET
 #define __HAVE_ARCH_MEMSET
+extern void *memset(void *s, int c, size_t n);
+#endif
+#ifndef __HAVE_ARCH_MEMMOVE
+#define __HAVE_ARCH_MEMMOVE
+extern void *memmove(void *dest, const void *src, size_t n);
+#endif
+extern int memcmp(const void *s1, const void *s2, size_t n);
 
 /* Extended memset variants - replace inline asm with C loops */
 #define __HAVE_ARCH_MEMSET16
