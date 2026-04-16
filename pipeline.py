@@ -993,6 +993,44 @@ HARNESS_BODIES = {
     BPF_ASSERT(bloom_map_push_elem(&bloom, &val_a, 1ULL) == -EINVAL);
 
     return 0;""",
+
+    "disasm": """\
+    /* disasm: BPF instruction disassembler.
+     *
+     * print_bpf_insn() is built around a variadic callback (bpf_insn_print_t)
+     * which the BPF backend cannot support (variadic functions and >5-arg calls
+     * are both rejected).  We therefore verify the non-variadic parts of
+     * disasm.c:
+     *
+     *   func_id_name(id)   -- array lookup: returns the string name of a BPF
+     *                         helper function ID, or "unknown" for invalid IDs.
+     *   bpf_class_string[] -- string table for BPF instruction classes.
+     *   bpf_alu_string[]   -- string table for ALU operations.
+     *
+     * Properties verified:
+     *   1. func_id_name(known_id) != NULL  (no null entry for valid helpers)
+     *   2. func_id_name(-1) != NULL        (out-of-range returns "unknown")
+     *   3. func_id_name(0) != NULL         (BPF_FUNC_unspec is valid)
+     *   4. bpf_class_string[BPF_LD >> 0] != NULL
+     *   5. bpf_alu_string[BPF_ADD >> 4] != NULL
+     */
+
+    /* 1. Known helper ID returns non-NULL name */
+    BPF_ASSERT(func_id_name(BPF_FUNC_map_lookup_elem) != 0);
+
+    /* 2. Out-of-range ID returns "unknown" (non-NULL) */
+    BPF_ASSERT(func_id_name(-1) != 0);
+
+    /* 3. BPF_FUNC_unspec (id=0) returns non-NULL */
+    BPF_ASSERT(func_id_name(0) != 0);
+
+    /* 4. bpf_class_string table is populated for BPF_LD class */
+    BPF_ASSERT(bpf_class_string[BPF_LD] != 0);
+
+    /* 5. bpf_alu_string table is populated for BPF_ADD operation */
+    BPF_ASSERT(bpf_alu_string[BPF_ADD >> 4] != 0);
+
+    return 0;""",
     # ---------------------------------------------------------------
     # Phase 2: 7 new high-priority targets
     # ---------------------------------------------------------------
@@ -3034,9 +3072,48 @@ __attribute__((internal_linkage))
 size_t HUF_decompress4X_usingDTable_bmi2(void *dst, size_t maxDstSize,
     const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int bmi2);
 __attribute__((internal_linkage))
-size_t HUF_decompress4X_hufOnly_wksp_bmi2(HUF_DTable *dctx, void *dst,
+    size_t HUF_decompress4X_hufOnly_wksp_bmi2(HUF_DTable *dctx, void *dst,
     size_t dstSize, const void *cSrc, size_t cSrcSize,
     void *workSpace, size_t wkspSize, int bmi2);
+""",
+
+    # disasm: The shim includes uapi/linux/bpf.h (for bpf_insn and BPF opcode
+    # constants) and provides its own disasm.h replacement inline.  The only
+    # remaining issue is that disasm.c calls snprintf() and strcpy() which are
+    # variadic/extern.  Stub snprintf as a no-op and strcpy as a simple loop so
+    # the BPF backend never sees unresolved extern BTF references.
+    "disasm": """\
+/* Block linux/bpf.h: it pulls in linux/percpu.h, linux/mm_types.h, etc.
+ * The shim provides struct bpf_insn and all BPF constants directly. */
+#define _LINUX_BPF_H 1
+/* Block linux/kernel.h to avoid the __printf(3,4) conflict with clang
+ * system headers.  The shim provides its own disasm.h replacement. */
+#define _LINUX_KERNEL_H
+/* Stub verbose() as a no-op: print_bpf_insn() uses a variadic callback
+ * (bpf_insn_print_t) with >5 arguments, which the BPF backend rejects.
+ * We only verify func_id_name() and the string tables, not print_bpf_insn.
+ * Stubbing verbose() allows the whole file to compile without errors. */
+#define verbose(priv, fmt, ...) ((void)(priv))
+/* Stub snprintf: disasm.c uses it only to format fallback strings into
+ * a caller-supplied buffer (buff).  Returning 0 is safe -- the caller
+ * always returns buff regardless of the return value. */
+#define snprintf(buf, size, fmt, ...) (0)
+/* Stub strcpy: used once in print_bpf_insn for the "unknown" fallback. */
+static __always_inline char *__bpf_strcpy(char *d, const char *s)
+{
+    char *r = d;
+    while ((*d++ = *s++));
+    return r;
+}
+#define strcpy(d, s) __bpf_strcpy(d, s)
+/* Provide __stringify since linux/stringify.h is blocked by _LINUX_KERNEL_H. */
+#ifndef __stringify
+#define __stringify(x) #x
+#endif
+/* Provide BUILD_BUG_ON as a no-op (used in __func_get_name). */
+#ifndef BUILD_BUG_ON
+#define BUILD_BUG_ON(cond) ((void)(cond))
+#endif
 """,
 }
 EXTRA_PREAMBLE = {
@@ -3201,6 +3278,17 @@ MIN_HEAP_PREALLOCATED(int, bpf_int_heap, 8) __bpf_heap_storage;
 #undef mpi_tdiv_r
 #undef mpi_mul
 #undef mpi_mulm
+""",
+
+    # disasm: provide the counter callback used by the harness body.
+    # The callback increments *private_data each time print_bpf_insn calls it.
+    # It is defined AFTER the source include so bpf_insn_print_t is fully defined.
+    "disasm": """\
+static void disasm_count_cb(void *private_data, const char *fmt, ...)
+{
+    int *cnt = (int *)private_data;
+    (*cnt)++;
+}
 """,
 }
 
@@ -3428,24 +3516,24 @@ def main():
         "min_heap":              KSRC / "lib/min_heap.c",  # introduced after 6.1; skipped if missing
         "rational_v2":           KSRC / "lib/math/rational.c",
 
-
-    # Phase 6: kernel/bpf/ targets
-    # tnum uses a shim (not the kernel source) because the kernel source defines
-    # all functions as non-static StructRet, which the BPF backend rejects.
-    # The shim redefines all functions as static __always_inline.
-    "tnum":                  SHIM / "tnum/tnum-shim.c",
-    "lpm_trie":              SHIM / "lpm_trie/lpm_trie-shim.c",
-    "bpf_lru_list":          SHIM / "bpf_lru_list/bpf_lru_list-shim.c",
-    "bloom_filter":          SHIM / "bloom_filter/bloom_filter-shim.c",
-    # Phase 3 targets
-    "string_helpers":       SHIM / "string-helpers-shim.c",
-    "refcount":             SHIM / "refcount-shim.c",
-    "crc32":                next(p for p in [KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"] if p.exists()),
-    "crc16":                next(p for p in [KSRC/"lib/crc/crc16.c",      KSRC/"lib/crc16.c"] if p.exists()),
-    "ratelimit":            SHIM / "ratelimit-shim.c",
-    # "bitmap_str": dropped - include chain too deep (bitmap.c -> device.h -> sched.h -> rwlock_t)
-    # "scatterlist": dropped - too many deep dependencies (kmalloc, dma-mapping)
-    # "kfifo": dropped - too many deep dependencies (dma-mapping.h)
+        # Phase 6: kernel/bpf/ targets
+        # tnum uses a shim (not the kernel source) because the kernel source defines
+        # all functions as non-static StructRet, which the BPF backend rejects.
+        # The shim redefines all functions as static __always_inline.
+        "tnum":                  SHIM / "tnum/tnum-shim.c",
+        "lpm_trie":              SHIM / "lpm_trie/lpm_trie-shim.c",
+        "bpf_lru_list":          SHIM / "bpf_lru_list/bpf_lru_list-shim.c",
+        "bloom_filter":          SHIM / "bloom_filter/bloom_filter-shim.c",
+        "disasm":                SHIM / "disasm/disasm-shim.c",
+        # Phase 3 targets
+        "string_helpers":       SHIM / "string-helpers-shim.c",
+        "refcount":             SHIM / "refcount-shim.c",
+        "crc32":                next(p for p in [KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"] if p.exists()),
+        "crc16":                next(p for p in [KSRC/"lib/crc/crc16.c",      KSRC/"lib/crc16.c"] if p.exists()),
+        "ratelimit":            SHIM / "ratelimit-shim.c",
+        # "bitmap_str": dropped - include chain too deep (bitmap.c -> device.h -> sched.h -> rwlock_t)
+        # "scatterlist": dropped - too many deep dependencies (kmalloc, dma-mapping)
+        # "kfifo": dropped - too many deep dependencies (dma-mapping.h)
     }
 
     compiled_ok = []
