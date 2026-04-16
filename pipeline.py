@@ -859,6 +859,89 @@ HARNESS_BODIES = {
 
     return (int)(match_b + match_c + match_d);""",
     # ---------------------------------------------------------------
+    # Phase 6 (continued): bpf_lru_list
+    # ---------------------------------------------------------------
+    "bpf_lru_list": """\
+    /* bpf_lru_list: BPF LRU list -- active/inactive/free list management.
+     *
+     * The BPF LRU list maintains three lists (active, inactive, free) and
+     * two local lists (free, pending) for per-CPU caching. The core
+     * invariants are:
+     *
+     *   1. After populating N nodes into the free list, the free list
+     *      contains exactly N nodes and counts are zero.
+     *   2. After moving a node from free to inactive, the inactive count
+     *      increments by 1.
+     *   3. After moving a node from inactive to active, the active count
+     *      increments and inactive count decrements.
+     *   4. After rotate_active: nodes with ref=0 move to inactive;
+     *      nodes with ref=1 stay active (ref cleared).
+     *   5. bpf_lru_list_inactive_low() returns true iff
+     *      inactive_count < active_count.
+     *
+     * We use a static pool of 8 nodes and a single bpf_lru_list.
+     * No per-CPU infrastructure is needed.
+     */
+    struct bpf_lru_list l;
+    bpf_lru_list_init(&l);
+
+    /* Populate 6 free nodes */
+    struct bpf_lru_node nodes[6];
+    bpf_lru_list_populate(&l, nodes, 6);
+
+    /* Invariant 1: free list has 6 nodes, counts are 0 */
+    BPF_ASSERT(!list_empty(&l.lists[BPF_LRU_LIST_T_FREE]));
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_ACTIVE]   == 0);
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_INACTIVE] == 0);
+
+    /* Allocate 3 nodes -> inactive */
+    struct bpf_lru_node *n0 = bpf_lru_list_alloc(&l);
+    struct bpf_lru_node *n1 = bpf_lru_list_alloc(&l);
+    struct bpf_lru_node *n2 = bpf_lru_list_alloc(&l);
+    BPF_ASSERT(n0 != NULL && n1 != NULL && n2 != NULL);
+
+    /* Invariant 2: inactive count == 3 */
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_INACTIVE] == 3);
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_ACTIVE]   == 0);
+
+    /* Move n0 from inactive to active */
+    __bpf_lru_node_move(&l, n0, BPF_LRU_LIST_T_ACTIVE);
+
+    /* Invariant 3: active=1, inactive=2 */
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_ACTIVE]   == 1);
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_INACTIVE] == 2);
+
+    /* Invariant 5: inactive_low = (2 < 1) = false */
+    BPF_ASSERT(!bpf_lru_list_inactive_low(&l));
+
+    /* Move n1 and n2 to active too -> active=3, inactive=0 */
+    __bpf_lru_node_move(&l, n1, BPF_LRU_LIST_T_ACTIVE);
+    __bpf_lru_node_move(&l, n2, BPF_LRU_LIST_T_ACTIVE);
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_ACTIVE]   == 3);
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_INACTIVE] == 0);
+
+    /* Invariant 5: inactive_low = (0 < 3) = true */
+    BPF_ASSERT(bpf_lru_list_inactive_low(&l));
+
+    /* Set ref=1 on n0, leave n1 and n2 with ref=0.
+     * After rotate_active (nr_scans=3):
+     *   n0 (ref=1) -> stays active, ref cleared
+     *   n1 (ref=0) -> moves to inactive
+     *   n2 (ref=0) -> moves to inactive
+     */
+    bpf_lru_node_set_ref(n0);
+    struct bpf_lru lru_ctx;
+    lru_ctx.nr_scans = 3;
+    __bpf_lru_list_rotate_active(&lru_ctx, &l);
+
+    /* Invariant 4: active=1 (n0), inactive=2 (n1,n2), n0.ref=0 */
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_ACTIVE]   == 1);
+    BPF_ASSERT(l.counts[BPF_LRU_LIST_T_INACTIVE] == 2);
+    BPF_ASSERT(n0->ref == 0);
+
+    return (int)(l.counts[BPF_LRU_LIST_T_ACTIVE] +
+                 l.counts[BPF_LRU_LIST_T_INACTIVE]);""",
+    # ---------------------------------------------------------------
     # Phase 2: 7 new high-priority targets
     # ---------------------------------------------------------------
     "bitmap": """    /* bitmap operations: algebraic identities.
@@ -3300,6 +3383,7 @@ def main():
     # The shim redefines all functions as static __always_inline.
     "tnum":                  SHIM / "tnum/tnum-shim.c",
     "lpm_trie":              SHIM / "lpm_trie/lpm_trie-shim.c",
+    "bpf_lru_list":          SHIM / "bpf_lru_list/bpf_lru_list-shim.c",
     # Phase 3 targets
     "string_helpers":       SHIM / "string-helpers-shim.c",
     "refcount":             SHIM / "refcount-shim.c",
