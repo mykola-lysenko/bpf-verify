@@ -171,3 +171,30 @@ The kernel's compression modules heavily rely on memory operations, which are of
 
 ### Conclusion of Phase 5
 The successful verification of the ZSTD and LZ4 modules demonstrates that even highly complex, optimized kernel code can be adapted for BPF verification. The primary barriers are BPF's architectural constraints (5 arguments, no struct-by-value) rather than the verifier's inability to prove the safety of the compression algorithms themselves. By using `internal_linkage` attributes and pointer-based parameter passing, we can bypass these constraints without altering the core logic of the algorithms.
+
+## Phase 6: Verifying the Verifier (`kernel/bpf/tnum.c`)
+
+In Phase 6, the pipeline was extended to target `kernel/bpf/tnum.c`, the implementation of the BPF verifier's own abstract domain (tristate numbers). This represented a unique meta-verification exercise: using the BPF verifier to prove the algebraic correctness of its own internal tracking logic.
+
+### Challenges and Resolutions
+
+The `tnum.c` file presented a significant architectural challenge for BPF compilation: **Struct-by-Value Returns (StructRet)**.
+
+1. **The StructRet ABI Limitation:** Every function in `tnum.c` (e.g., `tnum_add`, `tnum_and`, `tnum_mul`) returns a `struct tnum` by value. The BPF backend in LLVM does not support the StructRet ABI for non-inlined, non-static functions, resulting in fatal compilation errors.
+2. **The `internal_linkage` Conflict:** Previous targets (like `cordic`) solved this by using a `#pragma` to inject `__attribute__((internal_linkage))` into all function declarations. However, `tnum.c` includes `linux/kernel.h`, which declares standard library functions (like `snprintf`). Applying the pragma globally caused conflicts with the clang system headers' prior declarations of these functions.
+3. **The Expression Context Limitation:** Attempting to use individual macros to redefine functions as `__attribute__((always_inline))` failed because `tnum.c` functions call each other (e.g., `tnum_mul` calls `tnum_add` in an expression: `acc_m = tnum_add(...)`). The `__attribute__` keyword is syntactically invalid within a call expression.
+
+**Resolution:** A dedicated shim file (`shims/tnum/tnum-shim.c`) was created. This shim copies the function bodies verbatim from the kernel source but explicitly declares every function as `static __always_inline`. By including this shim instead of the original C file, the compiler is forced to inline all `tnum` operations directly into the BPF harness, completely bypassing the StructRet ABI limitation at the call sites. Pointer-based wrapper functions (`tnum_add_to_ptr`, etc.) were then provided in the pipeline's `EXTRA_PREAMBLE` so the harness could safely store results in local variables.
+
+### Verification Results
+
+The `tnum` harness successfully compiled and passed verification. The BPF verifier accepted the program in 75 instructions, exploring 131 states.
+
+The harness successfully proved the following algebraic properties of the `tnum` lattice:
+* **Constant Creation:** `tnum_const(c)` correctly produces a known constant (mask == 0, value == c).
+* **Addition:** `tnum_add(tnum_const(a), tnum_const(b)) == tnum_const(a+b)`.
+* **Bitwise AND Annihilation:** `tnum_and(x, tnum_const(0)) == tnum_const(0)` for any `x`.
+* **Bitwise OR Identity:** `tnum_or(x, tnum_const(0)) == x` for any `x`.
+* **Top Element:** `tnum_in(tnum_unknown, any_const)` is always true, confirming `tnum_unknown` acts as the top element of the lattice.
+
+This phase successfully demonstrated that the BPF verifier is capable of statically proving the foundational algebraic properties of its own abstract interpretation domain, provided the code is carefully structured to avoid ABI limitations.
