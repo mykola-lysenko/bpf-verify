@@ -1422,6 +1422,35 @@ HARNESS_BODIES = {
     BPF_ASSERT(seq_buf_has_overflowed(&s));
     return 0;
 """,
+
+    # lib_sha256: call sha256_transform directly to exercise the SHA-256 compression
+    # function.  We cannot call sha256_update because it reads from sctx->buf with a
+    # variable offset (partial = count & 0x3f), and the BPF verifier requires an
+    # explicit bounds check before any variable-offset map_value access -- a check
+    # that the kernel code omits (it relies on the implicit state-machine invariant).
+    # Calling sha256_transform directly avoids this issue while still verifying the
+    # core 64-round compression loop (7,101 instructions).
+    #
+    # Stack layout:
+    #   harness frame:      288 bytes  (state[8]=32 + W[64]=256)
+    #   sha256_transform:   192 bytes  (a-h + loop spills, separate frame via __noinline__)
+    #   combined:           480 bytes  < 512-byte BPF call-chain limit
+    "lib_sha256": """\
+    /* Call sha256_transform directly to exercise the SHA-256 compression function.
+     * sha256_state and data are not needed here -- only state[8] and W[64] on stack.
+     * sha256_transform is renamed to __bpf_sha256_transform via EXTRA_PRE_INCLUDE
+     * and marked __noinline__ so it gets its own 192-byte stack frame. */
+    u32 state[8];
+    u32 W[64];
+    static const u8 __bpf_input[64];
+    int i;
+    state[0] = 0x6a09e667; state[1] = 0xbb67ae85;
+    state[2] = 0x3c6ef372; state[3] = 0xa54ff53a;
+    state[4] = 0x510e527f; state[5] = 0x9b05688c;
+    state[6] = 0x1f83d9ab; state[7] = 0x5be0cd19;
+    for (i = 0; i < 64; i++) W[i] = 0;
+    __bpf_sha256_transform(state, __bpf_input, W);
+    return (int)state[0];""",
 }
 
 # Default harness body for files without a specific one
@@ -2132,9 +2161,25 @@ static __inline__ void *memcpy(void *dst, const void *src, __SIZE_TYPE__ n)
     # Fix: rename sha256_finup_2x to __bpf_sha256_finup_2x and inject internal_linkage
     # via a macro BEFORE crypto/sha2.h is included (sha2.h declares the function).
     # The macro renames both the declaration in sha2.h AND the definition in sha256.c.
-    # The harness body uses DEFAULT_HARNESS_BODY (return 0;) so no wrapper is needed.
+    #
+    # sha256_transform() is the SHA-256 compression function; it has a 192-byte stack
+    # frame (a-h registers + loop spills) and is called from sha256_update() which
+    # itself allocates W[64] (256 bytes) on the stack.  Without intervention, LLVM
+    # inlines sha256_transform into sha256_update, producing a single frame of
+    # 256 + 192 = 448 bytes -- which, when combined with the harness frame, exceeds
+    # the 512-byte BPF combined-call-chain limit.
+    # Fix: mark sha256_transform __noinline__ so it gets its own 192-byte frame.
+    # Use __noinline__ (double-underscore form) to avoid double-expansion: the kernel
+    # header compiler_types.h defines `noinline` as `__attribute__((__noinline__))`,
+    # so writing `__attribute__((noinline))` in the macro body would expand to
+    # `__attribute__((__attribute__((__noinline__))))` -- an invalid nested attribute.
     "lib_sha256": """\
 #define sha256_finup_2x __attribute__((internal_linkage)) sha256_finup_2x
+/* Make sha256_transform a non-inlined static subprogram to keep the BPF
+ * combined call-chain stack depth within the 512-byte limit.
+ * Use __noinline__ (double-underscore form) to avoid double-expansion via
+ * the kernel noinline macro in compiler_types.h. */
+#define sha256_transform __attribute__((__noinline__)) __bpf_sha256_transform
 /* Provide memcpy and memset as static inline to avoid extern BTF references. */
 static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
 {
