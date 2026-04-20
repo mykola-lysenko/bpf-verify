@@ -10,12 +10,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-KSRC = Path("/home/ubuntu/linux-6.1.102")
+KSRC = Path("/home/ubuntu/bpf-next-0aa637869")
 SHIM = Path(__file__).parent / "shims"
 OUTPUT = Path("/home/ubuntu/bpf-verify/output2")
 VERISTAT = "/home/ubuntu/bpf-verify/veristat"
-CLANG = "/home/ubuntu/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/bin/clang-18"
-LLVM_OBJCOPY = "/home/ubuntu/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/bin/llvm-objcopy"
+CLANG = "/usr/bin/clang-23"
+LLVM_OBJCOPY = "/usr/bin/llvm-objcopy-23"
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
 
