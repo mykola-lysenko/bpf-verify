@@ -181,8 +181,8 @@ static inline void mpi_assign_limb_space(MPI a, mpi_ptr_t ap, unsigned nlimbs)
 #define mpi_tdiv_r __bpf_mpi_tdiv_r
 static inline int __bpf_mpi_resize(MPI a, unsigned nlimbs)
     { (void)a; (void)nlimbs; return -ENOMEM; }
-static inline void __bpf_mpi_tdiv_r(MPI rem, MPI num, MPI den)
-    { (void)rem; (void)num; (void)den; }
+static inline int __bpf_mpi_tdiv_r(MPI rem, MPI num, MPI den)
+    { (void)rem; (void)num; (void)den; return 0; }
 /* Rename mpi_mul and mpi_mulm so the BPF backend emits them as __bpf_*
  * symbols (not the external mpi_mul/mpi_mulm). Since they're never called
  * from bpf_prog_mpi_mul, the BPF backend will DCE them. */

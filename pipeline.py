@@ -1594,16 +1594,18 @@ EXTRA_CFLAGS = {
     # The shim mpi-internal.h is included via EXTRA_PRE_INCLUDE (absolute path),
     # and its include guard prevents re-inclusion when mpi-mul.c does
     # #include "mpi-internal.h".
-    "mpi_mul": [f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi", "-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H"],
+    # mpi_mul: block sched.h (-> mm_types.h:1463 ACCESS_PRIVATE issue).
+    "mpi_mul": [f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi", "-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
     # mpi_add/mpi_cmp/mpih_*: block linux/mm.h and linux/scatterlist.h which pull
     # in full MM infrastructure (pte_mkwrite, vm_area_struct, page_address, etc.)
     # incompatible with BPF compilation.
-    "mpih_cmp":  ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H"],
-    "mpih_add1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H"],
-    "mpih_sub1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H"],
-    "mpih_mul1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H"],
-    "mpih_lshift": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H"],
-    "mpih_rshift": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H"],
+    # Also block sched.h to avoid mm_types.h:1463 ACCESS_PRIVATE clang error.
+    "mpih_cmp":  ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
+    "mpih_add1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
+    "mpih_sub1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
+    "mpih_mul1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
+    "mpih_lshift": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
+    "mpih_rshift": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
     # net_utils: block linux/mm.h, highmem.h, scatterlist.h, and bvec.h which
     # pull in full MM infrastructure incompatible with BPF compilation.
     "net_utils":  ["-D_LINUX_MM_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCATTERLIST_H",
@@ -1664,14 +1666,19 @@ EXTRA_CFLAGS = {
     # The -D flag takes effect before any source files are parsed, so it
     # wins over the #define in linux/init.h (which would normally override it).
     # We also need to suppress the .init.text section for __init.
-    "ts_fsm":  ["-D__exit=", "-D__init="],
-    "ts_kmp":  ["-D__exit=", "-D__init="],
+    # ts_fsm/ts_kmp/lib_aes: slab.h -> sched.h -> mm_types.h:1463
+    # mm_types.h:1463 uses ACCESS_PRIVATE which assigns unsigned long (*)[1] to
+    # unsigned long *, which clang rejects. Block sched.h to avoid mm_types.h.
+    "ts_fsm":  ["-D__exit=", "-D__init=", "-D_LINUX_SCHED_H"],
+    "ts_kmp":  ["-D__exit=", "-D__init=", "-D_LINUX_SCHED_H"],
+    "lib_aes": ["-D_LINUX_SCHED_H"],
     # mpi_add/mpi_cmp: add lib/mpi to include path for relative includes.
     # The shim mpi-internal.h is included via EXTRA_INCLUDES.
+    # Also block sched.h (pulled in via mpi.h -> slab.h -> sched.h -> mm_types.h:1463).
     "mpi_add":  ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H",
-                 f"-I{KSRC}/lib/mpi"],
+                 "-D_LINUX_SCHED_H", f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi"],
     "mpi_cmp":  ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H",
-                 f"-I{KSRC}/lib/mpi"],
+                 "-D_LINUX_SCHED_H", f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi"],
     # sort.c includes <linux/sched.h> for cond_resched(). sched.h:1642 uses
     # struct thread_struct which is not defined in our asm/processor.h shim.
     # Fix: block sched.h and stub out cond_resched via EXTRA_PRE_INCLUDE.
@@ -1680,7 +1687,12 @@ EXTRA_CFLAGS = {
     # Same issue: sched.h:1642 thread_struct incomplete.
     # Also netdevice.h -> delay.h:77 uses TASK_UNINTERRUPTIBLE (from sched.h, which is blocked).
     # Fix: block sched.h and delay.h for this target.
-    "dynamic_queue_limits": ["-D_LINUX_SCHED_H", "-D_LINUX_DELAY_H"],
+    # dynamic_queue_limits.c includes trace/events/napi.h only for tracing.
+    # napi.h pulls in netdevice.h -> a long chain of networking headers that
+    # reference many types not available in BPF context (sched.h, delay.h,
+    # socket.h, in.h, netfilter.h, stackdepot.h, ...).
+    # Block the entire napi trace header by pre-defining its include guard.
+    "dynamic_queue_limits": ["-D_TRACE_NAPI_H"],
     # net_dim.c includes dim.h -> workqueue.h -> sched.h (thread_struct incomplete)
     # and rtnetlink.h (pulls in net/netlink.h -> skbuff.h -> mm.h).
     # Fix: block sched.h, workqueue.h, and rtnetlink.h; provide stubs in EXTRA_PRE_INCLUDE.
@@ -1712,6 +1724,13 @@ EXTRA_PRE_INCLUDE = {
     # nodemask.c:28 does `get_random_int() % w` where w is int (signed).
     # This generates sdiv which the BPF backend cannot select.
     # Fix: redefine nodes_weight to return unsigned int via a cast.
+    # mpi_add and mpi_cmp: mpi-internal.h ends with a pragma clang attribute push
+    # (inside the include guard) that applies internal_linkage+always_inline to
+    # all functions defined in the EXTRA_INCLUDES files (mpiutil.c, mpih-cmp.c, etc.).
+    # Without a matching pop, clang reports "unterminated '#pragma clang attribute push'"
+    # at end of file. Pop it here (EXTRA_PRE_INCLUDE comes after EXTRA_INCLUDES).
+    "mpi_add": """#pragma clang attribute pop\n""",
+    "mpi_cmp": """#pragma clang attribute pop\n""",
     "nodemask": """/* nodes_weight returns int (signed). The % operator on signed types generates
  * sdiv which the BPF backend cannot select. Redefine to return unsigned. */
 #undef nodes_weight
@@ -2697,8 +2716,8 @@ static inline void mpi_assign_limb_space(MPI a, mpi_ptr_t ap, unsigned nlimbs)
 #define mpi_tdiv_r __bpf_mpi_tdiv_r
 static inline int __bpf_mpi_resize(MPI a, unsigned nlimbs)
     { (void)a; (void)nlimbs; return -ENOMEM; }
-static inline void __bpf_mpi_tdiv_r(MPI rem, MPI num, MPI den)
-    { (void)rem; (void)num; (void)den; }
+static inline int __bpf_mpi_tdiv_r(MPI rem, MPI num, MPI den)
+    { (void)rem; (void)num; (void)den; return 0; }
 /* Rename mpi_mul and mpi_mulm so the BPF backend emits them as __bpf_*
  * symbols (not the external mpi_mul/mpi_mulm). Since they're never called
  * from bpf_prog_mpi_mul, the BPF backend will DCE them. */
@@ -2744,6 +2763,20 @@ static inline void __bpf_mpi_tdiv_r(MPI rem, MPI num, MPI den)
 #include <linux/jiffies.h>
 #undef jiffies
 #define jiffies ((unsigned long)0)
+/* trace_dql_stall_detected is defined in trace/events/napi.h which is blocked
+ * by -D_TRACE_NAPI_H. Provide a no-op stub so dynamic_queue_limits.c compiles. */
+static inline void trace_dql_stall_detected(unsigned short thrs, unsigned int len,
+    unsigned long last_reap, unsigned long hist_head,
+    unsigned long now, unsigned long *hist)
+{ (void)thrs; (void)len; (void)last_reap; (void)hist_head; (void)now; (void)hist; }
+/* memset stub to avoid implicit declaration error. */
+static inline void *memset(void *dst, int c, __kernel_size_t n)
+{
+    unsigned char *d = (unsigned char *)dst;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = (unsigned char)c;
+    return dst;
+}
 """,
 
     # kstrtox.c uses _ctype (provided by ctype.c in EXTRA_INCLUDES) and min().
@@ -2771,14 +2804,8 @@ static inline void __bpf_mpi_tdiv_r(MPI rem, MPI num, MPI den)
     # annotations. But textsearch_unregister and __kmalloc are still extern.
     # Fix: provide static inline stubs for them.
     "ts_fsm": """\
-/* Stub textsearch_unregister and __kmalloc to avoid extern BTF references.
- * ts_fsm registers/unregisters a textsearch algorithm; the harness only
- * tests the search function, not module init/exit. */
-struct textsearch_ops;
-struct textsearch_desc { const struct textsearch_ops *ops; void *data; unsigned int len; };
-struct ts_config { const struct textsearch_ops *ops; int flags; };
-static inline void textsearch_unregister(struct textsearch_ops *ops)
-    { (void)ops; }
+/* Stub __kmalloc to avoid extern BTF references.
+ * textsearch.h is included directly (mm_types.h shim allows it). */
 static inline void *__kmalloc(__kernel_size_t size, unsigned int flags)
     { (void)size; (void)flags; return (void *)0; }
 static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
@@ -2792,12 +2819,7 @@ static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
 """,
 
     "ts_kmp": """\
-/* Same stubs as ts_fsm plus _ctype (provided by ctype.c in EXTRA_INCLUDES). */
-struct textsearch_ops;
-struct textsearch_desc { const struct textsearch_ops *ops; void *data; unsigned int len; };
-struct ts_config { const struct textsearch_ops *ops; int flags; };
-static inline void textsearch_unregister(struct textsearch_ops *ops)
-    { (void)ops; }
+/* Same stubs as ts_fsm. _ctype provided by ctype.c in EXTRA_INCLUDES. */
 static inline void *__kmalloc(__kernel_size_t size, unsigned int flags)
     { (void)size; (void)flags; return (void *)0; }
 static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)

@@ -138,14 +138,8 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
-/* Stub textsearch_unregister and __kmalloc to avoid extern BTF references.
- * ts_fsm registers/unregisters a textsearch algorithm; the harness only
- * tests the search function, not module init/exit. */
-struct textsearch_ops;
-struct textsearch_desc { const struct textsearch_ops *ops; void *data; unsigned int len; };
-struct ts_config { const struct textsearch_ops *ops; int flags; };
-static inline void textsearch_unregister(struct textsearch_ops *ops)
-    { (void)ops; }
+/* Stub __kmalloc to avoid extern BTF references.
+ * textsearch.h is included directly (mm_types.h shim allows it). */
 static inline void *__kmalloc(__kernel_size_t size, unsigned int flags)
     { (void)size; (void)flags; return (void *)0; }
 static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)

@@ -141,6 +141,7 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 #include "/home/ubuntu/bpf-next-0aa637869/lib/crypto/mpi/mpi-bit.c"
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
+#pragma clang attribute pop
 
 /* Include the kernel source file */
 #include "/home/ubuntu/bpf-next-0aa637869/lib/crypto/mpi/mpi-cmp.c"

@@ -8,6 +8,7 @@
 #include <linux/types.h>
 #include <asm/cpufeature.h>
 #include <asm/page.h>
+#include <asm/pgtable_types.h>  /* provides pgtable_t, used by mm_types.h via this include chain */
 
 /* CPU feature stubs */
 #define cpu_has(c, bit)		0

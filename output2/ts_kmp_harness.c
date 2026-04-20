@@ -138,12 +138,7 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 #include "/home/ubuntu/bpf-next-0aa637869/lib/ctype.c"
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
-/* Same stubs as ts_fsm plus _ctype (provided by ctype.c in EXTRA_INCLUDES). */
-struct textsearch_ops;
-struct textsearch_desc { const struct textsearch_ops *ops; void *data; unsigned int len; };
-struct ts_config { const struct textsearch_ops *ops; int flags; };
-static inline void textsearch_unregister(struct textsearch_ops *ops)
-    { (void)ops; }
+/* Same stubs as ts_fsm. _ctype provided by ctype.c in EXTRA_INCLUDES. */
 static inline void *__kmalloc(__kernel_size_t size, unsigned int flags)
     { (void)size; (void)flags; return (void *)0; }
 static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)

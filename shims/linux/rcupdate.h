@@ -44,4 +44,14 @@
 /* Guard integration */
 DEFINE_LOCK_GUARD_0(rcu, rcu_read_lock(), rcu_read_unlock())
 
+/* Lock debugging / lockdep stubs */
+static inline int rcu_read_lock_held(void) { return 1; }
+static inline int rcu_read_lock_bh_held(void) { return 1; }
+static inline int rcu_read_lock_sched_held(void) { return 1; }
+static inline int rcu_is_watching(void) { return 1; }
+static inline void rcu_try_lock_acquire(void *m) {}
+
+/* RCU lockdep warn stub */
+#define RCU_LOCKDEP_WARN(c, s) do {} while (0)
+
 #endif /* __LINUX_RCUPDATE_H */
