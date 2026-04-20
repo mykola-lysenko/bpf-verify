@@ -24,7 +24,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KSRC="${HOME}/bpf-next-0aa637869"
 KERNEL_COMMIT="0aa637869"
-GDRIVE_FILE_ID=""   # Set this after first upload to Google Drive
+GDRIVE_FILE_ID="14spgX-TYzW9hTmhe6EPHg3VByHoZtN8M"   # Set this after first upload to Google Drive
 GDRIVE_TARBALL="bpf-next-${KERNEL_COMMIT}.tar.gz"
 
 info()  { echo "[INFO]  $*"; }
