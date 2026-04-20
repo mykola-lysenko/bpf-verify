@@ -34,7 +34,7 @@
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
  *
- * These macros call warn_slowpath_fmt, printk, etc. — functions
+ * These macros call warn_slowpath_fmt, printk, etc. -- functions
  * that are not available in the BPF execution environment and
  * produce unresolved extern symbols that block libbpf loading.
  *
@@ -52,7 +52,7 @@
 #define BUG()                      do {} while (0)
 #define BUG_ON(cond)               do { if (cond) {} } while (0)
 
-/* printk / pr_* family — produce string-literal .rodata relocations */
+/* printk / pr_* family -- produce string-literal .rodata relocations */
 #define printk(fmt, ...)           do {} while (0)
 #define pr_emerg(fmt, ...)         do {} while (0)
 #define pr_alert(fmt, ...)         do {} while (0)
@@ -94,10 +94,12 @@
  * section below, after all kernel headers have been processed. */
 
 /* BPF_ASSERT: property assertion for verification.
- * If the condition is false the program writes to address 0 (NULL),
- * which the BPF verifier will flag as an invalid memory access.
- * This turns logical invariant violations into verifier rejections. */
-#define BPF_ASSERT(cond) do { if (!(cond)) { volatile int *__p = 0; *__p = 0; } } while(0)
+ * If the condition is false the program returns -1 (XDP_ABORTED / TC_ACT_SHOT),
+ * which veristat reports as a non-zero return value.
+ * Using return -1 instead of a null pointer write avoids the BPF verifier
+ * rejecting programs where the false branch is provably unreachable but the
+ * verifier still explores it (e.g., pointer equality comparisons). */
+#define BPF_ASSERT(cond) do { if (!(cond)) { return -1; } } while(0)
 
 /* BPF map for dynamic (non-constant) inputs.
  * IMPORTANT: This MUST be defined BEFORE the kernel source include.
@@ -136,28 +138,25 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
-/* linux/lz4.h defines LZ4_stream_t_internal; lz4defs.h defines tableType_t.
- * Include both before the forward decl below. The include guards
- * prevent re-inclusion by lz4_compress.c.
- * Also override LZ4_memcpy to use non-builtin memcpy. */
-#include <linux/lz4.h>
-#include "/home/ubuntu/linux-6.1.102/lib/lz4/lz4defs.h"
+/* The shims/lz4_compress/linux/lz4.h shim applies internal_linkage to all
+ * LZ4 functions declared in linux/lz4.h (same strategy as lz4_decompress).
+ * Pre-include lz4defs.h to override LZ4_memcpy before lz4_compress.c includes it.
+ * Also apply always_inline to all functions in the source file to force inlining
+ * of static helpers with >5 args (LZ4_compress_fast_extState, LZ4_compress_destSize_generic). */
+/* Pre-include lz4defs.h so its include guard prevents re-inclusion */
+#include "/home/ubuntu/bpf-next-0aa637869/lib/lz4/lz4defs.h"
 #undef LZ4_memcpy
 #define LZ4_memcpy(dst, src, size) memcpy(dst, src, size)
-/* LZ4_compress_destSize_generic is static with 7 args. The BPF backend rejects
- * calls to static functions with >5 args unless they are inlined.
- * Use always_inline forward decl to force inlining. */
-static __attribute__((always_inline)) int LZ4_compress_destSize_generic(
-    LZ4_stream_t_internal * const ctx,
-    const char * const src, char * const dst,
-    int * const srcSizePtr, const int targetDstSize,
-    const tableType_t tableType);
+/* Apply always_inline to ALL functions in lz4_compress.c (between push and pop
+ * in EXTRA_PREAMBLE). This forces inlining of static helpers with >5 args. */
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 
 /* Include the kernel source file */
-#include "/home/ubuntu/linux-6.1.102/lib/lz4/lz4_compress.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/lz4/lz4_compress.c"
 
 /* Per-file extra preamble: stubs injected AFTER the source file include
  * (so they can reference types defined in the source). */
+#pragma clang attribute pop
 
 
 /* Post-include fixups: redefine symbols that were declared as externs

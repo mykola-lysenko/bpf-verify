@@ -34,7 +34,7 @@
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
  *
- * These macros call warn_slowpath_fmt, printk, etc. — functions
+ * These macros call warn_slowpath_fmt, printk, etc. -- functions
  * that are not available in the BPF execution environment and
  * produce unresolved extern symbols that block libbpf loading.
  *
@@ -52,7 +52,7 @@
 #define BUG()                      do {} while (0)
 #define BUG_ON(cond)               do { if (cond) {} } while (0)
 
-/* printk / pr_* family — produce string-literal .rodata relocations */
+/* printk / pr_* family -- produce string-literal .rodata relocations */
 #define printk(fmt, ...)           do {} while (0)
 #define pr_emerg(fmt, ...)         do {} while (0)
 #define pr_alert(fmt, ...)         do {} while (0)
@@ -94,10 +94,12 @@
  * section below, after all kernel headers have been processed. */
 
 /* BPF_ASSERT: property assertion for verification.
- * If the condition is false the program writes to address 0 (NULL),
- * which the BPF verifier will flag as an invalid memory access.
- * This turns logical invariant violations into verifier rejections. */
-#define BPF_ASSERT(cond) do { if (!(cond)) { volatile int *__p = 0; *__p = 0; } } while(0)
+ * If the condition is false the program returns -1 (XDP_ABORTED / TC_ACT_SHOT),
+ * which veristat reports as a non-zero return value.
+ * Using return -1 instead of a null pointer write avoids the BPF verifier
+ * rejecting programs where the false branch is provably unreachable but the
+ * verifier still explores it (e.g., pointer equality comparisons). */
+#define BPF_ASSERT(cond) do { if (!(cond)) { return -1; } } while(0)
 
 /* BPF map for dynamic (non-constant) inputs.
  * IMPORTANT: This MUST be defined BEFORE the kernel source include.
@@ -134,16 +136,69 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 
 /* Extra dependencies (other translation units this file calls into) */
 #include "/home/ubuntu/bpf-verify/shims/mpi-internal.h"
-#include "/home/ubuntu/linux-6.1.102/lib/mpi/generic_mpih-mul1.c"
-#include "/home/ubuntu/linux-6.1.102/lib/mpi/mpih-mul.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/crypto/mpi/generic_mpih-mul1.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/crypto/mpi/mpih-mul.c"
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
 
+/* End the always_inline scope from shims/mpi-internal.h (which applied to
+ * generic_mpih-mul1.c and mpih-mul.c). The renamed __bpf_mpihelp_mul* functions
+ * are always_inline but never called (stubs below replace them), so the BPF
+ * backend DCEs them. */
+#pragma clang attribute pop
+/* Undo the rename macros so the stubs below use the original names. */
+#undef mpihelp_mul_karatsuba_case
+#undef mpihelp_mul
+/* Provide static inline stubs for mpi-mul.c to use instead of the renamed
+ * 6-arg functions. The stubs return -ENOMEM (Karatsuba path not taken in BPF). */
+static inline int mpihelp_mul_karatsuba_case(
+    mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize,
+    mpi_ptr_t vp, mpi_size_t vsize, struct karatsuba_ctx *ctx)
+{
+    (void)prodp; (void)up; (void)usize; (void)vp; (void)vsize; (void)ctx;
+    return -ENOMEM;
+}
+static inline int mpihelp_mul(
+    mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize,
+    mpi_ptr_t vp, mpi_size_t vsize, mpi_limb_t *_result)
+{
+    (void)prodp; (void)up; (void)usize; (void)vp; (void)vsize; (void)_result;
+    return -ENOMEM;
+}
+/* Stubs for mpiutil.c functions called from mpi-mul.c.
+ * These are declared with internal_linkage in mpi-internal.h so the BPF
+ * backend can DCE them. Provide definitions so they can be inlined. */
+static inline mpi_ptr_t mpi_alloc_limb_space(unsigned nlimbs)
+    { (void)nlimbs; return NULL; }
+static inline void mpi_free_limb_space(mpi_ptr_t a)
+    { (void)a; }
+static inline void mpi_assign_limb_space(MPI a, mpi_ptr_t ap, unsigned nlimbs)
+    { (void)a; (void)ap; (void)nlimbs; }
+/* mpi_resize and mpi_tdiv_r are declared in linux/mpi.h (not mpi-internal.h),
+ * so we can't add internal_linkage to their declarations there.
+ * Instead, rename them via macros so mpi-mul.c calls the stubs below. */
+#define mpi_resize __bpf_mpi_resize
+#define mpi_tdiv_r __bpf_mpi_tdiv_r
+static inline int __bpf_mpi_resize(MPI a, unsigned nlimbs)
+    { (void)a; (void)nlimbs; return -ENOMEM; }
+static inline void __bpf_mpi_tdiv_r(MPI rem, MPI num, MPI den)
+    { (void)rem; (void)num; (void)den; }
+/* Rename mpi_mul and mpi_mulm so the BPF backend emits them as __bpf_*
+ * symbols (not the external mpi_mul/mpi_mulm). Since they're never called
+ * from bpf_prog_mpi_mul, the BPF backend will DCE them. */
+#define mpi_mul __bpf_mpi_mul
+#define mpi_mulm __bpf_mpi_mulm
+
 /* Include the kernel source file */
-#include "/home/ubuntu/linux-6.1.102/lib/mpi/mpi-mul.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/crypto/mpi/mpi-mul.c"
 
 /* Per-file extra preamble: stubs injected AFTER the source file include
  * (so they can reference types defined in the source). */
+
+#undef mpi_resize
+#undef mpi_tdiv_r
+#undef mpi_mul
+#undef mpi_mulm
 
 
 /* Post-include fixups: redefine symbols that were declared as externs

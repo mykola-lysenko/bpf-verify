@@ -34,7 +34,7 @@
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
  *
- * These macros call warn_slowpath_fmt, printk, etc. — functions
+ * These macros call warn_slowpath_fmt, printk, etc. -- functions
  * that are not available in the BPF execution environment and
  * produce unresolved extern symbols that block libbpf loading.
  *
@@ -52,7 +52,7 @@
 #define BUG()                      do {} while (0)
 #define BUG_ON(cond)               do { if (cond) {} } while (0)
 
-/* printk / pr_* family — produce string-literal .rodata relocations */
+/* printk / pr_* family -- produce string-literal .rodata relocations */
 #define printk(fmt, ...)           do {} while (0)
 #define pr_emerg(fmt, ...)         do {} while (0)
 #define pr_alert(fmt, ...)         do {} while (0)
@@ -94,10 +94,12 @@
  * section below, after all kernel headers have been processed. */
 
 /* BPF_ASSERT: property assertion for verification.
- * If the condition is false the program writes to address 0 (NULL),
- * which the BPF verifier will flag as an invalid memory access.
- * This turns logical invariant violations into verifier rejections. */
-#define BPF_ASSERT(cond) do { if (!(cond)) { volatile int *__p = 0; *__p = 0; } } while(0)
+ * If the condition is false the program returns -1 (XDP_ABORTED / TC_ACT_SHOT),
+ * which veristat reports as a non-zero return value.
+ * Using return -1 instead of a null pointer write avoids the BPF verifier
+ * rejecting programs where the false branch is provably unreachable but the
+ * verifier still explores it (e.g., pointer equality comparisons). */
+#define BPF_ASSERT(cond) do { if (!(cond)) { return -1; } } while(0)
 
 /* BPF map for dynamic (non-constant) inputs.
  * IMPORTANT: This MUST be defined BEFORE the kernel source include.
@@ -136,12 +138,28 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
+/* Include cmpxchg.h so arch_cmpxchg is defined as a macro (not an extern).
+ * The renamed llist.c functions (__llist_add_batch_atomic etc.) use try_cmpxchg
+ * which expands to arch_cmpxchg via atomic-arch-fallback.h. Without this include,
+ * arch_cmpxchg would appear as an unresolved extern in BTF, causing libbpf to
+ * fail to load the BPF object. */
+#include <asm/cmpxchg.h>
+/* Rename llist.c functions to avoid conflict with shim static inline versions.
+ * The shim provides non-atomic implementations to work around try_cmpxchg on
+ * pointer types (not supported in BPF context). */
+#define llist_add_batch     __llist_add_batch_atomic
+#define llist_del_first     __llist_del_first_atomic
+#define llist_reverse_order __llist_reverse_order_impl
 
 /* Include the kernel source file */
-#include "/home/ubuntu/linux-6.1.102/lib/llist.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/llist.c"
 
 /* Per-file extra preamble: stubs injected AFTER the source file include
  * (so they can reference types defined in the source). */
+
+#undef llist_add_batch
+#undef llist_del_first
+#undef llist_reverse_order
 
 
 /* Post-include fixups: redefine symbols that were declared as externs

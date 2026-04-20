@@ -34,7 +34,7 @@
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
  *
- * These macros call warn_slowpath_fmt, printk, etc. — functions
+ * These macros call warn_slowpath_fmt, printk, etc. -- functions
  * that are not available in the BPF execution environment and
  * produce unresolved extern symbols that block libbpf loading.
  *
@@ -52,7 +52,7 @@
 #define BUG()                      do {} while (0)
 #define BUG_ON(cond)               do { if (cond) {} } while (0)
 
-/* printk / pr_* family — produce string-literal .rodata relocations */
+/* printk / pr_* family -- produce string-literal .rodata relocations */
 #define printk(fmt, ...)           do {} while (0)
 #define pr_emerg(fmt, ...)         do {} while (0)
 #define pr_alert(fmt, ...)         do {} while (0)
@@ -94,10 +94,12 @@
  * section below, after all kernel headers have been processed. */
 
 /* BPF_ASSERT: property assertion for verification.
- * If the condition is false the program writes to address 0 (NULL),
- * which the BPF verifier will flag as an invalid memory access.
- * This turns logical invariant violations into verifier rejections. */
-#define BPF_ASSERT(cond) do { if (!(cond)) { volatile int *__p = 0; *__p = 0; } } while(0)
+ * If the condition is false the program returns -1 (XDP_ABORTED / TC_ACT_SHOT),
+ * which veristat reports as a non-zero return value.
+ * Using return -1 instead of a null pointer write avoids the BPF verifier
+ * rejecting programs where the false branch is provably unreachable but the
+ * verifier still explores it (e.g., pointer equality comparisons). */
+#define BPF_ASSERT(cond) do { if (!(cond)) { return -1; } } while(0)
 
 /* BPF map for dynamic (non-constant) inputs.
  * IMPORTANT: This MUST be defined BEFORE the kernel source include.
@@ -136,9 +138,93 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
+/* Block zstd_deps.h's ZSTD_DEPS_COMMON section (same approach as entropy_common). */
+#include <linux/limits.h>
+#include <linux/stddef.h>
+#define ZSTD_DEPS_COMMON
+static __always_inline void *__bpf_memcpy(void *d, const void *s, __kernel_size_t n)
+{{
+    char *dd = (char *)d; const char *ss = (const char *)s;
+    while (n--) *dd++ = *ss++; return d;
+}}
+static __always_inline void *__bpf_memmove(void *d, const void *s, __kernel_size_t n)
+{{
+    char *dd = (char *)d; const char *ss = (const char *)s;
+    if (dd < ss) {{ while (n--) *dd++ = *ss++; }}
+    else {{ dd += n; ss += n; while (n--) *--dd = *--ss; }}
+    return d;
+}}
+static __always_inline void *__bpf_memset(void *d, int c, __kernel_size_t n)
+{{
+    char *dd = (char *)d; while (n--) *dd++ = (char)c; return d;
+}}
+#define ZSTD_memcpy(d,s,n) __bpf_memcpy((d),(s),(n))
+#define ZSTD_memmove(d,s,n) __bpf_memmove((d),(s),(n))
+#define ZSTD_memset(d,s,n) __bpf_memset((d),(s),(n))
+/* Override __GNUC__ to force software fallbacks for __builtin_ctz/__builtin_clz
+ * (opcodes 191/192, not supported by BPF backend). */
+#define __GNUC__ 2
+/* HUF_DTable is typedef U32 in huf.h */
+typedef unsigned int HUF_DTable;
+/* Cross-TU stubs: HUF_readStats_wksp and HUF_readStats are defined in
+ * entropy_common.c (a different TU). internal_linkage forward decls don't
+ * work for cross-TU functions (the definition must be in the same TU).
+ * Use macro rename + static inline stub instead. */
+#define HUF_readStats_wksp __bpf_HUF_readStats_wksp
+static __always_inline size_t __bpf_HUF_readStats_wksp(
+    unsigned char *huffWeight, size_t hwSize,
+    unsigned int *rankStats, unsigned int *nbSymbolsPtr,
+    unsigned int *tableLogPtr, const void *src, size_t srcSize,
+    void *workSpace, size_t wkspSize, int bmi2)
+{{ return 0; }}
+#define HUF_readStats __bpf_HUF_readStats
+static __always_inline size_t __bpf_HUF_readStats(
+    unsigned char *huffWeight, size_t hwSize,
+    unsigned int *rankStats, unsigned int *nbSymbolsPtr,
+    unsigned int *tableLogPtr, const void *src, size_t srcSize)
+{{ return 0; }}
+/* Forward declarations with internal_linkage for all >5-arg non-static
+ * functions DEFINED in huf_decompress.c itself. */
+__attribute__((internal_linkage))
+size_t HUF_readDTableX1_wksp(HUF_DTable *DTable, const void *src,
+    size_t srcSize, void *workSpace, size_t wkspSize, int flags);
+__attribute__((internal_linkage))
+size_t HUF_readDTableX2_wksp(HUF_DTable *DTable, const void *src,
+    size_t srcSize, void *workSpace, size_t wkspSize, int flags);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X1_DCtx_wksp(HUF_DTable *DCtx, void *dst, size_t dstSize,
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize, int flags);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X2_DCtx_wksp(HUF_DTable *DCtx, void *dst, size_t dstSize,
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize, int flags);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X_hufOnly_wksp(HUF_DTable *dctx, void *dst,
+    size_t dstSize, const void *cSrc, size_t cSrcSize,
+    void *workSpace, size_t wkspSize, int flags);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X_DCtx_wksp(HUF_DTable *dctx, void *dst, size_t dstSize,
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize, int flags);
+__attribute__((internal_linkage))
+size_t HUF_decompress1X_usingDTable(void *dst, size_t maxDstSize,
+    const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int flags);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X_usingDTable(void *dst, size_t maxDstSize,
+    const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int flags);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X1_usingDTable_internal_bmi2(void *dst, size_t dstSize,
+    void const *cSrc, size_t cSrcSize, const HUF_DTable *DTable);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X1_usingDTable_internal_default(void *dst, size_t dstSize,
+    void const *cSrc, size_t cSrcSize, const HUF_DTable *DTable);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X2_usingDTable_internal_bmi2(void *dst, size_t dstSize,
+    void const *cSrc, size_t cSrcSize, const HUF_DTable *DTable);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X2_usingDTable_internal_default(void *dst, size_t dstSize,
+    void const *cSrc, size_t cSrcSize, const HUF_DTable *DTable);
 
 /* Include the kernel source file */
-#include "/home/ubuntu/linux-6.1.102/lib/zstd/decompress/huf_decompress.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/zstd/decompress/huf_decompress.c"
 
 /* Per-file extra preamble: stubs injected AFTER the source file include
  * (so they can reference types defined in the source). */

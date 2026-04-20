@@ -90,6 +90,25 @@
 #define BPF_XCHG        (0xe0 | BPF_FETCH)
 #define BPF_CMPXCHG     (0xf0 | BPF_FETCH)
 
+/* Special insn->off values for address-space cast and per-CPU address resolution
+ * (from uapi/linux/bpf.h enum bpf_addr_space_cast, used in disasm.c) */
+#define BPF_ADDR_SPACE_CAST 1
+#define BPF_ADDR_PERCPU     2
+
+/* Atomic operation modifiers for load-acquire and store-release
+ * (from uapi/linux/bpf.h, used in disasm.c:271) */
+#define BPF_LOAD_ACQ  0x100
+#define BPF_STORE_REL 0x110
+
+/* Load with sign extension (from uapi/linux/bpf.h, used in disasm.c:298) */
+#define BPF_MEMSX     0x80
+
+/* Conditional pseudo-jump opcode (from uapi/linux/bpf.h, used in disasm.c:364) */
+#define BPF_JCOND     0xe0
+
+/* BPF_MAY_GOTO src_reg value for conditional jumps (from uapi/linux/bpf.h) */
+#define BPF_MAY_GOTO  0
+
 /* Pseudo source register values */
 #define BPF_PSEUDO_MAP_FD           1
 #define BPF_PSEUDO_MAP_IDX          5
@@ -358,4 +377,4 @@ void print_bpf_insn(const struct bpf_insn_cbs *cbs,
 #endif /* __BPF_DISASM_H__ */
 
 /* ── Now include the actual disasm.c source ───────────────────────────────── */
-#include "/home/ubuntu/linux-6.1.102/kernel/bpf/disasm.c"
+#include "/home/ubuntu/bpf-next-0aa637869/kernel/bpf/disasm.c"

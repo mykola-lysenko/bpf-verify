@@ -34,7 +34,7 @@
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
  *
- * These macros call warn_slowpath_fmt, printk, etc. — functions
+ * These macros call warn_slowpath_fmt, printk, etc. -- functions
  * that are not available in the BPF execution environment and
  * produce unresolved extern symbols that block libbpf loading.
  *
@@ -52,7 +52,7 @@
 #define BUG()                      do {} while (0)
 #define BUG_ON(cond)               do { if (cond) {} } while (0)
 
-/* printk / pr_* family — produce string-literal .rodata relocations */
+/* printk / pr_* family -- produce string-literal .rodata relocations */
 #define printk(fmt, ...)           do {} while (0)
 #define pr_emerg(fmt, ...)         do {} while (0)
 #define pr_alert(fmt, ...)         do {} while (0)
@@ -94,10 +94,12 @@
  * section below, after all kernel headers have been processed. */
 
 /* BPF_ASSERT: property assertion for verification.
- * If the condition is false the program writes to address 0 (NULL),
- * which the BPF verifier will flag as an invalid memory access.
- * This turns logical invariant violations into verifier rejections. */
-#define BPF_ASSERT(cond) do { if (!(cond)) { volatile int *__p = 0; *__p = 0; } } while(0)
+ * If the condition is false the program returns -1 (XDP_ABORTED / TC_ACT_SHOT),
+ * which veristat reports as a non-zero return value.
+ * Using return -1 instead of a null pointer write avoids the BPF verifier
+ * rejecting programs where the false branch is provably unreachable but the
+ * verifier still explores it (e.g., pointer equality comparisons). */
+#define BPF_ASSERT(cond) do { if (!(cond)) { return -1; } } while(0)
 
 /* BPF map for dynamic (non-constant) inputs.
  * IMPORTANT: This MUST be defined BEFORE the kernel source include.
@@ -136,9 +138,30 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
+/* Suppress extern strchr/memchr declarations from linux/string.h and
+ * provide static inline implementations. The BPF backend lowers strchr
+ * to memchr, so both stubs are required. */
+#define __HAVE_ARCH_STRCHR
+#define __HAVE_ARCH_MEMCHR
+static inline char *strchr(const char *s, int c)
+{{
+    while (*s) {{
+        if (*s == (char)c) return (char *)s;
+        s++;
+    }}
+    return (void *)0;
+}}
+static inline void *memchr(const void *s, int c, __kernel_size_t n)
+{{
+    const unsigned char *p = (const unsigned char *)s;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++)
+        if (p[i] == (unsigned char)c) return (void *)(p + i);
+    return (void *)0;
+}}
 
 /* Include the kernel source file */
-#include "/home/ubuntu/linux-6.1.102/lib/base64.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/base64.c"
 
 /* Per-file extra preamble: stubs injected AFTER the source file include
  * (so they can reference types defined in the source). */
@@ -193,10 +216,10 @@ int bpf_prog_base64(void *ctx)
     src[2] = (u8)((*v >> 16) & 0xff);
     /* Encode: 3 bytes -> 4 base64 chars */
     char enc[8];
-    int elen = base64_encode(src, 3, enc);
+    int elen = base64_encode(src, 3, enc, false, BASE64_STD);
     /* Decode back */
     u8 dec[4];
-    int dlen = base64_decode(enc, elen, dec);
+    int dlen = base64_decode(enc, elen, dec, false, BASE64_STD);
     return elen + dlen;
     return 0;
 }

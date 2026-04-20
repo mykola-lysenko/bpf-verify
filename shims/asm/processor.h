@@ -1,119 +1,96 @@
 /* BPF shim: asm/processor.h
- * x86 processor.h includes many headers with inline asm not valid in BPF.
- * Provide minimal stubs for the types and functions needed by lib/ targets.
- * NOTE: Do NOT include asm/cpufeatures.h here - it circularly includes processor.h.
+ * x86 processor.h uses inline assembly and x86-specific constructs.
+ * Provide minimal stubs for BPF compilation.
  */
 #ifndef _ASM_X86_PROCESSOR_H
 #define _ASM_X86_PROCESSOR_H
 
 #include <linux/types.h>
-#include <asm/types.h>
-/* Include pgtable_types.h for pgtable_t, pgprot_t, pgd_t etc. needed by mm_types.h */
-#include <asm/pgtable_types.h>
+#include <asm/cpufeature.h>
+#include <asm/page.h>
 
-/* Define NCAPINTS/NBUGINTS directly (from asm/cpufeatures.h) to avoid circular include */
-#ifndef NCAPINTS
-#define NCAPINTS	22	/* N 32-bit words worth of info */
-#endif
-#ifndef NBUGINTS
-#define NBUGINTS	2	/* N 32-bit bug flags */
-#endif
+/* CPU feature stubs */
+#define cpu_has(c, bit)		0
+#define boot_cpu_has(bit)	0
+#define this_cpu_has(bit)	0
 
-/* Minimal cpuinfo_x86 struct - only the fields used by cpufeature.h */
+/* Idle/relax stubs (native_halt is in irqflags.h) */
+static inline void cpu_relax(void) {}
+static inline void rep_nop(void) {}
+
+/* Cache line size */
+#define cache_line_size()	64
+
+/* Stack canary stub */
+struct stack_canary {
+	char __pad[20];
+	unsigned long canary;
+};
+
+/* Thread info stubs */
+#define THREAD_SIZE_ORDER	2
+
+/* cpuinfo_x86 stub - minimal */
 struct cpuinfo_x86 {
-	__u8		x86;
-	__u8		x86_vendor;
-	__u8		x86_model;
-	__u8		x86_stepping;
+	unsigned char	x86;
+	unsigned char	x86_vendor;
+	unsigned char	x86_model;
+	unsigned char	x86_stepping;
 	int		x86_tlbsize;
-	__u32		x86_capability[NCAPINTS + NBUGINTS];
+	unsigned int	x86_virt_bits;
+	unsigned int	x86_phys_bits;
+	unsigned int	x86_capability[21];
 	char		x86_vendor_id[16];
 	char		x86_model_id[64];
 	unsigned int	x86_cache_size;
 	int		x86_cache_alignment;
-	int		x86_cache_max_rmid;
-	int		x86_cache_occ_scale;
-	int		x86_cache_mbm_width_offset;
 	int		x86_power;
 	unsigned long	loops_per_jiffy;
-	u64		ppin;
-	u16		x86_max_cores;
-	u16		apicid;
-	u16		initial_apicid;
-	u16		x86_clflush_size;
-	u16		booted_cores;
-	u16		phys_proc_id;
-	u16		logical_proc_id;
-	u16		cpu_core_id;
-	u16		cpu_die_id;
-	u16		logical_die_id;
-	u16		cpu_index;
-	bool		smt_active;
-	u32		microcode;
-	u8		x86_cache_bits;
-	unsigned	initialized : 1;
 };
 
 extern struct cpuinfo_x86 boot_cpu_data;
-extern struct cpuinfo_x86 __percpu *cpu_info;
 
-/* native_cpuid stub */
-static __always_inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
-					  unsigned int *ecx, unsigned int *edx)
+/* MSR stubs */
+static inline unsigned long long native_read_msr(unsigned int msr) { return 0; }
+static inline void native_write_msr(unsigned int msr, unsigned low, unsigned high) {}
+
+/* CR register stubs */
+static inline unsigned long native_read_cr0(void) { return 0; }
+static inline unsigned long native_read_cr2(void) { return 0; }
+static inline unsigned long native_read_cr3(void) { return 0; }
+static inline unsigned long native_read_cr4(void) { return 0; }
+static inline void native_write_cr0(unsigned long val) {}
+static inline void native_write_cr2(unsigned long val) {}
+static inline void native_write_cr4(unsigned long val) {}
+
+#define read_cr0()	native_read_cr0()
+#define read_cr2()	native_read_cr2()
+#define read_cr3()	native_read_cr3()
+#define read_cr4()	native_read_cr4()
+#define write_cr0(x)	native_write_cr0(x)
+#define write_cr2(x)	native_write_cr2(x)
+#define write_cr4(x)	native_write_cr4(x)
+
+/* CPUID stub */
+static inline void cpuid(unsigned int op,
+	unsigned int *eax, unsigned int *ebx,
+	unsigned int *ecx, unsigned int *edx)
 {
 	*eax = *ebx = *ecx = *edx = 0;
 }
 
-/* have_cpuid_p stub */
-static inline int have_cpuid_p(void) { return 1; }
+/* Per-CPU current task */
+struct task_struct;
+extern struct task_struct *current;
 
-/* cpu_relax stub */
-static __always_inline void cpu_relax(void) {}
-static __always_inline void rep_nop(void) {}
-static __always_inline void cpu_relax_lowlatency(void) {}
-
-/* __cpuid stub */
-static __always_inline void __cpuid(unsigned int *eax, unsigned int *ebx,
-				     unsigned int *ecx, unsigned int *edx)
-{
-	native_cpuid(eax, ebx, ecx, edx);
-}
-
-/* Prefetch stubs */
-static __always_inline void prefetch(const void *x) {}
-static __always_inline void prefetchw(const void *x) {}
-static __always_inline void prefetcht0(const void *x) {}
-static __always_inline void prefetcht1(const void *x) {}
-static __always_inline void prefetcht2(const void *x) {}
-static __always_inline void prefetchnta(const void *x) {}
-
-/* wbinvd stub */
-static __always_inline void wbinvd(void) {}
-
-/* TSC stubs */
-static __always_inline u64 rdtsc(void) { return 0; }
-static __always_inline u64 rdtsc_ordered(void) { return 0; }
-
-/* IO stubs */
-static __always_inline void native_io_delay(void) {}
-static __always_inline void io_delay(void) {}
-
-/* Halt stub */
-static __always_inline void halt(void) {}
-
-/* SWAPGS stub */
-static __always_inline void native_swapgs(void) {}
-
-/* Task size */
-#define TASK_SIZE_MAX		((1UL << 47) - PAGE_SIZE)
-#define DEFAULT_MAP_WINDOW	((1UL << 47) - PAGE_SIZE)
-
-/* Minimal thread_struct: sched.h embeds this as the last field of task_struct.
- * The real x86 thread_struct contains fpu, desc_struct, io_bitmap etc. which
- * are all x86-specific and not needed for BPF lib/ verification. Provide an
- * opaque placeholder so task_struct is a complete type. */
+/* thread_struct is the arch-specific per-thread CPU state.
+ * sched.h:1642 embeds it in struct task_struct.
+ * Provide a minimal stub so task_struct can be defined without
+ * pulling in the full x86 processor.h (which has inline assembly). */
 struct thread_struct {
-	unsigned long		sp;		/* stack pointer */
+	unsigned long		sp;		/* kernel stack pointer */
+	unsigned long		ip;		/* instruction pointer */
+	unsigned long		flags;		/* thread flags */
 	unsigned long		cr2;		/* page fault address */
 	unsigned long		trap_nr;	/* trap number */
 	unsigned long		error_code;	/* trap error code */

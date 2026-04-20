@@ -34,7 +34,7 @@
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
  *
- * These macros call warn_slowpath_fmt, printk, etc. — functions
+ * These macros call warn_slowpath_fmt, printk, etc. -- functions
  * that are not available in the BPF execution environment and
  * produce unresolved extern symbols that block libbpf loading.
  *
@@ -52,7 +52,7 @@
 #define BUG()                      do {} while (0)
 #define BUG_ON(cond)               do { if (cond) {} } while (0)
 
-/* printk / pr_* family — produce string-literal .rodata relocations */
+/* printk / pr_* family -- produce string-literal .rodata relocations */
 #define printk(fmt, ...)           do {} while (0)
 #define pr_emerg(fmt, ...)         do {} while (0)
 #define pr_alert(fmt, ...)         do {} while (0)
@@ -94,10 +94,12 @@
  * section below, after all kernel headers have been processed. */
 
 /* BPF_ASSERT: property assertion for verification.
- * If the condition is false the program writes to address 0 (NULL),
- * which the BPF verifier will flag as an invalid memory access.
- * This turns logical invariant violations into verifier rejections. */
-#define BPF_ASSERT(cond) do { if (!(cond)) { volatile int *__p = 0; *__p = 0; } } while(0)
+ * If the condition is false the program returns -1 (XDP_ABORTED / TC_ACT_SHOT),
+ * which veristat reports as a non-zero return value.
+ * Using return -1 instead of a null pointer write avoids the BPF verifier
+ * rejecting programs where the false branch is provably unreachable but the
+ * verifier still explores it (e.g., pointer equality comparisons). */
+#define BPF_ASSERT(cond) do { if (!(cond)) { return -1; } } while(0)
 
 /* BPF map for dynamic (non-constant) inputs.
  * IMPORTANT: This MUST be defined BEFORE the kernel source include.
@@ -143,26 +145,53 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
  * only 2 static functions, no static variables). Then provide non-static
  * internal_linkage forward declarations for both functions so the BPF backend
  * inlines them. The shim pre-include (in EXTRA_INCLUDES) ensures kernel headers
- * are already processed before #define static takes effect. */
+ * are already processed before #define static takes effect.
+ *
+ * Actual signatures from lzo1x_compress.c:
+ *   static noinline int lzo1x_1_do_compress(const unsigned char *in,
+ *     size_t in_len, unsigned char **out, unsigned char *op_end, size_t *tp,
+ *     void *wrkmem, signed char *state_offset,
+ *     const unsigned char bitstream_version);
+ *   static int lzogeneric1x_1_compress(const unsigned char *in,
+ *     size_t in_len, unsigned char *out, size_t *out_len,
+ *     void *wrkmem, const unsigned char bitstream_version);
+ */
 #define static
-__attribute__((internal_linkage))
+/* Rename the two exported functions so the BPF backend emits them as __bpf_*
+ * symbols (not the external lzo1x_1_compress / lzorle1x_1_compress names).
+ * Since they're never called from bpf_prog_lzo_compress, the BPF backend
+ * will DCE them. We cannot add internal_linkage to them because their first
+ * declaration in linux/lzo.h does not have that attribute. */
+#define lzo1x_1_compress __bpf_lzo1x_1_compress
+#define lzorle1x_1_compress __bpf_lzorle1x_1_compress
+/* Apply always_inline + internal_linkage to the two static helpers
+ * (lzo1x_1_do_compress and lzogeneric1x_1_compress) which have >5 args.
+ * Their first declaration is the forward decl below (no prior decl in lzo.h),
+ * so internal_linkage is valid here. */
+#pragma clang attribute push(__attribute__((always_inline, internal_linkage)), apply_to=function)
+__attribute__((always_inline, internal_linkage))
 int lzo1x_1_do_compress(
     const unsigned char *in, size_t in_len,
     unsigned char **out, unsigned char *op_end,
     size_t *tp, void *wrkmem,
     signed char *state_offset,
     const unsigned char bitstream_version);
-__attribute__((internal_linkage))
+__attribute__((always_inline, internal_linkage))
 int lzogeneric1x_1_compress(
     const unsigned char *in, size_t in_len,
     unsigned char *out, size_t *out_len,
     void *wrkmem, const unsigned char bitstream_version);
 
 /* Include the kernel source file */
-#include "/home/ubuntu/linux-6.1.102/lib/lzo/lzo1x_compress.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/lzo/lzo1x_compress.c"
 
 /* Per-file extra preamble: stubs injected AFTER the source file include
  * (so they can reference types defined in the source). */
+
+#pragma clang attribute pop
+#undef static
+#undef lzo1x_1_compress
+#undef lzorle1x_1_compress
 
 
 /* Post-include fixups: redefine symbols that were declared as externs

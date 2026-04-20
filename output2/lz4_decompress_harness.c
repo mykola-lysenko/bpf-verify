@@ -34,7 +34,7 @@
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
  *
- * These macros call warn_slowpath_fmt, printk, etc. — functions
+ * These macros call warn_slowpath_fmt, printk, etc. -- functions
  * that are not available in the BPF execution environment and
  * produce unresolved extern symbols that block libbpf loading.
  *
@@ -52,7 +52,7 @@
 #define BUG()                      do {} while (0)
 #define BUG_ON(cond)               do { if (cond) {} } while (0)
 
-/* printk / pr_* family — produce string-literal .rodata relocations */
+/* printk / pr_* family -- produce string-literal .rodata relocations */
 #define printk(fmt, ...)           do {} while (0)
 #define pr_emerg(fmt, ...)         do {} while (0)
 #define pr_alert(fmt, ...)         do {} while (0)
@@ -94,10 +94,12 @@
  * section below, after all kernel headers have been processed. */
 
 /* BPF_ASSERT: property assertion for verification.
- * If the condition is false the program writes to address 0 (NULL),
- * which the BPF verifier will flag as an invalid memory access.
- * This turns logical invariant violations into verifier rejections. */
-#define BPF_ASSERT(cond) do { if (!(cond)) { volatile int *__p = 0; *__p = 0; } } while(0)
+ * If the condition is false the program returns -1 (XDP_ABORTED / TC_ACT_SHOT),
+ * which veristat reports as a non-zero return value.
+ * Using return -1 instead of a null pointer write avoids the BPF verifier
+ * rejecting programs where the false branch is provably unreachable but the
+ * verifier still explores it (e.g., pointer equality comparisons). */
+#define BPF_ASSERT(cond) do { if (!(cond)) { return -1; } } while(0)
 
 /* BPF map for dynamic (non-constant) inputs.
  * IMPORTANT: This MUST be defined BEFORE the kernel source include.
@@ -136,21 +138,24 @@ static void *(*bpf_map_lookup_elem)(void *map, const void *key) =
 
 /* Per-file pre-include code: macros/stubs injected BEFORE the source file
  * (e.g. identity macros to suppress 6-arg non-static functions). */
-/* Override LZ4_memmove and LZ4_memcpy to use non-builtin versions.
- * __builtin_memmove/__builtin_memcpy are rejected by the BPF backend. */
-#include "/home/ubuntu/linux-6.1.102/lib/lz4/lz4defs.h"
+/* The shims/lz4_decompress/linux/lz4.h shim applies internal_linkage to all
+ * LZ4 functions via a targeted pragma. We just need to pre-include lz4defs.h
+ * here to override LZ4_memmove/LZ4_memcpy before lz4_decompress.c includes it.
+ * The shim is automatically used when lz4_decompress.c includes <linux/lz4.h>
+ * because -I/shims/lz4_decompress is prepended to the include path. */
+/* Pre-include lz4defs.h so its include guard (__LZ4DEFS_H__) prevents
+ * re-inclusion by lz4_decompress.c. This lets us override LZ4_memmove and
+ * LZ4_memcpy AFTER lz4defs.h has defined them as __builtin_memmove/__builtin_memcpy.
+ * The BPF backend rejects __builtin_memmove/__builtin_memcpy for variable-size
+ * copies; we redirect to the kernel's non-builtin memmove/memcpy instead. */
+#include "/home/ubuntu/bpf-next-0aa637869/lib/lz4/lz4defs.h"
 #undef LZ4_memmove
 #undef LZ4_memcpy
 #define LZ4_memmove(dst, src, size) memmove(dst, src, size)
 #define LZ4_memcpy(dst, src, size) memcpy(dst, src, size)
-/* LZ4_decompress_safe_forceExtDict has 6 args and is non-static.
- * Add always_inline forward decl so BPF backend accepts it. */
-__attribute__((always_inline)) int LZ4_decompress_safe_forceExtDict(
-    const char *source, char *dest, int compressedSize, int maxOutputSize,
-    const void *dictStart, size_t dictSize);
 
 /* Include the kernel source file */
-#include "/home/ubuntu/linux-6.1.102/lib/lz4/lz4_decompress.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/lz4/lz4_decompress.c"
 
 /* Per-file extra preamble: stubs injected AFTER the source file include
  * (so they can reference types defined in the source). */

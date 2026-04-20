@@ -242,7 +242,9 @@ static __always_inline int arch_atomic_dec_if_positive(atomic_t *v)
 }
 #define arch_atomic_dec_if_positive arch_atomic_dec_if_positive
 
-/* atomic64 variants */
+/* atomic64 variants - atomic64_t is defined in linux/types.h */
+
+#ifdef CONFIG_64BIT
 static __always_inline s64 arch_atomic64_read(const atomic64_t *v)
 {
 	return READ_ONCE(v->counter);
@@ -421,5 +423,6 @@ static __always_inline bool arch_atomic64_inc_not_zero(atomic64_t *v)
 	return false;
 }
 #define arch_atomic64_inc_not_zero arch_atomic64_inc_not_zero
+#endif /* CONFIG_64BIT */
 
 #endif /* _ASM_ATOMIC_H */

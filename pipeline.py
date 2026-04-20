@@ -26,7 +26,7 @@ BPF_CFLAGS = [
     "-O2",
     "-g",   # Required for pahole to generate BTF debug info
     "-nostdinc",
-    "-isystem", "/home/ubuntu/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/lib/clang/18/include",
+    "-isystem", "/usr/lib/llvm-23/lib/clang/23/include",
     f"-I{SHIM}", f"-I{SHIM}/linux", f"-I{SHIM}/uapi",
     f"-I{KSRC}", f"-I{KSRC}/include",
     f"-I{KSRC}/include/uapi",
@@ -66,6 +66,12 @@ BPF_CFLAGS = [
     # conflict with our no-op macro definitions in HARNESS_TEMPLATE.
     "-D__KERNEL_PRINTK__",
     "-D_LINUX_PANIC_H",
+    # Block linux/sprintf.h -- our harness defines snprintf as a macro which
+    # conflicts with sprintf.h's function declarations.
+    "-D_LINUX_KERNEL_SPRINTF_H_",
+    # Block linux/random.h -- our harness defines get_random_bytes with a
+    # different signature (int nbytes vs size_t len), causing a conflict.
+    "-D_LINUX_RANDOM_H",
     # Suppress likely/unlikely as compiler-level macros so they don't
     # generate extern BTF references (win_minmax and others use them).
     "-Dunlikely(x)=(x)",
@@ -90,6 +96,11 @@ BPF_CFLAGS = [
     # Precompute THREAD_SIZE for sched.h (used in init_stack array size).
     # x86_64: PAGE_SIZE=4096, THREAD_SIZE_ORDER=2, KASAN_STACK_ORDER=0.
     "-DTHREAD_SIZE=16384UL",
+    # COMPILE_OFFSETS: skip sched.h's __migrate_enable/__migrate_disable section
+    # which uses RQ_nr_pinned (a generated constant from asm-offsets.h not in our tree).
+    # With COMPILE_OFFSETS defined, sched.h provides empty stubs for these functions
+    # and skips the include of generated/rq-offsets.h (which is empty anyway).
+    "-DCOMPILE_OFFSETS",
     # TIF_NOTIFY_RESUME is defined in asm/thread_info.h (x86_64: value=1).
     "-DTIF_NOTIFY_RESUME=1",
     # __latent_entropy is a GCC plugin attribute that Clang doesn't support.
@@ -1097,10 +1108,10 @@ HARNESS_BODIES = {
     src[2] = (u8)((*v >> 16) & 0xff);
     /* Encode: 3 bytes -> 4 base64 chars */
     char enc[8];
-    int elen = base64_encode(src, 3, enc);
+    int elen = base64_encode(src, 3, enc, false, BASE64_STD);
     /* Decode back */
     u8 dec[4];
-    int dlen = base64_decode(enc, elen, dec);
+    int dlen = base64_decode(enc, elen, dec, false, BASE64_STD);
     return elen + dlen;""",
 
     "polynomial": """\
@@ -1511,11 +1522,12 @@ EXTRA_INCLUDES = {
     # net_utils uses _ctype (from ctype.c).
     "net_utils": [KSRC / "lib/ctype.c"],
 
-    # lib_poly1305 uses poly1305_core_setkey/blocks/emit (from poly1305-donna64.c).
-    "lib_poly1305": [next(p for p in [KSRC/"lib/crypto/poly1305-donna64.c"] if p.exists())],
+    # lib_poly1305 uses poly1305_core_setkey/blocks/emit.
+    # BPF does not support 128-bit integers (u128), so we use donna32 instead of donna64.
+    "lib_poly1305": [next(p for p in [KSRC/"lib/crypto/poly1305-donna32.c", KSRC/"lib/crypto/poly1305-donna64.c"] if p.exists())],
 
-    # lib_blake2s uses blake2s_compress (from blake2s-generic.c).
-    "lib_blake2s": [KSRC / "lib/crypto/blake2s-generic.c"],
+    # lib_blake2s: blake2s-generic.c was merged into blake2s.c in newer kernels.
+    "lib_blake2s": [],
 
     # zlib_inflate uses inflate_fast (from inffast.c).
     "zlib_inflate": [KSRC / "lib/zlib_inflate/inffast.c"],
@@ -1524,24 +1536,27 @@ EXTRA_INCLUDES = {
     "zlib_deftree": [KSRC / "lib/bitrev.c"],
 
     # net_dim uses dim_calc_stats, dim_turn, dim_on_top, dim_park_* (from dim.c).
-    "net_dim":   [KSRC / "lib/dim/dim.c"],
+    # NOTE: dim.c is NOT in EXTRA_INCLUDES because dim.h uses struct work_struct,
+    # which must be defined BEFORE dim.c is included. Instead, dim.c is included
+    # in EXTRA_PRE_INCLUDE after the work_struct definition.
+    # "net_dim":   [KSRC / "lib/dim/dim.c"],  # moved to EXTRA_PRE_INCLUDE
 
     # mpi_add needs mpiutil (mpi_resize/copy/free), mpih-cmp (mpihelp_cmp),
     # generic_mpih-add1/sub1 (mpihelp_add_n/sub_n), mpi-mod (mpi_mod),
     # mpi-bit (mpi_normalize).
     "mpi_add":   [str(SHIM / "mpi-internal.h"),
-                  next(p for p in [KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/mpi/generic_mpih-add1.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/mpi/generic_mpih-sub1.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/mpi/mpi-mod.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
+                  next(p for p in [KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
+                  next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
+                  next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-add1.c", KSRC/"lib/mpi/generic_mpih-add1.c"] if p.exists()),
+                  next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-sub1.c", KSRC/"lib/mpi/generic_mpih-sub1.c"] if p.exists()),
+                  next(p for p in [KSRC/"lib/crypto/mpi/mpi-mod.c", KSRC/"lib/mpi/mpi-mod.c"] if p.exists()),
+                  next(p for p in [KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
 
     # mpi_cmp needs mpiutil (mpi_normalize via mpi-bit.c), mpih-cmp (mpihelp_cmp).
     "mpi_cmp":   [str(SHIM / "mpi-internal.h"),
-                  next(p for p in [KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
+                  next(p for p in [KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
+                  next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
+                  next(p for p in [KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
 }
 
 # Per-file extra compiler flags, keyed by src_name.
@@ -1568,6 +1583,13 @@ EXTRA_CFLAGS = {
     # Without it, the compiler sees it as an unknown type name.
     # Setting CONFIG_LIST_HARDENED=1 enables the #ifdef block in list.h.
     "list_debug": ["-DCONFIG_DEBUG_LIST=1", "-DCONFIG_LIST_HARDENED=1"],
+    # div64.c uses u128 (128-bit integers) when __SIZEOF_INT128__ is defined.
+    # BPF backend does not support 128-bit integers. Undefine it to use the
+    # fallback 32-bit implementation.
+    "div64": ["-U__SIZEOF_INT128__"],
+    # lib_poly1305 uses poly1305-donna64.c which uses u128 (128-bit integers).
+    # BPF backend does not support 128-bit integers. Use donna32 instead.
+    "lib_poly1305": ["-U__SIZEOF_INT128__"],
     # mpi_mul: add lib/mpi to include path so relative includes in mpi-mul.c work.
     # The shim mpi-internal.h is included via EXTRA_PRE_INCLUDE (absolute path),
     # and its include guard prevents re-inclusion when mpi-mul.c does
@@ -1590,6 +1612,11 @@ EXTRA_CFLAGS = {
     # zlib_inftrees uses #include "inftrees.h" (relative path).
     "zlib_inftrees": [f"-I{KSRC}/lib/zlib_inflate"],
     # zlib_inflate uses #include "inftrees.h" (relative path).
+    # zlib_inflate: -DINFTREES_H was removed because it blocked inftrees.h from being
+    # included by inffast.c (which is in EXTRA_INCLUDES). inffast.c includes inftrees.h
+    # to get the 'code' typedef, then includes inflate.h which uses 'code'. Blocking
+    # inftrees.h caused 'code' to be undefined when inflate.h was parsed.
+    # The EXTRA_PRE_INCLUDE handles INFTREES_H blocking for inflate.c's include.
     "zlib_inflate": [f"-I{KSRC}/lib/zlib_inflate"],
     # lib/crypto/sha256.c (v7.0-rc8) uses C99 for-loop variable declarations
     # (e.g. 'for (size_t i = 0; ...)') which are not valid in -std=gnu89.
@@ -1645,6 +1672,30 @@ EXTRA_CFLAGS = {
                  f"-I{KSRC}/lib/mpi"],
     "mpi_cmp":  ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H",
                  f"-I{KSRC}/lib/mpi"],
+    # sort.c includes <linux/sched.h> for cond_resched(). sched.h:1642 uses
+    # struct thread_struct which is not defined in our asm/processor.h shim.
+    # Fix: block sched.h and stub out cond_resched via EXTRA_PRE_INCLUDE.
+    "sort": ["-D_LINUX_SCHED_H"],
+    # dynamic_queue_limits.c includes trace/events/napi.h -> netdevice.h -> sched.h.
+    # Same issue: sched.h:1642 thread_struct incomplete.
+    # Also netdevice.h -> delay.h:77 uses TASK_UNINTERRUPTIBLE (from sched.h, which is blocked).
+    # Fix: block sched.h and delay.h for this target.
+    "dynamic_queue_limits": ["-D_LINUX_SCHED_H", "-D_LINUX_DELAY_H"],
+    # net_dim.c includes dim.h -> workqueue.h -> sched.h (thread_struct incomplete)
+    # and rtnetlink.h (pulls in net/netlink.h -> skbuff.h -> mm.h).
+    # Fix: block sched.h, workqueue.h, and rtnetlink.h; provide stubs in EXTRA_PRE_INCLUDE.
+    "net_dim": ["-D_LINUX_SCHED_H", "-D_LINUX_WORKQUEUE_H", "-D__LINUX_RTNETLINK_H"],
+    # oid_registry.c includes 'oid_registry_data.c' (relative path).
+    # The harness is in output2/, not lib/, so the relative include fails.
+    # Fix: add -I{KSRC}/lib so the relative include resolves to lib/oid_registry_data.c.
+    "oid_registry": [f"-I{KSRC}/lib"],
+    # net_utils.c includes <linux/if_ether.h> for MAC_ADDR_STR_LEN and ETH_ALEN.
+    # The old -D_LINUX_IF_ETHER_H flag blocked both the real header AND our shim.
+    # Fix: remove -D_LINUX_IF_ETHER_H so our shims/linux/if_ether.h is used.
+    # Our shim provides MAC_ADDR_STR_LEN and ETH_ALEN without pulling in skbuff.h.
+    "net_utils":  ["-D_LINUX_MM_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCATTERLIST_H",
+                   "-D__LINUX_BVEC_H", "-D_LINUX_SKBUFF_H",
+                   "-DETH_ALEN=6"],
 }
 
 # Extra C code injected into the harness BEFORE the source file include,
@@ -1779,6 +1830,9 @@ void sort_r_nonatomic(void *base, size_t num, size_t size,
             cmp_r_func_t cmp_func, swap_r_func_t swap_func, const void *priv);
 /* Block linux/sort.h to prevent its declaration from conflicting. */
 #define _LINUX_SORT_H
+/* cond_resched() is from linux/sched.h which we block with -D_LINUX_SCHED_H.
+ * sort.c calls cond_resched() in the may_schedule path. Stub it out. */
+#define cond_resched() do {} while (0)
 """,
     # FSE_buildDTable_wksp() has 6 args (non-static). Same internal_linkage fix.
     # fse.h:190 declares it with FSE_DTable* type; our forward decl must match.
@@ -1829,7 +1883,7 @@ typedef struct { size_t state; const void *table; } FSE_DState_t;
  * bitstream.h is normally included by fse.h's static section (which we blocked).
  * With __GNUC__ 2, bitstream.h uses the software fallback for BIT_highbit32
  * instead of __builtin_clz (opcode 192, not supported by BPF). */
-#include "/home/ubuntu/linux-6.1.102/lib/zstd/common/bitstream.h"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/zstd/common/bitstream.h"
 /* FSE_initDState/decodeSymbol/decodeSymbolFast are static inline in fse.h's
  * static-linking-only section (which we blocked). Provide stubs so the
  * BPF object has no unresolved extern references. */
@@ -1876,17 +1930,11 @@ int zlib_inflate_table(codetype type, unsigned short *lens, unsigned codes,
     # 5. Include inftrees.c - it defines __bpf_zit_impl as static.
     # 6. BPF backend accepts calls to static functions with >5 args.
     "zlib_inflate": """\
-/* Block inftrees.h so inflate.c's #include "inftrees.h" is a no-op. */
+/* Block inftrees.h so inflate.c's #include "inftrees.h" is a no-op.
+ * NOTE: inftrees.h was already included by inffast.c (via EXTRA_INCLUDES),
+ * so 'code', 'codetype', ENOUGH, MAXD are already defined. We just need to
+ * block inflate.c from including inftrees.h again (which would redefine them). */
 #define INFTREES_H
-/* Provide types from inftrees.h */
-typedef struct {
-    unsigned char op;
-    unsigned char bits;
-    unsigned short val;
-} code;
-#define ENOUGH 2048
-#define MAXD 592
-typedef enum { CODES, LENS, DISTS } codetype;
 /* Rename zlib_inflate_table to a hidden name (applies to both inftrees.c
  * definition and inflate.c call sites). */
 #define zlib_inflate_table __bpf_zit_impl
@@ -1897,7 +1945,7 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
     codetype type, unsigned short *lens, unsigned codes,
     code **table, unsigned *bits, unsigned short *work);
 /* Include inftrees.c to provide the definition. */
-#include "/home/ubuntu/linux-6.1.102/lib/zlib_inflate/inftrees.c"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/zlib_inflate/inftrees.c"
 """,
     # mpihelp_mul() has 6 args (non-static). Same fix.
     # mpi-internal.h declares: int mpihelp_mul(mpi_ptr_t prodp, mpi_ptr_t up,
@@ -1937,7 +1985,7 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
  * LZ4_memcpy AFTER lz4defs.h has defined them as __builtin_memmove/__builtin_memcpy.
  * The BPF backend rejects __builtin_memmove/__builtin_memcpy for variable-size
  * copies; we redirect to the kernel's non-builtin memmove/memcpy instead. */
-#include "/home/ubuntu/linux-6.1.102/lib/lz4/lz4defs.h"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/lz4/lz4defs.h"
 #undef LZ4_memmove
 #undef LZ4_memcpy
 #define LZ4_memmove(dst, src, size) memmove(dst, src, size)
@@ -1952,7 +2000,7 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
  * Also apply always_inline to all functions in the source file to force inlining
  * of static helpers with >5 args (LZ4_compress_fast_extState, LZ4_compress_destSize_generic). */
 /* Pre-include lz4defs.h so its include guard prevents re-inclusion */
-#include "/home/ubuntu/linux-6.1.102/lib/lz4/lz4defs.h"
+#include "/home/ubuntu/bpf-next-0aa637869/lib/lz4/lz4defs.h"
 #undef LZ4_memcpy
 #define LZ4_memcpy(dst, src, size) memcpy(dst, src, size)
 /* Apply always_inline to ALL functions in lz4_compress.c (between push and pop
@@ -1990,8 +2038,8 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
  * are already processed before #define static takes effect.
  *
  * Actual signatures from lzo1x_compress.c:
- *   static noinline size_t lzo1x_1_do_compress(const unsigned char *in,
- *     size_t in_len, unsigned char *out, size_t *out_len, size_t ti,
+ *   static noinline int lzo1x_1_do_compress(const unsigned char *in,
+ *     size_t in_len, unsigned char **out, unsigned char *op_end, size_t *tp,
  *     void *wrkmem, signed char *state_offset,
  *     const unsigned char bitstream_version);
  *   static int lzogeneric1x_1_compress(const unsigned char *in,
@@ -2012,10 +2060,10 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
  * so internal_linkage is valid here. */
 #pragma clang attribute push(__attribute__((always_inline, internal_linkage)), apply_to=function)
 __attribute__((always_inline, internal_linkage))
-size_t lzo1x_1_do_compress(
+int lzo1x_1_do_compress(
     const unsigned char *in, size_t in_len,
-    unsigned char *out, size_t *out_len,
-    size_t ti, void *wrkmem,
+    unsigned char **out, unsigned char *op_end,
+    size_t *tp, void *wrkmem,
     signed char *state_offset,
     const unsigned char bitstream_version);
 __attribute__((always_inline, internal_linkage))
@@ -2081,14 +2129,12 @@ int lzogeneric1x_1_compress(
 #define ZSTD_dParam_getBounds __bpf_ZSTD_dParam_getBounds
 /* Step 3: Include zstd_lib.h. It will declare the renamed versions with internal_linkage. */
 #include <linux/zstd_lib.h>
-/* Step 4: Provide static inline stubs for the renamed cross-TU functions. */
-static __always_inline void *__bpf_ZSTD_customMalloc(size_t size, ZSTD_customMem customMem)
-{{ return 0; }}
-static __always_inline void __bpf_ZSTD_customFree(void *ptr, ZSTD_customMem customMem)
-{{ }}
-static __always_inline void *__bpf_ZSTD_customCalloc(size_t size, ZSTD_customMem customMem)
-{{ return 0; }}
-/* Step 4: Block ZSTD_DEPS_COMMON so zstd_deps.h doesn't define __builtin_memcpy
+/* Step 4: NOTE: Do NOT provide stubs for __bpf_ZSTD_customMalloc/Free/Calloc here.
+ * The rename macros above cause allocations.h (included from zstd_decompress.c)
+ * to define them as MEM_STATIC (static inline). Providing stubs here would
+ * cause redefinition errors. allocations.h handles the definitions.
+ */
+/* Step 4b: Block ZSTD_DEPS_COMMON so zstd_deps.h doesn't define __builtin_memcpy
  * macros for ZSTD_memcpy/memset/memmove. */
 #define ZSTD_DEPS_COMMON
 /* Provide safe BPF implementations of ZSTD_memcpy/memset/memmove. */
@@ -2838,7 +2884,7 @@ static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
 }
 """,
 
-    # lib_blake2s uses memcpy, memset, and blake2s_compress (from blake2s-generic.c
+    # lib_blake2s uses memcpy, memset, and blake2s_compress (now in blake2s.c itself
     # in EXTRA_INCLUDES). Provide memcpy and memset stubs.
     "lib_blake2s": """\
 /* Provide memcpy and memset as static inline to avoid extern BTF references. */
@@ -2941,32 +2987,33 @@ static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
     # net_dim: ktime_get is used in dim_update_sample() (static inline in linux/dim.h).
     # system_wq and queue_work_on are used via schedule_work() -> queue_work().
     # Stub ktime_get, system_wq, and queue_work_on before the source include.
-    # dim.c (in EXTRA_INCLUDES) provides dim_calc_stats, dim_turn, etc.
-    "net_dim": """\
-/* Forward declarations with internal_linkage for the 4 StructRet functions.
- * They return struct dim_cq_moder by value which the BPF backend rejects for
- * non-static functions. internal_linkage makes them effectively static. */
-__attribute__((internal_linkage))
-struct dim_cq_moder net_dim_get_rx_moderation(u8 cq_period_mode, int ix);
-__attribute__((internal_linkage))
-struct dim_cq_moder net_dim_get_def_rx_moderation(u8 cq_period_mode);
-__attribute__((internal_linkage))
-struct dim_cq_moder net_dim_get_tx_moderation(u8 cq_period_mode, int ix);
-__attribute__((internal_linkage))
-struct dim_cq_moder net_dim_get_def_tx_moderation(u8 cq_period_mode);
-/* Stub ktime_get to avoid extern BTF reference. */
-static inline __s64 ktime_get(void) { return 0; }
-/* Stub system_wq and queue_work_on to avoid extern BTF references.
- * schedule_work() -> queue_work(system_wq, work) -> queue_work_on(...)
- * These are called from net_dim_work() which is registered as a workqueue
- * callback; the harness body does not call it directly. */
+    # dim.c is included HERE (not in EXTRA_INCLUDES) so that work_struct is defined
+    # before dim.h is parsed (dim.h uses struct work_struct in struct dim).
+    "net_dim": (
+"""/* Provide minimal workqueue stubs (workqueue.h is blocked via -D_LINUX_WORKQUEUE_H).
+ * dim.h uses struct work_struct in struct dim; net_dim.c calls schedule_work(). */
 struct workqueue_struct;
-struct work_struct;
-static struct workqueue_struct *system_wq = (struct workqueue_struct *)0;
+struct work_struct {{
+    unsigned long data;
+    void (*func)(struct work_struct *work);
+}};
+/* queue_work_on is declared in workqueue.h (blocked). Provide a static inline stub.
+ * This must come BEFORE dim.h is parsed (dim.h includes workqueue.h which is blocked,
+ * so this is the only declaration). */
 static inline int queue_work_on(int cpu, struct workqueue_struct *wq,
                                 struct work_struct *work)
-    { (void)cpu; (void)wq; (void)work; return 0; }
-""",
+    {{ (void)cpu; (void)wq; (void)work; return 0; }}
+static struct workqueue_struct *system_wq = (struct workqueue_struct *)0;
+/* Apply internal_linkage to ALL functions declared from this point.
+ * This ensures dim.h's declarations of net_dim_get_rx_moderation etc.
+ * (which return struct dim_cq_moder by value) get internal_linkage.
+ * Without this, the BPF backend rejects StructRet non-static functions. */
+#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
+/* Stub ktime_get to avoid extern BTF reference. */
+static inline __s64 ktime_get(void) {{ return 0; }}
+/* Include dim.c here (after work_struct is defined) to provide dim_calc_stats etc. */
+""" + f'#include "{KSRC}/lib/dim/dim.c"\n'
+    ),
 
     # entropy_common.c has three non-static functions with >5 args:
     #   FSE_readNCount_bmi2 (6), HUF_readStats (7), HUF_readStats_wksp (10).
@@ -3085,41 +3132,42 @@ static __always_inline size_t __bpf_HUF_readStats(
 /* Forward declarations with internal_linkage for all >5-arg non-static
  * functions DEFINED in huf_decompress.c itself. */
 __attribute__((internal_linkage))
-size_t HUF_readDTableX1_wksp_bmi2(HUF_DTable *DTable, const void *src,
-    size_t srcSize, void *workSpace, size_t wkspSize, int bmi2);
+size_t HUF_readDTableX1_wksp(HUF_DTable *DTable, const void *src,
+    size_t srcSize, void *workSpace, size_t wkspSize, int flags);
+__attribute__((internal_linkage))
+size_t HUF_readDTableX2_wksp(HUF_DTable *DTable, const void *src,
+    size_t srcSize, void *workSpace, size_t wkspSize, int flags);
 __attribute__((internal_linkage))
 size_t HUF_decompress1X1_DCtx_wksp(HUF_DTable *DCtx, void *dst, size_t dstSize,
-    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
-__attribute__((internal_linkage))
-size_t HUF_decompress4X1_DCtx_wksp(HUF_DTable *dctx, void *dst, size_t dstSize,
-    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize, int flags);
 __attribute__((internal_linkage))
 size_t HUF_decompress1X2_DCtx_wksp(HUF_DTable *DCtx, void *dst, size_t dstSize,
-    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
-__attribute__((internal_linkage))
-size_t HUF_decompress4X2_DCtx_wksp(HUF_DTable *dctx, void *dst, size_t dstSize,
-    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize, int flags);
 __attribute__((internal_linkage))
 size_t HUF_decompress4X_hufOnly_wksp(HUF_DTable *dctx, void *dst,
     size_t dstSize, const void *cSrc, size_t cSrcSize,
-    void *workSpace, size_t wkspSize);
+    void *workSpace, size_t wkspSize, int flags);
 __attribute__((internal_linkage))
 size_t HUF_decompress1X_DCtx_wksp(HUF_DTable *dctx, void *dst, size_t dstSize,
-    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize);
+    const void *cSrc, size_t cSrcSize, void *workSpace, size_t wkspSize, int flags);
 __attribute__((internal_linkage))
-size_t HUF_decompress1X_usingDTable_bmi2(void *dst, size_t maxDstSize,
-    const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int bmi2);
+size_t HUF_decompress1X_usingDTable(void *dst, size_t maxDstSize,
+    const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int flags);
 __attribute__((internal_linkage))
-size_t HUF_decompress1X1_DCtx_wksp_bmi2(HUF_DTable *dctx, void *dst,
-    size_t dstSize, const void *cSrc, size_t cSrcSize,
-    void *workSpace, size_t wkspSize, int bmi2);
+size_t HUF_decompress4X_usingDTable(void *dst, size_t maxDstSize,
+    const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int flags);
 __attribute__((internal_linkage))
-size_t HUF_decompress4X_usingDTable_bmi2(void *dst, size_t maxDstSize,
-    const void *cSrc, size_t cSrcSize, const HUF_DTable *DTable, int bmi2);
+size_t HUF_decompress4X1_usingDTable_internal_bmi2(void *dst, size_t dstSize,
+    void const *cSrc, size_t cSrcSize, const HUF_DTable *DTable);
 __attribute__((internal_linkage))
-    size_t HUF_decompress4X_hufOnly_wksp_bmi2(HUF_DTable *dctx, void *dst,
-    size_t dstSize, const void *cSrc, size_t cSrcSize,
-    void *workSpace, size_t wkspSize, int bmi2);
+size_t HUF_decompress4X1_usingDTable_internal_default(void *dst, size_t dstSize,
+    void const *cSrc, size_t cSrcSize, const HUF_DTable *DTable);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X2_usingDTable_internal_bmi2(void *dst, size_t dstSize,
+    void const *cSrc, size_t cSrcSize, const HUF_DTable *DTable);
+__attribute__((internal_linkage))
+size_t HUF_decompress4X2_usingDTable_internal_default(void *dst, size_t dstSize,
+    void const *cSrc, size_t cSrcSize, const HUF_DTable *DTable);
 """,
 
     # disasm: The shim includes uapi/linux/bpf.h (for bpf_insn and BPF opcode
@@ -3168,23 +3216,15 @@ EXTRA_PREAMBLE = {
     "lz4_compress": """\
 #pragma clang attribute pop
 """,
-    # zstd_decompress: pop the always_inline pragma, then provide stubs for
-    # cross-TU functions with >5 args (ZSTD_decompressBlock_internal, ZSTD_buildFSETable).
-    # These stubs are defined AFTER the source include so all types are available.
+    # zstd_decompress: pop the internal_linkage pragma pushed in EXTRA_PRE_INCLUDE.
+    # NOTE: Do NOT provide stubs for __bpf_ZSTD_decompressBlock_internal or
+    # __bpf_ZSTD_buildFSETable here. These functions are DEFINED in the source
+    # (zstd_decompress_block.c is #included by zstd_decompress.c, and
+    # zstd_decompress_block.c defines ZSTD_decompressBlock_internal which was
+    # renamed to __bpf_ZSTD_decompressBlock_internal by the macro in EXTRA_PRE_INCLUDE).
+    # Providing stubs here would cause 'conflicting types' errors.
     "zstd_decompress": """\
 #pragma clang attribute pop
-/* Stubs for cross-TU functions with >5 args (renamed in EXTRA_PRE_INCLUDE). */
-static __always_inline size_t __bpf_ZSTD_decompressBlock_internal(
-    ZSTD_DCtx *dctx, void *dst, size_t dstCapacity,
-    const void *src, size_t srcSize, int frame)
-{ (void)dctx; (void)dst; (void)dstCapacity; (void)src; (void)srcSize; (void)frame; return 0; }
-static __always_inline void __bpf_ZSTD_buildFSETable(
-    ZSTD_seqSymbol *dt, const short *normalizedCounter, unsigned maxSymbolValue,
-    const U32 *baseValue, const U32 *nbAdditionalBits,
-    unsigned tableLog, void *wksp, size_t wkspSize, int bmi2)
-{ (void)dt; (void)normalizedCounter; (void)maxSymbolValue;
-  (void)baseValue; (void)nbAdditionalBits; (void)tableLog;
-  (void)wksp; (void)wkspSize; (void)bmi2; }
 """,
     # reciprocal_value() returns struct by value -- BPF does not support
     # StructRet ABI ("functions with VarArgs or StructRet are not supported").
@@ -3334,6 +3374,14 @@ static void disasm_count_cb(void *private_data, const char *fmt, ...)
     int *cnt = (int *)private_data;
     (*cnt)++;
 }
+""",
+    # net_dim: pop the internal_linkage pragma pushed in EXTRA_PRE_INCLUDE.
+    # Also provide schedule_work stub (used by net_dim_work via workqueue).
+    "net_dim": """\
+#pragma clang attribute pop
+/* schedule_work is declared in workqueue.h (blocked). Provide a stub. */
+static inline int schedule_work(struct work_struct *work)
+    {{ (void)work; return 0; }}
 """,
 }
 
