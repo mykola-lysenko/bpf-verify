@@ -27,7 +27,11 @@ BPF_CFLAGS = [
     "-g",   # Required for pahole to generate BTF debug info
     "-nostdinc",
     "-isystem", "/usr/lib/llvm-23/lib/clang/23/include",
-    f"-I{SHIM}", f"-I{SHIM}/linux", f"-I{SHIM}/uapi",
+    # shims/ mirrors the kernel tree layout: shims/include/linux/ shadows include/linux/,
+    # shims/arch/x86/include/asm/ shadows arch/x86/include/asm/, etc.
+    # A single -I{SHIM} is sufficient because each shim lives at the same
+    # sub-path as its kernel counterpart.
+    f"-I{SHIM}", f"-I{SHIM}/include", f"-I{SHIM}/arch/x86/include",
     f"-I{KSRC}", f"-I{KSRC}/include",
     f"-I{KSRC}/include/uapi",
     f"-I{KSRC}/include/generated/uapi",
@@ -1478,7 +1482,7 @@ EXTRA_INCLUDES = {
     "lcm":       [KSRC / "lib/math/gcd.c"],
     # lzo_compress: pre-include headers used by lzo1x_compress.c so that
     # the #define static in EXTRA_PRE_INCLUDE doesn't affect them.
-    "lzo_compress": [str(SHIM / "lzo-shim.h")],
+    "lzo_compress": [str(SHIM / "lib/lzo/lzo-shim.h")],
     # memweight needs hweight.c for __sw_hweight8 (used by hweight8 inline).
     # We do NOT include bitmap.c because it pulls in linux/rcupdate.h
     # -> linux/sched.h (the full scheduler type system).
@@ -1493,7 +1497,7 @@ EXTRA_INCLUDES = {
     # mpihelp_mul_karatsuba_case (defined in mpih-mul.c itself).
     # mpi_mul: include shim mpi-internal.h FIRST so mpihelp_mul_karatsuba_case
     # is declared as static before mpih-mul.c defines it.
-    "mpi_mul":   [str(SHIM / "mpi-internal.h"),
+    "mpi_mul":   [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
                   next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul1.c", KSRC/"lib/mpi/generic_mpih-mul1.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpih-mul.c", KSRC/"lib/mpi/mpih-mul.c"] if p.exists())],
 
@@ -1549,7 +1553,7 @@ EXTRA_INCLUDES = {
     # mpi_add needs mpiutil (mpi_resize/copy/free), mpih-cmp (mpihelp_cmp),
     # generic_mpih-add1/sub1 (mpihelp_add_n/sub_n), mpi-mod (mpi_mod),
     # mpi-bit (mpi_normalize).
-    "mpi_add":   [str(SHIM / "mpi-internal.h"),
+    "mpi_add":   [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-add1.c", KSRC/"lib/mpi/generic_mpih-add1.c"] if p.exists()),
@@ -1558,7 +1562,7 @@ EXTRA_INCLUDES = {
                   next(p for p in [KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
 
     # mpi_cmp needs mpiutil (mpi_normalize via mpi-bit.c), mpih-cmp (mpihelp_cmp).
-    "mpi_cmp":   [str(SHIM / "mpi-internal.h"),
+    "mpi_cmp":   [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
@@ -1571,7 +1575,7 @@ EXTRA_INCLUDES = {
 EXTRA_EARLY_CFLAGS = {
     # lz4_decompress: prepend a module-specific include path that shadows linux/lz4.h
     # with a shim that adds internal_linkage to all LZ4_decompress* declarations.
-    # Must come BEFORE -I$SHIM/linux so the shim is found before the real lz4.h.
+    # Must come BEFORE -I$SHIM/include so the shim is found before the real lz4.h.
     "lz4_decompress": [f"-I{SHIM}/lz4_decompress"],
     # lz4_compress: same shim strategy as lz4_decompress - apply internal_linkage
     # to all LZ4 functions declared in linux/lz4.h before lz4_compress.c sees them.
@@ -1708,7 +1712,7 @@ EXTRA_CFLAGS = {
     "oid_registry": [f"-I{KSRC}/lib"],
     # net_utils.c includes <linux/if_ether.h> for MAC_ADDR_STR_LEN and ETH_ALEN.
     # The old -D_LINUX_IF_ETHER_H flag blocked both the real header AND our shim.
-    # Fix: remove -D_LINUX_IF_ETHER_H so our shims/linux/if_ether.h is used.
+    # Fix: remove -D_LINUX_IF_ETHER_H so our shims/include/linux/if_ether.h is used.
     # Our shim provides MAC_ADDR_STR_LEN and ETH_ALEN without pulling in skbuff.h.
     "net_utils":  ["-D_LINUX_MM_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCATTERLIST_H",
                    "-D__LINUX_BVEC_H", "-D_LINUX_SKBUFF_H",
@@ -1743,7 +1747,7 @@ EXTRA_PRE_INCLUDE = {
 """,
     "dim": """/* Override DIV_ROUND_UP to use u64 casts to avoid sdiv instruction.
  * The BPF backend cannot select sdiv; all divisions must be unsigned.
- * ktime_divns/ktime_to_us/ktime_us_delta are overridden by shims/linux/ktime.h. */
+ * ktime_divns/ktime_to_us/ktime_us_delta are overridden by shims/include/linux/ktime.h. */
 #undef DIV_ROUND_UP
 #define DIV_ROUND_UP(n, d) (((u64)(n) + (u64)(d) - 1) / (u64)(d))
 """,
@@ -1812,7 +1816,7 @@ EXTRA_PRE_INCLUDE = {
     # provides all struct definitions and declares every >5-arg function with
     # __attribute__((internal_linkage)) so the BPF backend accepts them.
     # No EXTRA_PRE_INCLUDE needed -- the shim header is picked up automatically
-    # via -I$SHIM/linux which is searched before $KSRC/include.
+    # via -I$SHIM/include which is searched before $KSRC/include.
     "packing": """\
 /* The shim linux/packing.h (bpf-asm-shim2/linux/packing.h) provides all
  * struct definitions and internal_linkage declarations for >5-arg functions.
@@ -1999,11 +2003,11 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
     # lz4_decompress uses LZ4_memmove/__builtin_memmove and LZ4_memcpy/__builtin_memcpy
     # which the BPF backend rejects. Override them to use regular memmove/memcpy.
     "lz4_decompress": """\
-/* The shims/lz4_decompress/linux/lz4.h shim applies internal_linkage to all
+/* The shims/lz4_decompress/linux/lz4.h shim (target-specific override) applies internal_linkage to all
  * LZ4 functions via a targeted pragma. We just need to pre-include lz4defs.h
  * here to override LZ4_memmove/LZ4_memcpy before lz4_decompress.c includes it.
  * The shim is automatically used when lz4_decompress.c includes <linux/lz4.h>
- * because -I/shims/lz4_decompress is prepended to the include path. */
+ * because -I{SHIM}/lz4_decompress is prepended to the include path. */
 /* Pre-include lz4defs.h so its include guard (__LZ4DEFS_H__) prevents
  * re-inclusion by lz4_decompress.c. This lets us override LZ4_memmove and
  * LZ4_memcpy AFTER lz4defs.h has defined them as __builtin_memmove/__builtin_memcpy.
@@ -2018,7 +2022,7 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
     # is static in lz4_compress.c and needs an always_inline forward decl.
     # We include lz4defs.h to get tableType_t and LZ4_stream_t_internal types.
     "lz4_compress": """\
-/* The shims/lz4_compress/linux/lz4.h shim applies internal_linkage to all
+/* The shims/lz4_compress/linux/lz4.h shim (target-specific override) applies internal_linkage to all
  * LZ4 functions declared in linux/lz4.h (same strategy as lz4_decompress).
  * Pre-include lz4defs.h to override LZ4_memcpy before lz4_compress.c includes it.
  * Also apply always_inline to all functions in the source file to force inlining
@@ -2219,7 +2223,7 @@ static __inline__ void *memcpy(void *dst, const void *src, __SIZE_TYPE__ n)
     # ucs2_string.c:61 uses E2BIG but ucs2_string.h does not include linux/errno.h.
     # Fix: include linux/errno.h before the source file.
     "ucs2_string": "#include <linux/errno.h>\n",
-    # seq_buf: the shim source file (shims/seq_buf-shim.c) replaces lib/seq_buf.c.
+    # seq_buf: the shim source file (shims/lib/seq_buf.c) replaces lib/seq_buf.c.
     # It provides only the BPF-safe functions (seq_buf_puts, seq_buf_putc,
     # seq_buf_putmem, seq_buf_putmem_hex, seq_buf_vprintf) and omits the four
     # BPF-incompatible ones (seq_buf_printf variadic, seq_buf_hex_dump,
@@ -2653,7 +2657,7 @@ static __attribute__((noinline)) void *bpf_kfifo_memcpy(
 #define memcpy(dst, src, n) bpf_kfifo_memcpy(dst, src, n)
 """,
     # llist.c defines llist_add_batch, llist_del_first, llist_reverse_order as
-    # non-static functions. Our shims/linux/llist.h provides static inline
+    # non-static functions. Our shims/include/linux/llist.h provides static inline
     # non-atomic versions of these (to avoid try_cmpxchg on pointer types).
     # Rename the llist.c functions so they don't conflict with the shim inlines.
     "llist": """\
@@ -2685,12 +2689,12 @@ static __attribute__((noinline)) void *bpf_kfifo_memcpy(
        if (__prev == (old)) *(ptr) = (new); \\
        __prev; })
 """,
-    # End the always_inline scope started in shims/mpi-internal.h BEFORE mpi-mul.c
+    # End the always_inline scope started in shims/lib/crypto/mpi/mpi-internal.h BEFORE mpi-mul.c
     # is included. This prevents mpi_mul/mpi_mulm from getting alwaysinline,
     # which would cause the BPF backend to try to emit mpihelp_mul_karatsuba_case
     # (a recursive 6-arg function) as a standalone function.
     "mpi_mul": """
-/* End the always_inline scope from shims/mpi-internal.h (which applied to
+/* End the always_inline scope from shims/lib/crypto/mpi/mpi-internal.h (which applied to
  * generic_mpih-mul1.c and mpih-mul.c). The renamed __bpf_mpihelp_mul* functions
  * are always_inline but never called (stubs below replace them), so the BPF
  * backend DCEs them. */
@@ -3388,7 +3392,7 @@ void reciprocal_value_to_ptr(__u32 d, struct __bpf_recip_rv *out)
     # ktime_us_delta/ktime_ms_delta to unused symbols. Now provide BPF-safe
     # unsigned versions as macros. These are defined after the source include
     # so the renamed (unused) static inline functions have already been compiled.
-    # dim: ktime_divns/ktime_to_us/ktime_us_delta are handled by shims/linux/ktime.h.
+    # dim: ktime_divns/ktime_to_us/ktime_us_delta are handled by shims/include/linux/ktime.h.
     # No EXTRA_PREAMBLE needed for dim.
     # seq_buf: close the #pragma clang attribute push scope opened in EXTRA_PRE_INCLUDE.
     # seq_buf: no EXTRA_PREAMBLE needed; the shim source handles everything.
@@ -3673,7 +3677,7 @@ def main():
         # nodemask.c removed from lib/ in kernel v7.0 - skip
         "oid_registry":          KSRC / "lib/oid_registry.c",
         "rbtree":                KSRC / "lib/rbtree.c",
-        "seq_buf":                SHIM / "seq_buf-shim.c",
+        "seq_buf":                SHIM / "lib/seq_buf.c",
         "siphash":               KSRC / "lib/siphash.c",
         "string":                KSRC / "lib/string.c",
         "timerqueue":            KSRC / "lib/timerqueue.c",
@@ -3732,11 +3736,11 @@ def main():
         # Skipped: rs_encode, rs_decode        # ---------------------------------------------------------------
         # Phase 2: 7 new high-priority targets
         # ---------------------------------------------------------------
-        "bitmap":                SHIM / "bitmap-shim.c",
+        "bitmap":                SHIM / "lib/bitmap.c",
         "base64":                KSRC / "lib/base64.c",
-        "polynomial":            SHIM / "polynomial-shim.c",
+        "polynomial":            SHIM / "lib/math/polynomial.c",
         "union_find":            KSRC / "lib/union_find.c",  # introduced after 6.1; skipped if missing
-        "hexdump":               SHIM / "hexdump-shim.c",
+        "hexdump":               SHIM / "lib/hexdump.c",
         "min_heap":              KSRC / "lib/min_heap.c",  # introduced after 6.1; skipped if missing
         "rational_v2":           KSRC / "lib/math/rational.c",
 
@@ -3744,17 +3748,17 @@ def main():
         # tnum uses a shim (not the kernel source) because the kernel source defines
         # all functions as non-static StructRet, which the BPF backend rejects.
         # The shim redefines all functions as static __always_inline.
-        "tnum":                  SHIM / "tnum/tnum-shim.c",
-        "lpm_trie":              SHIM / "lpm_trie/lpm_trie-shim.c",
-        "bpf_lru_list":          SHIM / "bpf_lru_list/bpf_lru_list-shim.c",
-        "bloom_filter":          SHIM / "bloom_filter/bloom_filter-shim.c",
-        "disasm":                SHIM / "disasm/disasm-shim.c",
+        "tnum":                  SHIM / "kernel/bpf/tnum.c",
+        "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
+        "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
+        "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",
+        "disasm":                SHIM / "kernel/bpf/disasm.c",
         # Phase 3 targets
-        "string_helpers":       SHIM / "string-helpers-shim.c",
-        "refcount":             SHIM / "refcount-shim.c",
+        "string_helpers":       SHIM / "lib/string_helpers.c",
+        "refcount":             SHIM / "lib/refcount.c",
         "crc32":                next(p for p in [KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"] if p.exists()),
         "crc16":                next(p for p in [KSRC/"lib/crc/crc16.c",      KSRC/"lib/crc16.c"] if p.exists()),
-        "ratelimit":            SHIM / "ratelimit-shim.c",
+        "ratelimit":            SHIM / "lib/ratelimit.c",
         # "bitmap_str": dropped - include chain too deep (bitmap.c -> device.h -> sched.h -> rwlock_t)
         # "scatterlist": dropped - too many deep dependencies (kmalloc, dma-mapping)
         # "kfifo": dropped - too many deep dependencies (dma-mapping.h)

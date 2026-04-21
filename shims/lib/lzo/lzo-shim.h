@@ -9,7 +9,7 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <asm/unaligned.h>
+#include <linux/unaligned.h>
 #include <linux/lzo.h>
 
 /* Include lzodefs.h from the kernel source tree using an absolute path so
