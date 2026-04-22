@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* BPF shim: lib/hexdump.c
- * Keeps hex_to_bin, hex2bin, bin2hex, hex_asc arrays.
- * Drops hex_dump_to_buffer (7 args, snprintf) and print_hex_dump (8 args, printk). */
+ * Full copy of hex_to_bin, hex2bin, bin2hex, hex_asc arrays.
+ * Cannot #include the real source — hex_dump_to_buffer (7 args) and
+ * print_hex_dump (8 args) cannot be suppressed via preprocessor and
+ * the BPF backend rejects >5-arg functions even if dead. */
 
 #include <linux/types.h>
 #include <linux/errno.h>

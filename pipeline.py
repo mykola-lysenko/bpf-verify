@@ -1587,6 +1587,9 @@ EXTRA_EARLY_CFLAGS = {
     # disasm: the shim at shims/kernel/bpf/disasm.c includes "kernel/bpf/disasm.c"
     # which must resolve to the kernel source, not back to the shim itself via -I{SHIM}.
     "disasm": [f"-I{KSRC}"],
+    "tnum": [f"-I{KSRC}"],
+    "bitmap": [f"-I{KSRC}"],
+    "string_helpers": [f"-I{KSRC}"],
 }
 
 EXTRA_CFLAGS = {
