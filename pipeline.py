@@ -16,7 +16,9 @@ _HOME = Path(os.environ.get("HOME", "/home/ubuntu"))
 KSRC = Path(os.environ.get("BPF_KSRC", str(_HOME / "bpf-next-0aa637869")))
 SHIM = Path(__file__).parent / "shims"
 OUTPUT = Path(os.environ.get("BPF_OUTPUT", str(Path(__file__).parent / "output2")))
-VERISTAT = os.environ.get("BPF_VERISTAT", str(Path(__file__).parent / "veristat"))
+VERISTAT = os.environ.get("BPF_VERISTAT", str(
+    Path(__file__).parent / "deps" / "bpf-uml-selftests" / "uml-veristat" / "uml-veristat"
+))
 CLANG = os.environ.get("BPF_CLANG", "/usr/bin/clang-23")
 LLVM_OBJCOPY = os.environ.get("BPF_LLVM_OBJCOPY", "/usr/bin/llvm-objcopy-23")
 
@@ -3701,27 +3703,34 @@ def compile_harness(src_name, src_path, harness_body, out_path):
 
 def run_veristat(obj_files):
     """Run veristat on a list of BPF object files, with verbose log."""
-    import os
-    if not os.path.exists(VERISTAT):
+    if not os.path.isfile(VERISTAT):
         return 0, "(veristat not available - skipped)", ""
-    # First run: verbose output to file for debugging
-    verbose_out = OUTPUT / "veristat_verbose_step1.txt"
-    verbose_result = subprocess.run(
-        ["sudo", VERISTAT, "-v"] + obj_files,
-        capture_output=True, timeout=300
-    )
-    vout = verbose_result.stdout.decode('utf-8', errors='replace')
-    verr = verbose_result.stderr.decode('utf-8', errors='replace')
-    verbose_out.write_text(vout + "\nSTDERR:\n" + verr)
 
-    # Second run: clean table output
-    result = subprocess.run(
-        ["sudo", VERISTAT] + obj_files,
-        capture_output=True, timeout=300
-    )
-    result_stdout = result.stdout.decode('utf-8', errors='replace')
-    result_stderr = result.stderr.decode('utf-8', errors='replace')
-    return result.returncode, result_stdout, result_stderr
+    veristat_cmd = [VERISTAT]
+    if os.environ.get("BPF_VERISTAT_SUDO", ""):
+        veristat_cmd = ["sudo"] + veristat_cmd
+
+    try:
+        verbose_out = OUTPUT / "veristat_verbose_step1.txt"
+        verbose_result = subprocess.run(
+            veristat_cmd + ["-v"] + obj_files,
+            capture_output=True, timeout=600
+        )
+        vout = verbose_result.stdout.decode('utf-8', errors='replace')
+        verr = verbose_result.stderr.decode('utf-8', errors='replace')
+        verbose_out.write_text(vout + "\nSTDERR:\n" + verr)
+
+        result = subprocess.run(
+            veristat_cmd + obj_files,
+            capture_output=True, timeout=600
+        )
+        result_stdout = result.stdout.decode('utf-8', errors='replace')
+        result_stderr = result.stderr.decode('utf-8', errors='replace')
+        return result.returncode, result_stdout, result_stderr
+    except FileNotFoundError:
+        return 0, "(veristat not runnable - skipped)", ""
+    except subprocess.TimeoutExpired:
+        return 1, "", "veristat timed out"
 
 
 def main():

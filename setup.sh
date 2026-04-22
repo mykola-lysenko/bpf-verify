@@ -32,9 +32,20 @@ step()  { echo ""; echo "==> $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
+# Step 0: Initialize git submodules (uml-veristat)
+# ---------------------------------------------------------------------------
+step "0/5  Initializing git submodules"
+if [ -f "${SCRIPT_DIR}/.gitmodules" ]; then
+    git -C "${SCRIPT_DIR}" submodule update --init --recursive
+    info "Submodules initialized."
+else
+    info "No .gitmodules found, skipping."
+fi
+
+# ---------------------------------------------------------------------------
 # Step 1: Install LLVM 23 nightly from apt.llvm.org
 # ---------------------------------------------------------------------------
-step "1/4  Installing LLVM 23 nightly (clang-23)"
+step "1/5  Installing LLVM 23 nightly (clang-23)"
 
 if command -v clang-23 &>/dev/null; then
     info "clang-23 already installed: $(clang-23 --version | head -1)"
@@ -59,7 +70,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step 2: Fetch bpf-next kernel source from Google Drive
 # ---------------------------------------------------------------------------
-step "2/4  Fetching bpf-next kernel source (commit ${KERNEL_COMMIT})"
+step "2/5  Fetching bpf-next kernel source (commit ${KERNEL_COMMIT})"
 
 if [ -d "${KSRC}/include/linux" ]; then
     info "Kernel source already present at ${KSRC}"
@@ -88,7 +99,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step 3: Create generated kernel headers
 # ---------------------------------------------------------------------------
-step "3/4  Creating generated kernel headers"
+step "3/5  Creating generated kernel headers"
 
 GENERATED="${KSRC}/include/generated"
 mkdir -p "${GENERATED}"
@@ -215,7 +226,7 @@ info "Generated headers created."
 # ---------------------------------------------------------------------------
 # Step 4: Verify setup
 # ---------------------------------------------------------------------------
-step "4/4  Verifying setup"
+step "4/5  Verifying setup"
 
 CLANG="/usr/bin/clang-23"
 LLVM_OBJCOPY="/usr/bin/llvm-objcopy-23"
@@ -243,6 +254,23 @@ else
     info "Compile test output: ${TEST_OUT}"
 fi
 
+# ---------------------------------------------------------------------------
+# Step 5: Build uml-veristat (optional, needed for verification)
+# ---------------------------------------------------------------------------
+step "5/5  Building uml-veristat (BPF verification via UML)"
+
+UML_VERISTAT_DIR="${SCRIPT_DIR}/deps/bpf-uml-selftests/uml-veristat"
+if [ -x "${HOME}/.local/share/uml-veristat/linux" ]; then
+    info "uml-veristat already built."
+elif [ -x "${UML_VERISTAT_DIR}/build.sh" ]; then
+    info "Building uml-veristat (this takes ~30 min on first run)..."
+    "${UML_VERISTAT_DIR}/build.sh"
+    info "uml-veristat built successfully."
+else
+    warn "uml-veristat submodule not found. Run: git submodule update --init --recursive"
+    warn "Verification step will be skipped."
+fi
+
 echo ""
 info "Setup complete!"
 info ""
@@ -250,6 +278,7 @@ info "  clang-23:       $(clang-23 --version | head -1)"
 info "  llvm-objcopy:   $(llvm-objcopy-23 --version | head -1)"
 info "  Kernel source:  ${KSRC}"
 info "  Commit:         $(git -C "${KSRC}" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+info "  uml-veristat:   $([ -x "${HOME}/.local/share/uml-veristat/linux" ] && echo 'OK' || echo 'not built')"
 info ""
 info "Run the pipeline:"
 info "  cd ${SCRIPT_DIR}"

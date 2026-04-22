@@ -14,204 +14,146 @@ concurrency:
 
 jobs:
   verify:
-    name: Compile & verify (${{ matrix.kernel_commit }})
+    name: Compile & verify
     runs-on: ubuntu-24.04
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - kernel_commit: "0aa637869"
-            kernel_repo: "https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git"
-
     env:
-      KERNEL_COMMIT: ${{ matrix.kernel_commit }}
-      KERNEL_REPO:   ${{ matrix.kernel_repo }}
-      KSRC:          ${{ github.workspace }}/bpf-next
-      BPF_KSRC:      ${{ github.workspace }}/bpf-next
-      BPF_OUTPUT:    ${{ github.workspace }}/bpf-verify/output
-      BPF_VERISTAT:  ${{ github.workspace }}/bpf-verify/veristat
-      BPF_CLANG:     /usr/bin/clang-23
-      BPF_LLVM_OBJCOPY: /usr/bin/llvm-objcopy-23
+      UML_VERISTAT_DIR: ${{ github.workspace }}/bpf-verify/deps/bpf-uml-selftests/uml-veristat
+      BPF_OUTPUT:       ${{ github.workspace }}/bpf-verify/output
 
     steps:
       # -----------------------------------------------------------------------
-      # 1. Checkout the bpf-verify repo
+      # 1. Checkout bpf-verify (with uml-veristat submodule)
       # -----------------------------------------------------------------------
       - name: Checkout bpf-verify
         uses: actions/checkout@v4
         with:
           path: bpf-verify
+          submodules: recursive
 
       # -----------------------------------------------------------------------
-      # 2. Install LLVM 23 (clang-23, llvm-objcopy-23)
+      # 2. Build uml-veristat (provides LLVM, kernel source, UML kernel, veristat)
+      #    The .build/ directory contains the LLVM toolchain and bpf-next kernel
+      #    source used for BPF compilation.  ~/.local/share/uml-veristat/ contains
+      #    the UML kernel binary and veristat binary used for verification.
+      #    Both are cached; rebuild only when build.sh or patches change.
       # -----------------------------------------------------------------------
-      - name: Cache LLVM 23
-        id: cache-llvm
+      - name: Cache uml-veristat build
+        id: cache-uml-veristat
         uses: actions/cache@v4
         with:
-          path: /usr/lib/llvm-23
-          key: llvm-23-ubuntu-24.04-v2
+          path: |
+            ~/.local/share/uml-veristat
+            ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install
+            ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
+            ${{ env.UML_VERISTAT_DIR }}/.build/pahole-install
+          key: uml-veristat-build-${{ hashFiles('bpf-verify/deps/bpf-uml-selftests/uml-veristat/build.sh', 'bpf-verify/deps/bpf-uml-selftests/uml-veristat/patches/*') }}
 
-      - name: Install LLVM 23
-        if: steps.cache-llvm.outputs.cache-hit != 'true'
+      - name: Install build dependencies
+        if: steps.cache-uml-veristat.outputs.cache-hit != 'true'
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
-            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
-          echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble main" \
-            | sudo tee /etc/apt/sources.list.d/llvm-23.list > /dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y clang-23 llvm-23 lld-23
+          sudo apt-get install -y \
+            build-essential git bc flex bison \
+            libelf-dev libssl-dev libdw-dev libdwarf-dev \
+            pkg-config cmake ninja-build python3 \
+            libcap-dev curl wget rsync zlib1g-dev
 
-      - name: Create LLVM symlinks
+      - name: Build uml-veristat
+        if: steps.cache-uml-veristat.outputs.cache-hit != 'true'
+        working-directory: bpf-verify/deps/bpf-uml-selftests/uml-veristat
         run: |
-          for tool in /usr/lib/llvm-23/bin/*; do
-            name=$(basename "$tool")
-            sudo ln -sf "$tool" "/usr/bin/$name" 2>/dev/null || true
+          export PATH="${PWD}/.build/llvm-install/bin:${PATH}"
+          ./build.sh || true
+          # Verify the essential artifacts were produced
+          for f in ~/.local/share/uml-veristat/linux \
+                   ~/.local/share/uml-veristat/veristat \
+                   .build/llvm-install/bin/clang \
+                   .build/bpf-next/Kconfig; do
+            [ -e "$f" ] || { echo "::error::Missing artifact: $f"; exit 1; }
           done
-          clang-23 --version
+        timeout-minutes: 45
 
-      # -----------------------------------------------------------------------
-      # 3. Fetch the bpf-next kernel source via snapshot tarball.
-      #    kernel.org provides per-commit tarballs at:
-      #      .../snapshot/bpf-next-<sha>.tar.gz
-      # -----------------------------------------------------------------------
-      - name: Cache kernel source
-        id: cache-kernel
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.KSRC }}
-          key: bpf-next-${{ env.KERNEL_COMMIT }}-tarball-v2
-
-      - name: Fetch kernel source (snapshot tarball)
-        if: steps.cache-kernel.outputs.cache-hit != 'true'
+      - name: Verify uml-veristat build
         run: |
-          TARBALL_URL="${KERNEL_REPO}/snapshot/bpf-next-${KERNEL_COMMIT}.tar.gz"
-          echo "Downloading $TARBALL_URL"
-          curl -fL --retry 3 --retry-delay 5 --max-time 300 \
-            -o /tmp/bpf-next.tar.gz "$TARBALL_URL"
-          mkdir -p "$KSRC"
-          tar -xzf /tmp/bpf-next.tar.gz --strip-components=1 -C "$KSRC"
-          rm /tmp/bpf-next.tar.gz
-          echo "Kernel source extracted to $KSRC"
-          ls "$KSRC"
+          LLVM="${UML_VERISTAT_DIR}/.build/llvm-install"
+          KSRC="${UML_VERISTAT_DIR}/.build/bpf-next"
+          echo "Clang:      $("${LLVM}/bin/clang" --version | head -1)"
+          echo "Kernel:     $(git -C "${KSRC}" log --oneline -1 2>/dev/null || echo 'unknown')"
+          echo "UML kernel: $([ -x "${HOME}/.local/share/uml-veristat/linux" ] && echo 'OK' || echo 'MISSING')"
+          echo "veristat:   $([ -x "${HOME}/.local/share/uml-veristat/veristat" ] && echo 'OK' || echo 'MISSING')"
 
       # -----------------------------------------------------------------------
-      # 4. Generate kernel headers that are normally produced by the build
-      #    system (bounds.h, asm-offsets.h, etc.) and build-generated source
-      #    files (crc32table.h, crc64table.h, oid_registry_data.c).
-      #
-      #    autoconf.h is provided by shims/include/generated/autoconf.h and
-      #    takes priority via the -I ordering in pipeline.py.
+      # 3. Generate build artifacts that the kernel build may not have produced
+      #    (CRC lookup tables, OID registry data).  The full UML kernel build
+      #    already generates autoconf.h, bounds.h, timeconst.h, asm-offsets.h,
+      #    and compiler-version.h — no stubs needed.
       # -----------------------------------------------------------------------
-      - name: Generate kernel headers and build artifacts
+      - name: Generate kernel build artifacts
         run: |
-          GENERATED="$KSRC/include/generated"
-          mkdir -p "$GENERATED"
+          KSRC="${UML_VERISTAT_DIR}/.build/bpf-next"
 
-          # bounds.h
-          cat > "$GENERATED/bounds.h" << 'BOUNDS'
-          #ifndef __GENERATED_BOUNDS_H
-          #define __GENERATED_BOUNDS_H
-          #define NR_PAGEFLAGS 26
-          #define MAX_NR_ZONES 4
-          #define NR_MEM_TYPES 3
-          #endif
-          BOUNDS
-
-          # rq-offsets.h
-          printf '#ifndef __GENERATED_RQ_OFFSETS_H\n#define __GENERATED_RQ_OFFSETS_H\n#endif\n' \
-            > "$GENERATED/rq-offsets.h"
-
-          # timeconst.h
-          cat > "$GENERATED/timeconst.h" << 'TIMECONST'
-          #ifndef __GENERATED_TIMECONST_H
-          #define __GENERATED_TIMECONST_H
-          #define HZ 250
-          #define NSEC_PER_JIFFIE 4000000UL
-          #define USEC_PER_JIFFIE 4000UL
-          #define MSEC_PER_JIFFIE 4UL
-          #endif
-          TIMECONST
-
-          # asm-offsets.h
-          printf '/* empty */\n' > "$GENERATED/asm-offsets.h"
-
-          # arch/x86/include/generated/ stubs
-          X86_GEN="$KSRC/arch/x86/include/generated"
-          mkdir -p "$X86_GEN/uapi/asm" "$X86_GEN/asm"
-          echo '#include <asm-generic/types.h>'  > "$X86_GEN/uapi/asm/types.h"
-          echo '#include <asm-generic/rwonce.h>' > "$X86_GEN/asm/rwonce.h"
-          echo '#include <asm-generic/errno.h>'  > "$X86_GEN/asm/errno.h"
-
-          # compiler-version.h — detect actual clang version
-          CLANG_VER=$(clang-23 --version | head -1 | sed 's/.*version \([0-9]*\).*/\1/')
-          CLANG_FULL=$(clang-23 --version | head -1)
-          cat > "$KSRC/include/linux/compiler-version.h" << COMPVER
-          #ifndef __LINUX_COMPILER_VERSION_H
-          #define __LINUX_COMPILER_VERSION_H
-          #define CONFIG_CC_VERSION_TEXT "${CLANG_FULL}"
-          #define CONFIG_CLANG_VERSION ${CLANG_VER}0000
-          #endif
-          COMPVER
-
-          # --- Build-generated source files ---
-          # gen_crc32table.c uses #include "../../include/generated/autoconf.h"
-          # so we need a minimal autoconf.h in the kernel tree for host compilation.
-          # (BPF compilation uses the shim version via -I ordering.)
-          cat > "$GENERATED/autoconf.h" << 'AUTOCONF'
-          #ifndef __GENERATED_AUTOCONF_H
-          #define __GENERATED_AUTOCONF_H
-          #define CONFIG_PAGE_SHIFT 12
-          #define CONFIG_64BIT 1
-          #define CONFIG_X86_64 1
-          #define CONFIG_SMP 1
-          #endif
-          AUTOCONF
-
-          # crc32table.h — generated by lib/crc/gen_crc32table.c
-          CRC32_GEN_SRC=$(find "$KSRC/lib" -name "gen_crc32table.c" 2>/dev/null | head -1)
-          if [ -n "$CRC32_GEN_SRC" ]; then
-            CRC32_DIR=$(dirname "$CRC32_GEN_SRC")
-            cc -I"$KSRC/include" -I"$KSRC/include/uapi" \
-              -o /tmp/gen_crc32table "$CRC32_GEN_SRC" && \
-              /tmp/gen_crc32table > "$CRC32_DIR/crc32table.h" && \
-              echo "Generated $CRC32_DIR/crc32table.h" || \
-              echo "::warning::Could not generate crc32table.h"
+          # crc32table.h
+          CRC32_GEN=$(find "$KSRC/lib" -name "gen_crc32table.c" 2>/dev/null | head -1)
+          if [ -n "$CRC32_GEN" ]; then
+            CRC32_DIR=$(dirname "$CRC32_GEN")
+            if [ ! -f "$CRC32_DIR/crc32table.h" ]; then
+              cc -I"$KSRC/include" -I"$KSRC/include/uapi" \
+                -o /tmp/gen_crc32table "$CRC32_GEN" && \
+                /tmp/gen_crc32table > "$CRC32_DIR/crc32table.h" && \
+                echo "Generated $CRC32_DIR/crc32table.h" || \
+                echo "::warning::Could not generate crc32table.h"
+            else
+              echo "crc32table.h already present"
+            fi
           fi
 
-          # crc64table.h — generated by lib/crc/gen_crc64table.c
-          CRC64_GEN_SRC=$(find "$KSRC/lib" -name "gen_crc64table.c" 2>/dev/null | head -1)
-          if [ -n "$CRC64_GEN_SRC" ]; then
-            CRC64_DIR=$(dirname "$CRC64_GEN_SRC")
-            cc -I"$KSRC/include" -I"$KSRC/include/uapi" \
-              -o /tmp/gen_crc64table "$CRC64_GEN_SRC" && \
-              /tmp/gen_crc64table > "$CRC64_DIR/crc64table.h" && \
-              echo "Generated $CRC64_DIR/crc64table.h" || \
-              echo "::warning::Could not generate crc64table.h"
+          # crc64table.h
+          CRC64_GEN=$(find "$KSRC/lib" -name "gen_crc64table.c" 2>/dev/null | head -1)
+          if [ -n "$CRC64_GEN" ]; then
+            CRC64_DIR=$(dirname "$CRC64_GEN")
+            if [ ! -f "$CRC64_DIR/crc64table.h" ]; then
+              cc -I"$KSRC/include" -I"$KSRC/include/uapi" \
+                -o /tmp/gen_crc64table "$CRC64_GEN" && \
+                /tmp/gen_crc64table > "$CRC64_DIR/crc64table.h" && \
+                echo "Generated $CRC64_DIR/crc64table.h" || \
+                echo "::warning::Could not generate crc64table.h"
+            else
+              echo "crc64table.h already present"
+            fi
           fi
 
-          # oid_registry_data.c — generated by scripts/build_OID_registry
-          OID_SCRIPT=$(find "$KSRC/scripts" -name "build_OID_registry" 2>/dev/null | head -1)
-          if [ -n "$OID_SCRIPT" ] && [ -f "$KSRC/lib/oid_registry.c" ]; then
-            perl "$OID_SCRIPT" \
-              < "$KSRC/lib/oid_registry.c" \
-              > "$KSRC/lib/oid_registry_data.c" 2>&1 && \
-              echo "Generated $KSRC/lib/oid_registry_data.c" || \
-              echo "::warning::Could not generate oid_registry_data.c"
+          # oid_registry_data.c
+          if [ ! -f "$KSRC/lib/oid_registry_data.c" ]; then
+            OID_SCRIPT=$(find "$KSRC/scripts" -name "build_OID_registry" 2>/dev/null | head -1)
+            if [ -n "$OID_SCRIPT" ] && [ -f "$KSRC/lib/oid_registry.c" ]; then
+              perl "$OID_SCRIPT" \
+                < "$KSRC/lib/oid_registry.c" \
+                > "$KSRC/lib/oid_registry_data.c" 2>&1 && \
+                echo "Generated oid_registry_data.c" || {
+                echo "::warning::build_OID_registry failed, creating stub"
+                printf 'static const unsigned char oid_data[1] = { 0 };\nstatic const unsigned char oid_index[OID__NR + 1] = { 0 };\nstatic const struct { unsigned char hash; enum OID oid; } oid_search_table[1] = { { 0, 0 } };\n' \
+                  > "$KSRC/lib/oid_registry_data.c"
+              }
+            else
+              echo "::warning::build_OID_registry not found, creating stub"
+              printf 'static const unsigned char oid_data[1] = { 0 };\nstatic const unsigned char oid_index[OID__NR + 1] = { 0 };\nstatic const struct { unsigned char hash; enum OID oid; } oid_search_table[1] = { { 0, 0 } };\n' \
+                > "$KSRC/lib/oid_registry_data.c"
+            fi
           else
-            echo "::warning::build_OID_registry script not found, creating stub"
-            printf 'static const unsigned char oid_data[1] = { 0 };\nstatic const unsigned char oid_index[OID__NR + 1] = { 0 };\nstatic const struct { unsigned char hash; enum OID oid; } oid_search_table[1] = { { 0, 0 } };\n' \
-              > "$KSRC/lib/oid_registry_data.c"
+            echo "oid_registry_data.c already present"
           fi
 
-          echo "Generated headers and build artifacts OK"
-
       # -----------------------------------------------------------------------
-      # 5. Run the full pipeline (compile + veristat in one pass)
+      # 4. Run the full pipeline (compile + verify via uml-veristat)
       # -----------------------------------------------------------------------
       - name: Run BPF verification pipeline
         working-directory: bpf-verify
+        env:
+          BPF_KSRC:         ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
+          BPF_CLANG:        ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/clang
+          BPF_LLVM_OBJCOPY: ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/llvm-objcopy
+          BPF_VERISTAT:     ${{ env.UML_VERISTAT_DIR }}/uml-veristat
         run: |
           python3 pipeline.py 2>&1 | tee pipeline.log
           # Fail the step if any target failed to compile
@@ -228,15 +170,17 @@ jobs:
           fi
 
       # -----------------------------------------------------------------------
-      # 6. Report results as a job summary
+      # 5. Report results as a job summary
       # -----------------------------------------------------------------------
       - name: Report results
         if: always()
         working-directory: bpf-verify
         run: |
+          KSRC="${UML_VERISTAT_DIR}/.build/bpf-next"
+          KERNEL_COMMIT=$(git -C "${KSRC}" rev-parse --short HEAD 2>/dev/null || echo 'unknown')
           echo "## BPF Verification Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Kernel commit:** \`$KERNEL_COMMIT\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Kernel commit:** \`${KERNEL_COMMIT}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ -f output/results.txt ]; then
             SUCCESS=$(grep -cw "success" output/results.txt || true)
@@ -258,13 +202,13 @@ jobs:
           fi
 
       # -----------------------------------------------------------------------
-      # 7. Upload artifacts for debugging
+      # 6. Upload artifacts for debugging
       # -----------------------------------------------------------------------
       - name: Upload pipeline log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pipeline-log-${{ env.KERNEL_COMMIT }}
+          name: pipeline-log
           path: bpf-verify/pipeline.log
           if-no-files-found: ignore
 
@@ -272,7 +216,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: veristat-results-${{ env.KERNEL_COMMIT }}
+          name: veristat-results
           path: |
             bpf-verify/output/results.txt
             bpf-verify/output/veristat_verbose_step1.txt

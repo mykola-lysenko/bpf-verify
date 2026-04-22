@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Test the three failing targets: base64, min_heap, union_find."""
+import os
 import subprocess
 import sys
 sys.path.insert(0, '/home/ubuntu/bpf-verify')
@@ -35,7 +36,10 @@ for name, src in candidates.items():
     print(f'  Compile OK: {out}')
 
     # Run veristat
-    r = subprocess.run(['sudo', str(pipeline.VERISTAT), str(out)],
+    veristat_cmd = [str(pipeline.VERISTAT)]
+    if os.environ.get("BPF_VERISTAT_SUDO", ""):
+        veristat_cmd = ["sudo"] + veristat_cmd
+    r = subprocess.run(veristat_cmd + [str(out)],
                       capture_output=True, text=True, timeout=60)
     print(r.stdout.strip())
     if r.returncode != 0:

@@ -1,0 +1,3 @@
+[submodule "deps/bpf-uml-selftests"]
+	path = deps/bpf-uml-selftests
+	url = https://github.com/mykola-lysenko/bpf-uml-selftests.git

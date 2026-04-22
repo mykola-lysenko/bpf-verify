@@ -16,18 +16,36 @@ This project systematically compiles kernel library functions (CRC, MPI, string 
 
 ## Requirements
 
-- Linux kernel source tree at `/home/ubuntu/linux-6.1.102` (or update `KSRC` in `pipeline.py`)
-- LLVM/clang with BPF target support at `/home/ubuntu/llvm-project/build/bin/clang`
-- `veristat` binary at `./veristat`
-- BPF header shims at `/tmp/bpf-asm-shim2/`
+- Linux kernel source tree (set `BPF_KSRC` or default `~/bpf-next-0aa637869`)
+- LLVM/clang 23+ with BPF target support (`BPF_CLANG`, default `/usr/bin/clang-23`)
+- [uml-veristat](https://github.com/mykola-lysenko/bpf-uml-selftests) (included as a git submodule under `deps/`)
+
+## Setup
+
+```bash
+git clone --recurse-submodules https://github.com/mykola-lysenko/bpf-verify.git
+cd bpf-verify
+
+# Or if already cloned:
+git submodule update --init --recursive
+
+# One-time setup (installs LLVM, fetches kernel source, builds uml-veristat):
+./setup.sh
+```
 
 ## Usage
 
 ```bash
-python3 pipeline.py
+python3 pipeline.py --compile-only   # compile only
+python3 pipeline.py                  # compile + verify with uml-veristat
 ```
 
 Results are written to `output2/results.txt`.
+
+To use a custom veristat binary instead of uml-veristat:
+```bash
+BPF_VERISTAT=/path/to/veristat BPF_VERISTAT_SUDO=1 python3 pipeline.py
+```
 
 ## Current Status (as of Phase 4)
 
