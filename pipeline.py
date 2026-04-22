@@ -1582,10 +1582,8 @@ EXTRA_EARLY_CFLAGS = {
     # lz4_decompress: prepend a module-specific include path that shadows linux/lz4.h
     # with a shim that adds internal_linkage to all LZ4_decompress* declarations.
     # Must come BEFORE -I$SHIM/include so the shim is found before the real lz4.h.
-    "lz4_decompress": [f"-I{SHIM}/lz4_decompress"],
-    # lz4_compress: same shim strategy as lz4_decompress - apply internal_linkage
-    # to all LZ4 functions declared in linux/lz4.h before lz4_compress.c sees them.
-    "lz4_compress": [f"-I{SHIM}/lz4_compress"],
+    "lz4_decompress": [f"-I{SHIM}/lz4"],
+    "lz4_compress": [f"-I{SHIM}/lz4"],
     # disasm: the shim at shims/kernel/bpf/disasm.c includes "kernel/bpf/disasm.c"
     # which must resolve to the kernel source, not back to the shim itself via -I{SHIM}.
     "disasm": [f"-I{KSRC}"],

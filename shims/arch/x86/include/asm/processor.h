@@ -8,7 +8,8 @@
 #include <linux/types.h>
 #include <asm/cpufeature.h>
 #include <asm/page.h>
-#include <asm/pgtable_types.h>  /* provides pgtable_t, used by mm_types.h via this include chain */
+#include <asm/pgtable_types.h>
+#include <asm/special_insns.h>
 
 /* CPU feature stubs */
 #define cpu_has(c, bit)		0
@@ -54,15 +55,6 @@ extern struct cpuinfo_x86 boot_cpu_data;
 /* MSR stubs */
 static inline unsigned long long native_read_msr(unsigned int msr) { return 0; }
 static inline void native_write_msr(unsigned int msr, unsigned low, unsigned high) {}
-
-/* CR register stubs */
-static inline unsigned long native_read_cr0(void) { return 0; }
-static inline unsigned long native_read_cr2(void) { return 0; }
-static inline unsigned long native_read_cr3(void) { return 0; }
-static inline unsigned long native_read_cr4(void) { return 0; }
-static inline void native_write_cr0(unsigned long val) {}
-static inline void native_write_cr2(unsigned long val) {}
-static inline void native_write_cr4(unsigned long val) {}
 
 #define read_cr0()	native_read_cr0()
 #define read_cr2()	native_read_cr2()
