@@ -2487,7 +2487,7 @@ enum string_size_units {
 #endif
 """,
     "refcount": """
-/* refcount shim is self-contained; no pre-include setup needed. */
+#define _LINUX_REFCOUNT_H
 """,
     "crc32": """
 #define _LINUX_CRC32_H
