@@ -377,4 +377,4 @@ void print_bpf_insn(const struct bpf_insn_cbs *cbs,
 #endif /* __BPF_DISASM_H__ */
 
 /* ── Now include the actual disasm.c source ───────────────────────────────── */
-#include "/home/ubuntu/bpf-next-0aa637869/kernel/bpf/disasm.c"
+#include "kernel/bpf/disasm.c"

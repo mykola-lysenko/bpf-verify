@@ -12,8 +12,8 @@
 #include <linux/unaligned.h>
 #include <linux/lzo.h>
 
-/* Include lzodefs.h from the kernel source tree using an absolute path so
- * the '#define static' in EXTRA_PRE_INCLUDE does not affect it. */
-#include "/home/ubuntu/bpf-next-0aa637869/lib/lzo/lzodefs.h"
+/* Include lzodefs.h from the kernel source tree.
+ * The -I{KSRC} flag in the pipeline's include path resolves this. */
+#include "lib/lzo/lzodefs.h"
 
 #endif /* _BPF_LZO_SHIM_H */

@@ -1,0 +1,279 @@
+name: BPF Verification Pipeline
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+    branches: ["master", "main"]
+  workflow_dispatch:   # allow manual runs
+
+# Cancel in-progress runs for the same branch/PR to save runner minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Compile & verify (${{ matrix.kernel_commit }})
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kernel_commit: "0aa637869"
+            kernel_repo: "https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git"
+
+    env:
+      KERNEL_COMMIT: ${{ matrix.kernel_commit }}
+      KERNEL_REPO:   ${{ matrix.kernel_repo }}
+      KSRC:          ${{ github.workspace }}/bpf-next
+      BPF_KSRC:      ${{ github.workspace }}/bpf-next
+      BPF_OUTPUT:    ${{ github.workspace }}/bpf-verify/output
+      BPF_VERISTAT:  ${{ github.workspace }}/bpf-verify/veristat
+      BPF_CLANG:     /usr/bin/clang-23
+      BPF_LLVM_OBJCOPY: /usr/bin/llvm-objcopy-23
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout the bpf-verify repo
+      # -----------------------------------------------------------------------
+      - name: Checkout bpf-verify
+        uses: actions/checkout@v4
+        with:
+          path: bpf-verify
+
+      # -----------------------------------------------------------------------
+      # 2. Install LLVM 23 (clang-23, llvm-objcopy-23)
+      # -----------------------------------------------------------------------
+      - name: Cache LLVM 23
+        id: cache-llvm
+        uses: actions/cache@v4
+        with:
+          path: /usr/lib/llvm-23
+          key: llvm-23-ubuntu-24.04-v2
+
+      - name: Install LLVM 23
+        if: steps.cache-llvm.outputs.cache-hit != 'true'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-23.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y clang-23 llvm-23 lld-23
+
+      - name: Create LLVM symlinks
+        run: |
+          for tool in /usr/lib/llvm-23/bin/*; do
+            name=$(basename "$tool")
+            sudo ln -sf "$tool" "/usr/bin/$name" 2>/dev/null || true
+          done
+          clang-23 --version
+
+      # -----------------------------------------------------------------------
+      # 3. Fetch the bpf-next kernel source via snapshot tarball.
+      #    kernel.org provides per-commit tarballs at:
+      #      .../snapshot/bpf-next-<sha>.tar.gz
+      # -----------------------------------------------------------------------
+      - name: Cache kernel source
+        id: cache-kernel
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KSRC }}
+          key: bpf-next-${{ env.KERNEL_COMMIT }}-tarball-v2
+
+      - name: Fetch kernel source (snapshot tarball)
+        if: steps.cache-kernel.outputs.cache-hit != 'true'
+        run: |
+          TARBALL_URL="${KERNEL_REPO}/snapshot/bpf-next-${KERNEL_COMMIT}.tar.gz"
+          echo "Downloading $TARBALL_URL"
+          curl -fL --retry 3 --retry-delay 5 --max-time 300 \
+            -o /tmp/bpf-next.tar.gz "$TARBALL_URL"
+          mkdir -p "$KSRC"
+          tar -xzf /tmp/bpf-next.tar.gz --strip-components=1 -C "$KSRC"
+          rm /tmp/bpf-next.tar.gz
+          echo "Kernel source extracted to $KSRC"
+          ls "$KSRC"
+
+      # -----------------------------------------------------------------------
+      # 4. Generate kernel headers that are normally produced by the build
+      #    system (bounds.h, asm-offsets.h, etc.) and build-generated source
+      #    files (crc32table.h, crc64table.h, oid_registry_data.c).
+      #
+      #    autoconf.h is provided by shims/include/generated/autoconf.h and
+      #    takes priority via the -I ordering in pipeline.py.
+      # -----------------------------------------------------------------------
+      - name: Generate kernel headers and build artifacts
+        run: |
+          GENERATED="$KSRC/include/generated"
+          mkdir -p "$GENERATED"
+
+          # bounds.h
+          cat > "$GENERATED/bounds.h" << 'BOUNDS'
+          #ifndef __GENERATED_BOUNDS_H
+          #define __GENERATED_BOUNDS_H
+          #define NR_PAGEFLAGS 26
+          #define MAX_NR_ZONES 4
+          #define NR_MEM_TYPES 3
+          #endif
+          BOUNDS
+
+          # rq-offsets.h
+          printf '#ifndef __GENERATED_RQ_OFFSETS_H\n#define __GENERATED_RQ_OFFSETS_H\n#endif\n' \
+            > "$GENERATED/rq-offsets.h"
+
+          # timeconst.h
+          cat > "$GENERATED/timeconst.h" << 'TIMECONST'
+          #ifndef __GENERATED_TIMECONST_H
+          #define __GENERATED_TIMECONST_H
+          #define HZ 250
+          #define NSEC_PER_JIFFIE 4000000UL
+          #define USEC_PER_JIFFIE 4000UL
+          #define MSEC_PER_JIFFIE 4UL
+          #endif
+          TIMECONST
+
+          # asm-offsets.h
+          printf '/* empty */\n' > "$GENERATED/asm-offsets.h"
+
+          # arch/x86/include/generated/ stubs
+          X86_GEN="$KSRC/arch/x86/include/generated"
+          mkdir -p "$X86_GEN/uapi/asm" "$X86_GEN/asm"
+          echo '#include <asm-generic/types.h>'  > "$X86_GEN/uapi/asm/types.h"
+          echo '#include <asm-generic/rwonce.h>' > "$X86_GEN/asm/rwonce.h"
+          echo '#include <asm-generic/errno.h>'  > "$X86_GEN/asm/errno.h"
+
+          # compiler-version.h — detect actual clang version
+          CLANG_VER=$(clang-23 --version | head -1 | sed 's/.*version \([0-9]*\).*/\1/')
+          CLANG_FULL=$(clang-23 --version | head -1)
+          cat > "$KSRC/include/linux/compiler-version.h" << COMPVER
+          #ifndef __LINUX_COMPILER_VERSION_H
+          #define __LINUX_COMPILER_VERSION_H
+          #define CONFIG_CC_VERSION_TEXT "${CLANG_FULL}"
+          #define CONFIG_CLANG_VERSION ${CLANG_VER}0000
+          #endif
+          COMPVER
+
+          # --- Build-generated source files ---
+          # gen_crc32table.c uses #include "../../include/generated/autoconf.h"
+          # so we need a minimal autoconf.h in the kernel tree for host compilation.
+          # (BPF compilation uses the shim version via -I ordering.)
+          cat > "$GENERATED/autoconf.h" << 'AUTOCONF'
+          #ifndef __GENERATED_AUTOCONF_H
+          #define __GENERATED_AUTOCONF_H
+          #define CONFIG_PAGE_SHIFT 12
+          #define CONFIG_64BIT 1
+          #define CONFIG_X86_64 1
+          #define CONFIG_SMP 1
+          #endif
+          AUTOCONF
+
+          # crc32table.h — generated by lib/crc/gen_crc32table.c
+          CRC32_GEN_SRC=$(find "$KSRC/lib" -name "gen_crc32table.c" 2>/dev/null | head -1)
+          if [ -n "$CRC32_GEN_SRC" ]; then
+            CRC32_DIR=$(dirname "$CRC32_GEN_SRC")
+            cc -I"$KSRC/include" -I"$KSRC/include/uapi" \
+              -o /tmp/gen_crc32table "$CRC32_GEN_SRC" && \
+              /tmp/gen_crc32table > "$CRC32_DIR/crc32table.h" && \
+              echo "Generated $CRC32_DIR/crc32table.h" || \
+              echo "::warning::Could not generate crc32table.h"
+          fi
+
+          # crc64table.h — generated by lib/crc/gen_crc64table.c
+          CRC64_GEN_SRC=$(find "$KSRC/lib" -name "gen_crc64table.c" 2>/dev/null | head -1)
+          if [ -n "$CRC64_GEN_SRC" ]; then
+            CRC64_DIR=$(dirname "$CRC64_GEN_SRC")
+            cc -I"$KSRC/include" -I"$KSRC/include/uapi" \
+              -o /tmp/gen_crc64table "$CRC64_GEN_SRC" && \
+              /tmp/gen_crc64table > "$CRC64_DIR/crc64table.h" && \
+              echo "Generated $CRC64_DIR/crc64table.h" || \
+              echo "::warning::Could not generate crc64table.h"
+          fi
+
+          # oid_registry_data.c — generated by scripts/build_OID_registry
+          OID_SCRIPT=$(find "$KSRC/scripts" -name "build_OID_registry" 2>/dev/null | head -1)
+          if [ -n "$OID_SCRIPT" ] && [ -f "$KSRC/lib/oid_registry.c" ]; then
+            perl "$OID_SCRIPT" \
+              < "$KSRC/lib/oid_registry.c" \
+              > "$KSRC/lib/oid_registry_data.c" 2>&1 && \
+              echo "Generated $KSRC/lib/oid_registry_data.c" || \
+              echo "::warning::Could not generate oid_registry_data.c"
+          else
+            echo "::warning::build_OID_registry script not found, creating stub"
+            printf 'static const unsigned char oid_data[1] = { 0 };\nstatic const unsigned char oid_index[OID__NR + 1] = { 0 };\nstatic const struct { unsigned char hash; enum OID oid; } oid_search_table[1] = { { 0, 0 } };\n' \
+              > "$KSRC/lib/oid_registry_data.c"
+          fi
+
+          echo "Generated headers and build artifacts OK"
+
+      # -----------------------------------------------------------------------
+      # 5. Run the full pipeline (compile + veristat in one pass)
+      # -----------------------------------------------------------------------
+      - name: Run BPF verification pipeline
+        working-directory: bpf-verify
+        run: |
+          python3 pipeline.py 2>&1 | tee pipeline.log
+          # Fail the step if any target failed to compile
+          if grep -qP '^\s*\[FAIL\]' pipeline.log; then
+            echo "::error::One or more targets failed to compile"
+            grep -P '^\s*\[FAIL\]' pipeline.log
+            exit 1
+          fi
+          # Fail if any BPF program failed the verifier
+          if [ -f output/results.txt ] && grep -qw "failure" output/results.txt; then
+            echo "::error::One or more BPF programs failed the verifier"
+            grep -w "failure" output/results.txt
+            exit 1
+          fi
+
+      # -----------------------------------------------------------------------
+      # 6. Report results as a job summary
+      # -----------------------------------------------------------------------
+      - name: Report results
+        if: always()
+        working-directory: bpf-verify
+        run: |
+          echo "## BPF Verification Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Kernel commit:** \`$KERNEL_COMMIT\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f output/results.txt ]; then
+            SUCCESS=$(grep -cw "success" output/results.txt || true)
+            FAILURE=$(grep -cw "failure" output/results.txt || true)
+            echo "| Metric | Count |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Veristat: success | $SUCCESS |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Veristat: failure | $FAILURE |" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "<details><summary>Full veristat table</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat output/results.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No results file found (pipeline may have failed during compilation)._" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # -----------------------------------------------------------------------
+      # 7. Upload artifacts for debugging
+      # -----------------------------------------------------------------------
+      - name: Upload pipeline log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log-${{ env.KERNEL_COMMIT }}
+          path: bpf-verify/pipeline.log
+          if-no-files-found: ignore
+
+      - name: Upload veristat results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veristat-results-${{ env.KERNEL_COMMIT }}
+          path: |
+            bpf-verify/output/results.txt
+            bpf-verify/output/veristat_verbose_step1.txt
+          if-no-files-found: ignore

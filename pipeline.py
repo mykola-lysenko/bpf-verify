@@ -10,12 +10,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-KSRC = Path("/home/ubuntu/bpf-next-0aa637869")
+# All paths are overridable via environment variables so the pipeline runs
+# on any host (local sandbox, GitHub Actions runner, etc.).
+_HOME = Path(os.environ.get("HOME", "/home/ubuntu"))
+KSRC = Path(os.environ.get("BPF_KSRC", str(_HOME / "bpf-next-0aa637869")))
 SHIM = Path(__file__).parent / "shims"
-OUTPUT = Path("/home/ubuntu/bpf-verify/output2")
-VERISTAT = "/home/ubuntu/bpf-verify/veristat"
-CLANG = "/usr/bin/clang-23"
-LLVM_OBJCOPY = "/usr/bin/llvm-objcopy-23"
+OUTPUT = Path(os.environ.get("BPF_OUTPUT", str(Path(__file__).parent / "output2")))
+VERISTAT = os.environ.get("BPF_VERISTAT", str(Path(__file__).parent / "veristat"))
+CLANG = os.environ.get("BPF_CLANG", "/usr/bin/clang-23")
+LLVM_OBJCOPY = os.environ.get("BPF_LLVM_OBJCOPY", "/usr/bin/llvm-objcopy-23")
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
 
@@ -43,9 +46,6 @@ BPF_CFLAGS = [
     "-include", f"{KSRC}/include/linux/kconfig.h",
     f"-I{KSRC}/ubuntu/include",
     "-include", f"{KSRC}/include/linux/compiler_types.h",
-    # Force-include kconfig.h so IS_ENABLED() is always available,
-    # even in headers included before the source file.
-    "-include", f"{KSRC}/include/linux/kconfig.h",
     "-D__KERNEL__",
     # --- Layer 1: Real kernel CONFIG_* symbols ---
     # Generated from /proc/config.gz of the running kernel (6.1.102) via
@@ -168,6 +168,8 @@ HARNESS_TEMPLATE = """\
 #define EXPORT_TRACEPOINT_SYMBOL_GPL(x)
 #define module_init(x)
 #define module_exit(x)
+#define subsys_initcall(x)
+#define late_initcall(x)
 
 /* ---------------------------------------------------------------
  * Step 1: Suppress WARN_ON / BUG_ON / printk family.
@@ -1493,7 +1495,7 @@ EXTRA_INCLUDES = {
     # mpihelp_mul_karatsuba_case (defined in mpih-mul.c itself).
     # mpi_mul: include shim mpi-internal.h FIRST so mpihelp_mul_karatsuba_case
     # is declared as static before mpih-mul.c defines it.
-    "mpi_mul":   [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
+    "mpi_mul":   lambda: [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
                   next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul1.c", KSRC/"lib/mpi/generic_mpih-mul1.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpih-mul.c", KSRC/"lib/mpi/mpih-mul.c"] if p.exists())],
 
@@ -1530,7 +1532,7 @@ EXTRA_INCLUDES = {
 
     # lib_poly1305 uses poly1305_core_setkey/blocks/emit.
     # BPF does not support 128-bit integers (u128), so we use donna32 instead of donna64.
-    "lib_poly1305": [next(p for p in [KSRC/"lib/crypto/poly1305-donna32.c", KSRC/"lib/crypto/poly1305-donna64.c"] if p.exists())],
+    "lib_poly1305": lambda: [next(p for p in [KSRC/"lib/crypto/poly1305-donna32.c", KSRC/"lib/crypto/poly1305-donna64.c"] if p.exists())],
 
     # lib_blake2s: blake2s-generic.c was merged into blake2s.c in newer kernels.
     "lib_blake2s": [],
@@ -1555,7 +1557,7 @@ EXTRA_INCLUDES = {
     # mpi_add needs mpiutil (mpi_resize/copy/free), mpih-cmp (mpihelp_cmp),
     # generic_mpih-add1/sub1 (mpihelp_add_n/sub_n), mpi-mod (mpi_mod),
     # mpi-bit (mpi_normalize).
-    "mpi_add":   [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
+    "mpi_add":   lambda: [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-add1.c", KSRC/"lib/mpi/generic_mpih-add1.c"] if p.exists()),
@@ -1564,7 +1566,7 @@ EXTRA_INCLUDES = {
                   next(p for p in [KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
 
     # mpi_cmp needs mpiutil (mpi_normalize via mpi-bit.c), mpih-cmp (mpihelp_cmp).
-    "mpi_cmp":   [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
+    "mpi_cmp":   lambda: [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
                   next(p for p in [KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
@@ -1582,6 +1584,9 @@ EXTRA_EARLY_CFLAGS = {
     # lz4_compress: same shim strategy as lz4_decompress - apply internal_linkage
     # to all LZ4 functions declared in linux/lz4.h before lz4_compress.c sees them.
     "lz4_compress": [f"-I{SHIM}/lz4_compress"],
+    # disasm: the shim at shims/kernel/bpf/disasm.c includes "kernel/bpf/disasm.c"
+    # which must resolve to the kernel source, not back to the shim itself via -I{SHIM}.
+    "disasm": [f"-I{KSRC}"],
 }
 
 EXTRA_CFLAGS = {
@@ -1600,13 +1605,13 @@ EXTRA_CFLAGS = {
     "div64": ["-U__SIZEOF_INT128__"],
     # lib_poly1305 uses poly1305-donna64.c which uses u128 (128-bit integers).
     # BPF backend does not support 128-bit integers. Use donna32 instead.
-    "lib_poly1305": ["-U__SIZEOF_INT128__"],
+    "lib_poly1305": ["-U__SIZEOF_INT128__", "-DCONFIG_CRYPTO_LIB_POLY1305_RSIZE=1"],
     # mpi_mul: add lib/mpi to include path so relative includes in mpi-mul.c work.
     # The shim mpi-internal.h is included via EXTRA_PRE_INCLUDE (absolute path),
     # and its include guard prevents re-inclusion when mpi-mul.c does
     # #include "mpi-internal.h".
     # mpi_mul: block sched.h (-> mm_types.h:1463 ACCESS_PRIVATE issue).
-    "mpi_mul": [f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi", "-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
+    "mpi_mul": [f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi", "-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H", "-Wno-int-conversion"],
     # mpi_add/mpi_cmp/mpih_*: block linux/mm.h and linux/scatterlist.h which pull
     # in full MM infrastructure (pte_mkwrite, vm_area_struct, page_address, etc.)
     # incompatible with BPF compilation.
@@ -1682,14 +1687,17 @@ EXTRA_CFLAGS = {
     # unsigned long *, which clang rejects. Block sched.h to avoid mm_types.h.
     "ts_fsm":  ["-D__exit=", "-D__init=", "-D_LINUX_SCHED_H"],
     "ts_kmp":  ["-D__exit=", "-D__init=", "-D_LINUX_SCHED_H"],
-    "lib_aes": ["-D_LINUX_SCHED_H"],
+    "lib_aes": ["-D_LINUX_SCHED_H", "-D_CRYPTO_ALGAPI_H", "-D_LINUX_CRYPTO_H",
+                 "-include", f"{KSRC}/include/linux/errno.h"],
     # mpi_add/mpi_cmp: add lib/mpi to include path for relative includes.
     # The shim mpi-internal.h is included via EXTRA_INCLUDES.
     # Also block sched.h (pulled in via mpi.h -> slab.h -> sched.h -> mm_types.h:1463).
     "mpi_add":  ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H",
-                 "-D_LINUX_SCHED_H", f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi"],
+                 "-D_LINUX_SCHED_H", "-Wno-int-conversion",
+                 f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi"],
     "mpi_cmp":  ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H",
-                 "-D_LINUX_SCHED_H", f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi"],
+                 "-D_LINUX_SCHED_H", "-Wno-int-conversion",
+                 f"-I{KSRC}/lib/crypto/mpi", f"-I{KSRC}/lib/mpi"],
     # sort.c includes <linux/sched.h> for cond_resched(). sched.h:1642 uses
     # struct thread_struct which is not defined in our asm/processor.h shim.
     # Fix: block sched.h and stub out cond_resched via EXTRA_PRE_INCLUDE.
@@ -1928,7 +1936,7 @@ typedef struct { size_t state; const void *table; } FSE_DState_t;
  * bitstream.h is normally included by fse.h's static section (which we blocked).
  * With __GNUC__ 2, bitstream.h uses the software fallback for BIT_highbit32
  * instead of __builtin_clz (opcode 192, not supported by BPF). */
-#include "/home/ubuntu/bpf-next-0aa637869/lib/zstd/common/bitstream.h"
+#include "{ksrc}/lib/zstd/common/bitstream.h"
 /* FSE_initDState/decodeSymbol/decodeSymbolFast are static inline in fse.h's
  * static-linking-only section (which we blocked). Provide stubs so the
  * BPF object has no unresolved extern references. */
@@ -1990,7 +1998,7 @@ static __attribute__((always_inline)) int __bpf_zit_impl(
     codetype type, unsigned short *lens, unsigned codes,
     code **table, unsigned *bits, unsigned short *work);
 /* Include inftrees.c to provide the definition. */
-#include "/home/ubuntu/bpf-next-0aa637869/lib/zlib_inflate/inftrees.c"
+#include "{ksrc}/lib/zlib_inflate/inftrees.c"
 /* Provide memcpy as static inline to avoid extern BTF reference. */
 static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
 {
@@ -2039,7 +2047,7 @@ static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
  * LZ4_memcpy AFTER lz4defs.h has defined them as __builtin_memmove/__builtin_memcpy.
  * The BPF backend rejects __builtin_memmove/__builtin_memcpy for variable-size
  * copies; we redirect to the kernel's non-builtin memmove/memcpy instead. */
-#include "/home/ubuntu/bpf-next-0aa637869/lib/lz4/lz4defs.h"
+#include "{ksrc}/lib/lz4/lz4defs.h"
 #undef LZ4_memmove
 #undef LZ4_memcpy
 #define LZ4_memmove(dst, src, size) memmove(dst, src, size)
@@ -2054,7 +2062,7 @@ static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
  * Also apply always_inline to all functions in the source file to force inlining
  * of static helpers with >5 args (LZ4_compress_fast_extState, LZ4_compress_destSize_generic). */
 /* Pre-include lz4defs.h so its include guard prevents re-inclusion */
-#include "/home/ubuntu/bpf-next-0aa637869/lib/lz4/lz4defs.h"
+#include "{ksrc}/lib/lz4/lz4defs.h"
 #undef LZ4_memcpy
 #define LZ4_memcpy(dst, src, size) memcpy(dst, src, size)
 /* Apply always_inline to ALL functions in lz4_compress.c (between push and pop
@@ -3638,9 +3646,11 @@ def compile_harness(src_name, src_path, harness_body, out_path):
     """Compile a kernel source file with a BPF harness wrapper."""
     safe_name = src_name.replace('-', '_').replace('.', '_')
     extras = EXTRA_INCLUDES.get(src_name, [])
+    if callable(extras):
+        extras = extras()
     extra_includes_str = '\n'.join(f'#include "{p}"' for p in extras)
     extra_preamble_str = EXTRA_PREAMBLE.get(src_name, '')
-    extra_pre_include_str = EXTRA_PRE_INCLUDE.get(src_name, '')
+    extra_pre_include_str = EXTRA_PRE_INCLUDE.get(src_name, '').replace('{ksrc}', str(KSRC))
     harness_content = HARNESS_TEMPLATE.format(
         src_name=src_name,
         src_path=src_path,
@@ -3715,6 +3725,14 @@ def run_veristat(obj_files):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="BPF Kernel Verification Pipeline")
+    parser.add_argument(
+        "--compile-only", action="store_true",
+        help="Only compile harnesses; skip the veristat verification step."
+    )
+    args = parser.parse_args()
+
     print("=" * 70)
     print("BPF Kernel Verification Pipeline")
     print(f"Kernel source: {KSRC}")
@@ -3882,7 +3900,7 @@ def main():
             compiled_ok.append((name, out))
             print(f"  [OK]   {name}")
         else:
-            first_err = errors[0][:80] if errors else "unknown error"
+            first_err = errors[0][:200] if errors else "unknown error"
             compiled_fail.append((name, first_err))
             print(f"  [FAIL] {name}: {first_err}")
 
@@ -3891,6 +3909,10 @@ def main():
     if not compiled_ok:
         print("No files compiled successfully!")
         sys.exit(1)
+
+    if args.compile_only:
+        print("\n--compile-only: skipping veristat.")
+        return
 
     print("\n--- Phase 2: Running veristat ---")
     obj_files = [str(o) for _, o in compiled_ok]
