@@ -87,6 +87,12 @@ BPF_CFLAGS = [
     "-D__read_mostly=",
     "-D____cacheline_aligned=__attribute__((__aligned__(64)))",
     "-D____cacheline_aligned_in_smp=__attribute__((__aligned__(64)))",
+    # Block headers replaced by -D guards + harness stubs (strategy 3)
+    "-D_ASM_X86_KFENCE_H",
+    "-D_ASM_X86_TIMEX_H",
+    "-D_LINUX_FORTIFY_STRING_H_",
+    "-D_LINUX_BH_H",
+    "-D_LINUX_IRQFLAGS_H",
     # THIS_MODULE is defined in linux/module.h which we block with -D_LINUX_MODULE_H.
     "-DTHIS_MODULE=NULL",
     # Block linux/kprobes.h -- it pulls in ftrace.h -> trace_recursion.h ->
@@ -229,6 +235,30 @@ HARNESS_TEMPLATE = """\
 /* Also stub out common printk-related types/macros that other headers use */
 #define printk_ratelimit()         0
 #define printk_timed_ratelimit(a,b) 0
+/* ---------------------------------------------------------------
+ * Step 1c: Stub out IRQ flags, bottom-half, timex, fortify.
+ *
+ * These were previously separate shim files; now replaced by -D
+ * guards in BPF_CFLAGS + inline stubs here (strategy 3).
+ * --------------------------------------------------------------- */
+#define local_irq_enable()           do {{}} while (0)
+#define local_irq_disable()          do {{}} while (0)
+#define local_irq_save(flags)        do {{ (void)(flags); }} while (0)
+#define local_irq_restore(flags)     do {{ (void)(flags); }} while (0)
+#define irqs_disabled()              0
+#define raw_local_irq_enable()       do {{}} while (0)
+#define raw_local_irq_disable()      do {{}} while (0)
+#define raw_local_irq_save(f)        do {{ (void)(f); }} while (0)
+#define raw_local_irq_restore(f)     do {{ (void)(f); }} while (0)
+#define raw_local_save_flags(f)      do {{ (void)(f); }} while (0)
+#define raw_irqs_disabled()          0
+#define raw_irqs_disabled_flags(f)   0
+#define local_bh_disable()           do {{}} while (0)
+#define local_bh_enable()            do {{}} while (0)
+typedef unsigned long long cycles_t;
+#define get_cycles()                 ((cycles_t)0)
+static inline void fortify_panic(const char *name) {{ }}
+
 /* jiffies: linux/jiffies.h declares it as 'extern unsigned long volatile jiffies'.
  * We cannot block that header (it pulls in linux/types.h etc.).
  * Instead we undef the extern declaration after the include and redefine
