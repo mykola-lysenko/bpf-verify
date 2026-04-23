@@ -1424,6 +1424,70 @@ HARNESS_BODIES = {
     if (!___ratelimit(&rs, "test")) { *(volatile int *)0 = 0; }
     return 0;
 """,
+    "crc_t10dif": """
+    /* crc-t10dif: verify CRC of known data */
+    unsigned char data[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+    u16 c = crc_t10dif_update(0, data, 4);
+    (void)c;
+    return 0;
+""",
+    "int_log": """
+    /* int_log: verify intlog2 of powers of 2 */
+    unsigned int r = intlog2(8);
+    (void)r;
+    return 0;
+""",
+    "arc4": """
+    /* arc4: just verify the functions compile and link.
+     * arc4_ctx has a 1024-byte S-box (u32 S[256]) that exceeds BPF's
+     * 512-byte stack limit, so we can't instantiate it on the stack. */
+    (void)arc4_setkey;
+    (void)arc4_crypt;
+    return 0;
+""",
+    "crypto_utils": """
+    /* crypto_utils: __crypto_xor test */
+    u8 a[4] = {0xFF, 0x00, 0xAA, 0x55};
+    u8 b[4] = {0x0F, 0xF0, 0x55, 0xAA};
+    u8 dst[4];
+    __crypto_xor(dst, a, b, 4);
+    (void)dst[0];
+    return 0;
+""",
+    "chacha_block": """
+    /* chacha_block: test chacha_permute via chacha_block_generic */
+    struct chacha_state state;
+    __builtin_memset(&state, 0, sizeof(state));
+    u8 out[64];
+    chacha_block_generic(&state, out, 20);
+    (void)out[0];
+    return 0;
+""",
+    "nh": """
+    /* nh: test NH hash */
+    u32 key[272] = {0};
+    u8 msg[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    __le64 hash[4];
+    nh(key, msg, 16, hash);
+    (void)hash[0];
+    return 0;
+""",
+    "mpih_addmul1": """
+    /* mpih_addmul1: multiply-accumulate test */
+    unsigned long res[2] = {0, 0};
+    unsigned long s1[2] = {3, 0};
+    mpihelp_addmul_1(res, s1, 2, 5);
+    (void)res[0];
+    return 0;
+""",
+    "mpih_submul1": """
+    /* mpih_submul1: multiply-subtract test */
+    unsigned long res[2] = {100, 0};
+    unsigned long s1[2] = {3, 0};
+    mpihelp_submul_1(res, s1, 2, 5);
+    (void)res[0];
+    return 0;
+""",
     "bitmap_str": """
     /* bitmap_str: test bitmap_parselist and bitmap_weight */
     DECLARE_BITMAP(bmap, 64);
@@ -1655,6 +1719,8 @@ EXTRA_CFLAGS = {
     "mpih_mul1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
     "mpih_lshift": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
     "mpih_rshift": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
+    "mpih_addmul1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
+    "mpih_submul1": ["-D_LINUX_MM_H", "-D_LINUX_SCATTERLIST_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCHED_H"],
     # net_utils: block linux/mm.h, highmem.h, scatterlist.h, and bvec.h which
     # pull in full MM infrastructure incompatible with BPF compilation.
     "net_utils":  ["-D_LINUX_MM_H", "-D_LINUX_HIGHMEM_H", "-D_LINUX_SCATTERLIST_H",
@@ -3003,6 +3069,46 @@ static __always_inline __kernel_size_t strnlen(const char *s, __kernel_size_t ma
     # lib_chacha: provide memcpy stub (used by chacha-block-generic.c) and
     # include chacha-block-generic.c + crypto/utils.c as extra translation units
     # to resolve chacha_block_generic, hchacha_block_generic, and __crypto_xor.
+    "chacha_block": """\
+/* Block string.h's memset/memcpy declarations to avoid conflict with our inlines */
+#define _LINUX_STRING_H_
+#include <linux/types.h>
+#include <linux/stddef.h>
+static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
+{
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = s[i];
+    return dst;
+}
+static inline void *memset(void *dst, int c, __kernel_size_t n)
+{
+    unsigned char *d = (unsigned char *)dst;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = (unsigned char)c;
+    return dst;
+}
+static inline int memcmp(const void *a, const void *b, __kernel_size_t n)
+{
+    const unsigned char *p = a, *q = b;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) { if (p[i] != q[i]) return p[i] - q[i]; }
+    return 0;
+}
+#define memzero_explicit(p, n) memset((p), 0, (n))
+""",
+    "crypto_utils": """\
+/* Provide __ffs as static inline to avoid extern BTF reference */
+static __always_inline unsigned long __ffs(unsigned long word)
+{
+    unsigned long bit = 0;
+    while (!(word & 1)) { word >>= 1; bit++; }
+    return bit;
+}
+/* Force __crypto_xor to be inlined into the BPF program */
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     "lib_chacha": """\
 /* Provide memcpy and memset as static inline to avoid extern BTF references.
  * memcpy is used by hchacha_block_generic() in chacha-block-generic.c.
@@ -3389,6 +3495,9 @@ static __always_inline char *__bpf_strcpy(char *d, const char *s)
 """,
 }
 EXTRA_PREAMBLE = {
+    "crypto_utils": """
+#pragma clang attribute pop
+""",
     # lib_sha256: provide a sha256_blocks_generic wrapper that uses a static W[64]
     # array (placed in .data, not on the BPF stack) to avoid exceeding the 512-byte
     # BPF call-chain stack limit.  The original sha256_blocks_generic was renamed to
@@ -3825,6 +3934,7 @@ def main():
         "crc32":                 next(p for p in [KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"]  if p.exists()),
         "crc4":                  next(p for p in [KSRC/"lib/crc/crc4.c",      KSRC/"lib/crc4.c"]   if p.exists()),
         "crc64":                 next(p for p in [KSRC/"lib/crc/crc64-main.c",KSRC/"lib/crc64.c"]  if p.exists()),
+        "crc_t10dif":            next(p for p in [KSRC/"lib/crc/crc-t10dif-main.c", KSRC/"lib/crc-t10dif.c"] if p.exists()),
         "ctype":                 KSRC / "lib/ctype.c",
         "errname":               KSRC / "lib/errname.c",
         "glob":                  KSRC / "lib/glob.c",
@@ -3853,12 +3963,17 @@ def main():
         "div64":                 KSRC / "lib/math/div64.c",
         "int_pow":               KSRC / "lib/math/int_pow.c",
         "rational":              KSRC / "lib/math/rational.c",
+        "int_log":               KSRC / "lib/math/int_log.c",
         # lib/crypto/ subdirectory (pure cipher/hash primitives)
         "lib_aes":               KSRC / "lib/crypto/aes.c",
         "lib_sha256":            KSRC / "lib/crypto/sha256.c",
         "lib_chacha":            KSRC / "lib/crypto/chacha.c",
         "lib_blake2s":           KSRC / "lib/crypto/blake2s.c",
         "lib_poly1305":          KSRC / "lib/crypto/poly1305.c",
+        "arc4":                  KSRC / "lib/crypto/arc4.c",
+        "crypto_utils":          KSRC / "lib/crypto/utils.c",
+        "chacha_block":          KSRC / "lib/crypto/chacha-block-generic.c",
+        "nh":                    KSRC / "lib/crypto/nh.c",
         # lib/zstd/ subdirectory (reorganised in kernel v7.0)
         "zstd_entropy_common":   KSRC / "lib/zstd/common/entropy_common.c",
         "zstd_fse_decompress":   KSRC / "lib/zstd/common/fse_decompress.c",
@@ -3886,6 +4001,8 @@ def main():
         "mpih_mul1":             next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul1.c",  KSRC/"lib/mpi/generic_mpih-mul1.c"]  if p.exists()),
         "mpih_lshift":           next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-lshift.c",KSRC/"lib/mpi/generic_mpih-lshift.c"] if p.exists()),
         "mpih_rshift":           next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-rshift.c",KSRC/"lib/mpi/generic_mpih-rshift.c"] if p.exists()),
+        "mpih_addmul1":          next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul2.c", KSRC/"lib/mpi/generic_mpih-mul2.c"]  if p.exists()),
+        "mpih_submul1":          next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul3.c", KSRC/"lib/mpi/generic_mpih-mul3.c"]  if p.exists()),
         # lib/dim/ subdirectory (dynamic interrupt moderation)
         "dim":                   KSRC / "lib/dim/dim.c",
         "net_dim":               KSRC / "lib/dim/net_dim.c",
