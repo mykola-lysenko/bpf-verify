@@ -1013,6 +1013,93 @@ HARNESS_BODIES = {
     n0 = pcpu_freelist_pop(&fl);
     BPF_ASSERT(n0 != 0);
     return two + nr + (n0 != 0);""",
+    "queue_stack_maps": """\
+    /* queue_stack_maps: BPF queue/stack map data-path helpers.
+     *
+     * The target-specific pre-include provides the small bpf_map surface used
+     * by this source file and keeps element storage local, so the verifier can
+     * track queue indexes and element copies precisely.
+     *
+     * Covered here:
+     *   1. Queue FIFO push/peek/pop behavior and empty-pop zeroing.
+     *   2. Stack top lookup/pop behavior and BPF_EXIST full-map replacement.
+     *   3. Attribute validation plus allocator success/free paths.
+     */
+    struct {
+        struct bpf_queue_stack qs;
+        u8 data[32];
+    } storage;
+    struct bpf_queue_stack *qs = &storage.qs;
+    struct bpf_map *map = &qs->map;
+    u64 in0 = 0x1111111111111111ULL;
+    u64 in1 = 0x2222222222222222ULL;
+    u64 in2 = 0x3333333333333333ULL;
+    u64 in3 = 0x4444444444444444ULL;
+    u64 out = 0;
+    union bpf_attr attr = {};
+    struct bpf_map *alloc_map;
+
+    qs->map.ops = 0;
+    qs->map.key_size = 0;
+    qs->map.value_size = sizeof(u64);
+    qs->map.max_entries = 3;
+    qs->map.map_flags = 0;
+    qs->map.numa_node = 0;
+    raw_res_spin_lock_init(&qs->lock);
+    qs->head = 0;
+    qs->tail = 0;
+    qs->size = 4;
+
+    BPF_ASSERT(queue_stack_map_is_empty(qs));
+    BPF_ASSERT(!queue_stack_map_is_full(qs));
+    BPF_ASSERT(queue_stack_map_mem_usage(map) ==
+               sizeof(struct bpf_queue_stack) + 32);
+
+    BPF_ASSERT(queue_stack_map_push_elem(map, &in0, 0) == 0);
+    BPF_ASSERT(queue_stack_map_push_elem(map, &in1, 0) == 0);
+    BPF_ASSERT(queue_map_peek_elem(map, &out) == 0);
+    BPF_ASSERT(out == in0);
+    BPF_ASSERT(queue_map_pop_elem(map, &out) == 0);
+    BPF_ASSERT(out == in0);
+    BPF_ASSERT(queue_map_pop_elem(map, &out) == 0);
+    BPF_ASSERT(out == in1);
+    BPF_ASSERT(queue_map_pop_elem(map, &out) == -ENOENT);
+    BPF_ASSERT(out == 0);
+
+    qs->map.value_size = sizeof(u64);
+    qs->map.max_entries = 3;
+    qs->head = 0;
+    qs->tail = 0;
+    qs->size = 4;
+    BPF_ASSERT(queue_stack_map_push_elem(map, &in0, 0) == 0);
+    BPF_ASSERT(queue_stack_map_push_elem(map, &in1, 0) == 0);
+    BPF_ASSERT(queue_stack_map_push_elem(map, &in2, 0) == 0);
+    BPF_ASSERT(queue_stack_map_is_full(qs));
+    BPF_ASSERT(queue_stack_map_push_elem(map, &in3, 0) == -E2BIG);
+    BPF_ASSERT(queue_stack_map_push_elem(map, &in3, BPF_EXIST) == 0);
+    BPF_ASSERT(stack_map_peek_elem(map, &out) == 0);
+    BPF_ASSERT(out == in3);
+    BPF_ASSERT(stack_map_pop_elem(map, &out) == 0);
+    BPF_ASSERT(out == in3);
+    BPF_ASSERT(queue_stack_map_push_elem(map, &in0, BPF_NOEXIST) == -EINVAL);
+    BPF_ASSERT(queue_stack_map_update_elem(map, 0, &in0, 0) == -EINVAL);
+    BPF_ASSERT(queue_stack_map_delete_elem(map, 0) == -EINVAL);
+    BPF_ASSERT(queue_stack_map_get_next_key(map, 0, 0) == -EINVAL);
+    BPF_ASSERT(queue_stack_map_lookup_elem(map, 0) == 0);
+
+    attr.max_entries = 3;
+    attr.value_size = sizeof(u64);
+    BPF_ASSERT(queue_stack_map_alloc_check(&attr) == 0);
+    __bpf_qs_allocated = 0;
+    alloc_map = queue_stack_map_alloc(&attr);
+    BPF_ASSERT(alloc_map == &__bpf_qs_alloc.qs.map);
+    BPF_ASSERT(__bpf_qs_alloc.qs.size == 4);
+    queue_stack_map_free(alloc_map);
+    BPF_ASSERT(__bpf_qs_allocated == 0);
+
+    attr.key_size = 1;
+    BPF_ASSERT(queue_stack_map_alloc_check(&attr) == -EINVAL);
+    return (int)out;""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -2678,6 +2765,126 @@ static void __bpf_percpu_free(void *ptr);
 #define alloc_percpu(type) ((type *)__bpf_percpu_alloc(sizeof(type)))
 #define free_percpu(ptr) __bpf_percpu_free(ptr)
 """,
+    # queue_stack_maps: this source only needs the map metadata contract, BTF
+    # ID placeholder, rqspinlock, and small map-area allocation hooks.
+    "queue_stack_maps": """\
+#include <linux/errno.h>
+#define _LINUX_BPF_H 1
+#define _LINUX_BTF_IDS_H 1
+#define __PERCPU_FREELIST_H__ 1
+#define _ASM_X86_RQSPINLOCK_H 1
+#define __ASM_GENERIC_RQSPINLOCK_H 1
+#ifndef NUMA_NO_NODE
+#define NUMA_NO_NODE (-1)
+#endif
+#ifndef KMALLOC_MAX_SIZE
+#define KMALLOC_MAX_SIZE (1UL << 20)
+#endif
+#define BPF_ANY 0
+#define BPF_NOEXIST 1
+#define BPF_EXIST 2
+#define BPF_F_NUMA_NODE (1U << 2)
+#define BPF_F_RDONLY (1U << 3)
+#define BPF_F_WRONLY (1U << 4)
+#define BPF_F_RDONLY_PROG (1U << 7)
+#define BPF_F_WRONLY_PROG (1U << 8)
+#define BPF_F_ACCESS_MASK \
+    (BPF_F_RDONLY | BPF_F_WRONLY | BPF_F_RDONLY_PROG | BPF_F_WRONLY_PROG)
+#define BTF_ID_LIST_SINGLE(name, prefix, typename) static u32 name[1];
+#define ERR_PTR(error) ((void *)(long)(error))
+typedef struct { u32 locked; } rqspinlock_t;
+static inline void raw_res_spin_lock_init(rqspinlock_t *lock)
+{ lock->locked = 0; }
+static inline int raw_res_spin_lock_irqsave(rqspinlock_t *lock,
+                                            unsigned long flags)
+{ (void)lock; (void)flags; return 0; }
+static inline void raw_res_spin_unlock_irqrestore(rqspinlock_t *lock,
+                                                  unsigned long flags)
+{ (void)lock; (void)flags; }
+union bpf_attr {
+    struct {
+        u32 map_type;
+        u32 key_size;
+        u32 value_size;
+        u32 max_entries;
+        u32 map_flags;
+        u32 inner_map_fd;
+        u32 numa_node;
+    };
+};
+struct bpf_map {
+    const struct bpf_map_ops *ops;
+    u32 key_size;
+    u32 value_size;
+    u32 max_entries;
+    u32 map_flags;
+    int numa_node;
+};
+struct bpf_map_ops {
+    bool (*map_meta_equal)(const struct bpf_map *meta0,
+                           const struct bpf_map *meta1);
+    int (*map_alloc_check)(union bpf_attr *attr);
+    struct bpf_map *(*map_alloc)(union bpf_attr *attr);
+    void (*map_free)(struct bpf_map *map);
+    void *(*map_lookup_elem)(struct bpf_map *map, void *key);
+    long (*map_update_elem)(struct bpf_map *map, void *key, void *value,
+                            u64 flags);
+    long (*map_delete_elem)(struct bpf_map *map, void *key);
+    long (*map_push_elem)(struct bpf_map *map, void *value, u64 flags);
+    long (*map_pop_elem)(struct bpf_map *map, void *value);
+    long (*map_peek_elem)(struct bpf_map *map, void *value);
+    int (*map_get_next_key)(struct bpf_map *map, void *key, void *next_key);
+    u64 (*map_mem_usage)(const struct bpf_map *map);
+    const u32 *map_btf_id;
+};
+static inline bool bpf_map_meta_equal(const struct bpf_map *meta0,
+                                      const struct bpf_map *meta1)
+{ (void)meta0; (void)meta1; return true; }
+static inline bool bpf_map_flags_access_ok(u32 map_flags)
+{ return (map_flags & ~BPF_F_ACCESS_MASK) == 0; }
+static inline int bpf_map_attr_numa_node(const union bpf_attr *attr)
+{
+    return (attr->map_flags & BPF_F_NUMA_NODE) ?
+           (int)attr->numa_node : NUMA_NO_NODE;
+}
+static inline void bpf_map_init_from_attr(struct bpf_map *map,
+                                          union bpf_attr *attr)
+{
+    map->key_size = attr->key_size;
+    map->value_size = attr->value_size;
+    map->max_entries = attr->max_entries;
+    map->map_flags = attr->map_flags;
+    map->numa_node = bpf_map_attr_numa_node(attr);
+}
+static void *bpf_map_area_alloc(u64 size, int numa_node);
+static void bpf_map_area_free(void *base);
+static __always_inline void *memcpy(void *dst, const void *src, size_t n)
+{
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+    size_t i;
+
+    for (i = 0; i < 32; i++) {
+        if (i >= n)
+            break;
+        d[i] = s[i];
+    }
+    return dst;
+}
+static __always_inline void *memset(void *dst, int c, size_t n)
+{
+    unsigned char *d = (unsigned char *)dst;
+    size_t i;
+
+    for (i = 0; i < 32; i++) {
+        if (i >= n)
+            break;
+        d[i] = (unsigned char)c;
+    }
+    return dst;
+}
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     # lpm_trie: fully self-contained shim -- no EXTRA_PRE_INCLUDE needed.
     # cordic_calc_iq() returns struct cordic_iq by value -- BPF does not allow
     # aggregate (struct) returns (StructRet ABI).
@@ -4121,6 +4328,56 @@ static void __bpf_percpu_free(void *ptr)
 #define __bpf_hide_ptr(ptr) asm volatile("" : "+r"(ptr))
 #define __bpf_memory_barrier() asm volatile("" ::: "memory")
 """,
+    "queue_stack_maps": """\
+#pragma clang attribute pop
+struct __bpf_queue_stack_alloc {
+    struct bpf_queue_stack qs;
+    u8 data[32];
+};
+
+static struct __bpf_queue_stack_alloc __bpf_qs_alloc;
+static u32 __bpf_qs_allocated;
+
+static void __bpf_qs_zero_alloc(void)
+{
+    __bpf_qs_alloc.qs.map.ops = 0;
+    __bpf_qs_alloc.qs.map.key_size = 0;
+    __bpf_qs_alloc.qs.map.value_size = 0;
+    __bpf_qs_alloc.qs.map.max_entries = 0;
+    __bpf_qs_alloc.qs.map.map_flags = 0;
+    __bpf_qs_alloc.qs.map.numa_node = 0;
+    __bpf_qs_alloc.qs.lock.locked = 0;
+    __bpf_qs_alloc.qs.head = 0;
+    __bpf_qs_alloc.qs.tail = 0;
+    __bpf_qs_alloc.qs.size = 0;
+    __bpf_qs_alloc.data[0] = 0;
+    __bpf_qs_alloc.data[1] = 0;
+    __bpf_qs_alloc.data[2] = 0;
+    __bpf_qs_alloc.data[3] = 0;
+    __bpf_qs_alloc.data[4] = 0;
+    __bpf_qs_alloc.data[5] = 0;
+    __bpf_qs_alloc.data[6] = 0;
+    __bpf_qs_alloc.data[7] = 0;
+}
+
+static void *bpf_map_area_alloc(u64 size, int numa_node)
+{
+    (void)numa_node;
+    if (size > sizeof(__bpf_qs_alloc))
+        return 0;
+    if (__bpf_qs_allocated)
+        return 0;
+    __bpf_qs_allocated = 1;
+    __bpf_qs_zero_alloc();
+    return &__bpf_qs_alloc;
+}
+
+static void bpf_map_area_free(void *base)
+{
+    (void)base;
+    __bpf_qs_allocated = 0;
+}
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -4579,6 +4836,7 @@ def main():
         "tnum":                  SHIM / "kernel/bpf/tnum.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
+        "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",

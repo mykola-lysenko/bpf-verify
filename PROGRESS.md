@@ -1,10 +1,10 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 116 compiled, 116 verified, 0 skipped.
+**Current status:** 117 compiled, 117 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding `kernel/bpf/percpu_freelist.c`: 116 compiled, 116 verified, 0 skipped.
+- Full local pipeline after adding `kernel/bpf/queue_stack_maps.c`: 117 compiled, 117 verified, 0 skipped.
 - CI guardrails now fail on compile failures, verifier failures, skipped objects, and object-open failures.
 
 ## Target plan
@@ -34,4 +34,9 @@
 
 - Added the real `kernel/bpf/percpu_freelist.c` target with one-CPU percpu and rqspinlock stubs.
 - The harness verifies init success/failure, LIFO push/pop behavior, empty-pop behavior, and bounded `pcpu_freelist_populate()`.
-- Keep BPF-core queue next; likely follow-ups are `queue_stack_maps.c` or a focused `bpf_insn_array.c` harness.
+
+## Notes for `kernel/bpf/queue_stack_maps.c`
+
+- Added the real `kernel/bpf/queue_stack_maps.c` target with focused BPF map metadata, BTF ID, rqspinlock, and map-area allocation stubs.
+- The harness verifies FIFO queue push/peek/pop, empty-pop zeroing, stack peek/pop, full-map replacement with `BPF_EXIST`, validation failures, and allocator success/free.
+- Keep BPF-core targets first; likely follow-ups are focused real-source harnesses for `bpf_insn_array.c` or smaller map infrastructure files before returning to deferred `lib/` work.
