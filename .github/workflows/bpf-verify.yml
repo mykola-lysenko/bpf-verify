@@ -155,11 +155,24 @@ jobs:
           BPF_LLVM_OBJCOPY: ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/llvm-objcopy
           BPF_VERISTAT:     ${{ env.UML_VERISTAT_DIR }}/uml-veristat
         run: |
+          set -o pipefail
           python3 pipeline.py 2>&1 | tee pipeline.log
           # Fail the step if any target failed to compile
           if grep -qP '^\s*\[FAIL\]' pipeline.log; then
             echo "::error::One or more targets failed to compile"
             grep -P '^\s*\[FAIL\]' pipeline.log
+            exit 1
+          fi
+          # Fail if veristat skipped any compiled object/program. Skips usually
+          # mean libbpf could not open an object due to unresolved externs.
+          if [ -f output/results.txt ] && grep -q "Failed to open" output/results.txt; then
+            echo "::error::One or more BPF objects could not be opened by veristat"
+            grep "Failed to open" output/results.txt
+            exit 1
+          fi
+          if [ -f output/results.txt ] && grep -Eq 'Skipped ([1-9][0-9]* files|[0-9]+ files, [1-9][0-9]* programs)' output/results.txt; then
+            echo "::error::One or more BPF objects/programs were skipped by veristat"
+            grep -E 'Done\. Processed .* Skipped ' output/results.txt
             exit 1
           fi
           # Fail if any BPF program failed the verifier

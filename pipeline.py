@@ -758,6 +758,16 @@ HARNESS_BODIES = {
     BPF_ASSERT(hweight32(r) <= 32);
     return (int)r;""",
 
+    "memneq": """\
+    /* memneq: compare two dynamic words through __crypto_memneq. */
+    __u32 key0 = 0, key1 = 1;
+    __u64 *va = bpf_map_lookup_elem(&input_map, &key0);
+    __u64 *vb = bpf_map_lookup_elem(&input_map, &key1);
+    if (!va || !vb) return 0;
+    u64 a = *va;
+    u64 b = *vb;
+    return __crypto_memneq(&a, &b, sizeof(a)) ? 1 : 0;""",
+
     "cordic": """\
     /* cordic_calc_iq computes i/q coordinate for a given angle.
      * cordic_calc_iq() returns struct by value (StructRet) which BPF does not
@@ -1428,7 +1438,7 @@ HARNESS_BODIES = {
     struct ratelimit_state rs;
     ratelimit_state_init(&rs, 1000, 5);
     /* First call should always be allowed (burst not yet exhausted) */
-    if (!___ratelimit(&rs, "test")) { *(volatile int *)0 = 0; }
+    BPF_ASSERT(___ratelimit(&rs, "test"));
     return 0;
 """,
     "crc_t10dif": """
@@ -2595,6 +2605,26 @@ enum string_size_units {
 #define UNESCAPE_ANY     0xf
 #endif
 """,
+    "memneq": """
+/* OPTIMIZER_HIDE_VAR lowers to an extern-like barrier in this BPF harness.
+ * For verification, a no-op keeps the constant-time code loadable while still
+ * exercising the same data-flow operations. */
+#undef OPTIMIZER_HIDE_VAR
+#define OPTIMIZER_HIDE_VAR(var) do { } while (0)
+""",
+    "lib_aes": """
+/* The kernel rotate helpers are static inline but can be left as unresolved
+ * externs under the BPF/gnu89 inline model. Include their definitions first,
+ * then force AES call sites to use expression macros. */
+#include <linux/compiler.h>
+#include <linux/bitops.h>
+#undef barrier
+#define barrier() do { } while (0)
+#define rol32(word, shift) \
+    (((__u32)(word) << ((shift) & 31)) | ((__u32)(word) >> ((-(shift)) & 31)))
+#define ror32(word, shift) \
+    (((__u32)(word) >> ((shift) & 31)) | ((__u32)(word) << ((-(shift)) & 31)))
+""",
     "refcount": """
 #define _LINUX_REFCOUNT_H
 """,
@@ -2626,10 +2656,24 @@ typedef struct raw_spinlock raw_spinlock_t;
 typedef struct { raw_spinlock_t rlock; } spinlock_t;
 #define spin_lock_irqsave(l, f)      do {} while (0)
 #define spin_unlock_irqrestore(l, f) do {} while (0)
+#define raw_spin_lock_init(lock)     do {} while (0)
 /* Provide jiffies as a static variable (not extern) to avoid BTF extern reference */
 static unsigned long jiffies = 0;
 #define HZ 1000
 #define msecs_to_jiffies(ms) ((ms) * HZ / 1000)
+#define time_is_before_jiffies(a) ((long)((a) - jiffies) < 0)
+static __always_inline void *__bpf_memset(void *dst, int c, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = (unsigned char)c;
+    return dst;
+}
+#define memset(dst, c, n) __bpf_memset((dst), (c), (n))
+#define atomic_set(v, i) ((v)->counter = (i))
+#define atomic_read(v) ((v)->counter)
+#define atomic_inc(v) ((v)->counter += 1)
+#define atomic_xchg_relaxed(v, i) ({ int __old = (v)->counter; (v)->counter = (i); __old; })
 /* ratelimit.h already defines ratelimit_state_init as static inline.
  * We just need to suppress printk and pr_warn. */
 #define printk(fmt, ...) do {} while (0)
@@ -4119,6 +4163,9 @@ def main():
             f.write("\nVeristat STDERR:\n" + stderr)
 
     print(f"\nResults saved to: {results_file}")
+
+    if rc != 0:
+        sys.exit(rc)
 
 
 if __name__ == '__main__':
