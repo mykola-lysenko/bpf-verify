@@ -940,6 +940,79 @@ HARNESS_BODIES = {
     range_tree_init(&insert_rt);
     BPF_ASSERT(range_tree_set(&insert_rt, 0, 4) == 0);
     return 0;""",
+    "percpu_freelist": """\
+    /* percpu_freelist: per-CPU free-list used by BPF map internals.
+     *
+     * The target-specific pre-include collapses the kernel per-CPU API to a
+     * single CPU and stubs rqspinlock, so this harness exercises the actual
+     * freelist data-structure transitions while staying verifier-trackable.
+     *
+     * Covered here:
+     *   1. pcpu_freelist_init() success and allocator failure paths.
+     *   2. pcpu_freelist_push()/pop() LIFO ordering and empty-pop behavior.
+     *   3. pcpu_freelist_populate() with a bounded dynamic element count.
+     */
+    __u32 key0 = 0;
+    __u64 *v = bpf_map_lookup_elem(&input_map, &key0);
+    if (!v) return 0;
+
+    struct pcpu_freelist init_fl;
+    struct pcpu_freelist fl;
+    struct pcpu_freelist_head head;
+    struct pcpu_freelist_node nodes[4];
+    struct pcpu_freelist_node *p0, *p1;
+    struct pcpu_freelist_node *n0, *n1, *n2;
+    int two = (int)(*v & 1);
+    u32 nr = (u32)((*v & 3) + 1);
+    int ret;
+
+    __bpf_pcpu_allocated = (u32)two;
+    ret = pcpu_freelist_init(&init_fl);
+    __bpf_memory_barrier();
+    if (two) {
+        BPF_ASSERT(ret == -ENOMEM);
+    } else {
+        BPF_ASSERT(ret == 0);
+        BPF_ASSERT(init_fl.freelist == &__bpf_pcpu_head);
+        pcpu_freelist_destroy(&init_fl);
+    }
+
+    raw_res_spin_lock_init(&head.lock);
+    head.first = 0;
+    fl.freelist = &head;
+
+    p0 = &nodes[0];
+    p1 = &nodes[1];
+    __bpf_hide_ptr(p0);
+    __bpf_hide_ptr(p1);
+
+    BPF_ASSERT(pcpu_freelist_pop(&fl) == 0);
+    pcpu_freelist_push(&fl, p0);
+    __bpf_memory_barrier();
+    if (two) {
+        pcpu_freelist_push(&fl, p1);
+        __bpf_memory_barrier();
+    }
+
+    n0 = pcpu_freelist_pop(&fl);
+    __bpf_memory_barrier();
+    n1 = pcpu_freelist_pop(&fl);
+    __bpf_memory_barrier();
+    n2 = pcpu_freelist_pop(&fl);
+    if (two) {
+        BPF_ASSERT(n0 == p1);
+        BPF_ASSERT(n1 == p0);
+    } else {
+        BPF_ASSERT(n0 == p0);
+        BPF_ASSERT(n1 == 0);
+    }
+    BPF_ASSERT(n2 == 0);
+
+    pcpu_freelist_populate(&fl, nodes, sizeof(nodes[0]), nr);
+    __bpf_memory_barrier();
+    n0 = pcpu_freelist_pop(&fl);
+    BPF_ASSERT(n0 != 0);
+    return two + nr + (n0 != 0);""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -2572,6 +2645,39 @@ static void __bpf_range_tree_free(const void *ptr);
 #define kmalloc_nolock(size, flags, node) __bpf_range_tree_alloc((size), (flags), (node))
 #define kfree_nolock(ptr) __bpf_range_tree_free((ptr))
 """,
+    # percpu_freelist: collapse per-CPU iteration to one CPU and stub
+    # rqspinlock so the real source compiles without scheduler/percpu asm.
+    "percpu_freelist": """\
+#include <linux/errno.h>
+#undef __percpu
+#define __percpu
+#define __LINUX_PREEMPT_H
+#define _LINUX_TRACE_IRQFLAGS_H
+#define __LINUX_PERCPU_H
+#define _ASM_X86_RQSPINLOCK_H
+#undef READ_ONCE
+#undef WRITE_ONCE
+#define READ_ONCE(x) (x)
+#define WRITE_ONCE(x, v) do { (x) = (v); } while (0)
+#define num_possible_cpus() 1U
+#define raw_smp_processor_id() 0
+#define cpu_possible_mask ((const unsigned long *)0)
+#define for_each_possible_cpu(cpu) for ((cpu) = 0; (cpu) < 1; (cpu)++)
+#define for_each_cpu_wrap(cpu, mask, start) for ((cpu) = 0; (cpu) < 1; (cpu)++)
+#define per_cpu_ptr(ptr, cpu) (ptr)
+#define this_cpu_ptr(ptr) (ptr)
+typedef struct { u32 locked; } rqspinlock_t;
+static inline void raw_res_spin_lock_init(rqspinlock_t *lock)
+{ lock->locked = 0; }
+static inline int raw_res_spin_lock(rqspinlock_t *lock)
+{ (void)lock; return 0; }
+static inline void raw_res_spin_unlock(rqspinlock_t *lock)
+{ (void)lock; }
+static void *__bpf_percpu_alloc(size_t size);
+static void __bpf_percpu_free(void *ptr);
+#define alloc_percpu(type) ((type *)__bpf_percpu_alloc(sizeof(type)))
+#define free_percpu(ptr) __bpf_percpu_free(ptr)
+""",
     # lpm_trie: fully self-contained shim -- no EXTRA_PRE_INCLUDE needed.
     # cordic_calc_iq() returns struct cordic_iq by value -- BPF does not allow
     # aggregate (struct) returns (StructRet ABI).
@@ -3990,6 +4096,31 @@ static void __bpf_range_tree_free(const void *ptr)
     (void)ptr;
 }
 """,
+    "percpu_freelist": """\
+static struct pcpu_freelist_head __bpf_pcpu_head;
+static u32 __bpf_pcpu_allocated;
+
+static void *__bpf_percpu_alloc(size_t size)
+{
+    if (size != sizeof(struct pcpu_freelist_head))
+        return 0;
+    if (__bpf_pcpu_allocated)
+        return 0;
+    __bpf_pcpu_allocated = 1;
+    __bpf_pcpu_head.first = 0;
+    raw_res_spin_lock_init(&__bpf_pcpu_head.lock);
+    return &__bpf_pcpu_head;
+}
+
+static void __bpf_percpu_free(void *ptr)
+{
+    (void)ptr;
+    __bpf_pcpu_allocated = 0;
+}
+
+#define __bpf_hide_ptr(ptr) asm volatile("" : "+r"(ptr))
+#define __bpf_memory_barrier() asm volatile("" ::: "memory")
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -4447,6 +4578,7 @@ def main():
         # The shim redefines all functions as static __always_inline.
         "tnum":                  SHIM / "kernel/bpf/tnum.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
+        "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",
