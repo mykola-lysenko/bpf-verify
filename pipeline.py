@@ -1376,9 +1376,16 @@ HARNESS_BODIES = {
 
     "string_helpers": """
     /* string_helpers: test string_unescape with UNESCAPE_SPACE | UNESCAPE_OCTAL */
-    /* Use a simple input with no escape sequences to ensure n >= 0 */
-    char src[] = "hello";
+    /* Keep the source buffer fully initialized. The verifier explores
+     * impossible escape paths when bytes are not tracked as constants, so
+     * padding avoids speculative uninitialized stack reads. */
+    char src[64] = {0};
     char dst[32] = {0};
+    src[0] = 'h';
+    src[1] = 'e';
+    src[2] = 'l';
+    src[3] = 'l';
+    src[4] = 'o';
     int n = string_unescape(src, dst, sizeof(dst),
                             UNESCAPE_SPACE | UNESCAPE_OCTAL);
     /* n is the number of bytes written (always >= 0) */
@@ -1447,12 +1454,15 @@ HARNESS_BODIES = {
 """,
     "crypto_utils": """
     /* crypto_utils: __crypto_xor test */
-    u8 a[4] = {0xFF, 0x00, 0xAA, 0x55};
-    u8 b[4] = {0x0F, 0xF0, 0x55, 0xAA};
-    u8 dst[4];
-    __crypto_xor(dst, a, b, 4);
-    (void)dst[0];
-    return 0;
+    __u32 key0 = 0, key1 = 1;
+    __u64 *va = bpf_map_lookup_elem(&input_map, &key0);
+    __u64 *vb = bpf_map_lookup_elem(&input_map, &key1);
+    if (!va || !vb) return 0;
+    u64 a = *va;
+    u64 b = *vb;
+    u64 dst = 0;
+    __crypto_xor((u8 *)&dst, (const u8 *)&a, (const u8 *)&b, sizeof(dst));
+    return (int)dst;
 """,
     "chacha_block": """
     /* chacha_block: test chacha_permute via chacha_block_generic */
@@ -3099,6 +3109,12 @@ static inline int memcmp(const void *a, const void *b, __kernel_size_t n)
 #define memzero_explicit(p, n) memset((p), 0, (n))
 """,
     "crypto_utils": """\
+/* crypto_utils.c has a fallback alignment probe that XORs pointer values.
+ * That is valid C, but the BPF verifier rejects bitwise ops on pointers.
+ * The CI/kernel target is x86_64, where unaligned accesses are efficient,
+ * so force the code path that skips pointer-to-integer alignment arithmetic. */
+#undef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS
+#define CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS 1
 /* Provide __ffs as static inline to avoid extern BTF reference */
 static __always_inline unsigned long __ffs(unsigned long word)
 {
