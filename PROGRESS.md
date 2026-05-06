@@ -1,16 +1,16 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 114 compiled, 114 verified, 0 skipped.
+**Current status:** 115 compiled, 115 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after the `lib/crypto/` pass: 114 compiled, 114 verified, 0 skipped.
+- Full local pipeline after adding `kernel/bpf/range_tree.c`: 115 compiled, 115 verified, 0 skipped.
 - CI guardrails now fail on compile failures, verifier failures, skipped objects, and object-open failures.
 
 ## Target plan
 
-1. Add `kernel/bpf/range_tree.c`.
-2. Return to harder `lib/crypto/` files separately if needed.
+1. Return to harder `lib/crypto/` files separately if needed.
+2. Pick the next Linux source-tree target after the deferred crypto pass.
 
 ## Notes for `cmdline.c`
 
@@ -23,3 +23,9 @@
 - Deferred `md5.c` and `des.c` because clang times out compiling those full translation units in this harness.
 - Deferred `blake2b.c` because the generic compression frame exceeds the BPF stack limit.
 - Deferred `sha3.c` because it needs separate include-shim work around `__ffs`/`utils.c`.
+
+## Notes for `kernel/bpf/range_tree.c`
+
+- Added the real `kernel/bpf/range_tree.c` target with `lib/rbtree.c` included under internal linkage to avoid unsupported indirect callback opcodes.
+- The harness verifies empty-tree lookup, range size calculation, best-fit `range_tree_find()`, and first-range `range_tree_set()` insertion.
+- Full set/find/clear round-trips remain verifier-limited because rb-tree pointers stored in `.bss` allocator nodes are reloaded as scalars.

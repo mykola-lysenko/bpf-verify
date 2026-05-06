@@ -889,6 +889,57 @@ HARNESS_BODIES = {
     BPF_ASSERT(tnum_in_wrap(unk, ca));
 
     return (int)(sum.value & 0xff);""",
+    "range_tree": """\
+    /* range_tree: BPF arena range allocator.
+     *
+     * The full public set/find/clear round-trip stores range_node pointers in
+     * rbtrees backed by .bss allocator storage. The verifier loses pointer type
+     * when those child pointers are loaded back from map-value memory, so this
+     * harness keeps retrieval tests on stack-built nodes where pointer spills
+     * remain tracked.
+     *
+     * Covered here:
+     *   1. range_tree_init() creates an empty tree; range_tree_find() returns -ENOENT.
+     *   2. rn_size() computes inclusive range length.
+     *   3. range_tree_find() performs best-fit lookup over the range-size rbtree.
+     *   4. range_tree_set() inserts the first public range using kmalloc_nolock().
+     */
+    struct range_tree rt;
+    struct range_tree insert_rt;
+    struct range_node big;
+    struct range_node small;
+
+    range_tree_init(&rt);
+    BPF_ASSERT(range_tree_find(&rt, 1) == -ENOENT);
+
+    big.rb_range_size.__rb_parent_color = RB_BLACK;
+    big.rb_range_size.rb_left = 0;
+    big.rb_range_size.rb_right = &small.rb_range_size;
+    big.rn_start = 4;
+    big.rn_last = 11;
+    big.__rn_subtree_last = 11;
+
+    small.rb_range_size.__rb_parent_color =
+        (unsigned long)&big.rb_range_size + RB_RED;
+    small.rb_range_size.rb_left = 0;
+    small.rb_range_size.rb_right = 0;
+    small.rn_start = 20;
+    small.rn_last = 23;
+    small.__rn_subtree_last = 23;
+
+    rt.range_size_root.rb_root.rb_node = &big.rb_range_size;
+    rt.range_size_root.rb_leftmost = &big.rb_range_size;
+
+    BPF_ASSERT(rn_size(&big) == 8);
+    BPF_ASSERT(rn_size(&small) == 4);
+    BPF_ASSERT(range_tree_find(&rt, 4) == 20);
+    BPF_ASSERT(range_tree_find(&rt, 5) == 4);
+    BPF_ASSERT(range_tree_find(&rt, 9) == -ENOENT);
+
+    __bpf_range_tree_used = 0;
+    range_tree_init(&insert_rt);
+    BPF_ASSERT(range_tree_set(&insert_rt, 0, 4) == 0);
+    return 0;""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -2505,6 +2556,22 @@ static inline void *memset(void *dst, int c, __kernel_size_t n)
 #define sha256_blocks_generic __bpf_sha256_blocks_orig
 """,
     # tnum: uses a shim file (static __always_inline functions) -- no EXTRA_PRE_INCLUDE needed.
+    # range_tree: include rbtree.c with internal linkage so clang can drop the
+    # unused generic augmented-erase wrapper that emits an unsupported callx.
+    # Block linux/bpf.h; range_tree.c only needs errno, rbtree/slab, and its
+    # local header for this harness.
+    "range_tree": """\
+#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
+#include "{ksrc}/lib/rbtree.c"
+#pragma clang attribute pop
+#include <linux/errno.h>
+#define _LINUX_BPF_H 1
+#define NUMA_NO_NODE (-1)
+static void *__bpf_range_tree_alloc(size_t size, unsigned int flags, int node);
+static void __bpf_range_tree_free(const void *ptr);
+#define kmalloc_nolock(size, flags, node) __bpf_range_tree_alloc((size), (flags), (node))
+#define kfree_nolock(ptr) __bpf_range_tree_free((ptr))
+""",
     # lpm_trie: fully self-contained shim -- no EXTRA_PRE_INCLUDE needed.
     # cordic_calc_iq() returns struct cordic_iq by value -- BPF does not allow
     # aggregate (struct) returns (StructRet ABI).
@@ -3888,6 +3955,41 @@ struct {
     # tnum: shim uses static __always_inline -- all calls are inlined, no StructRet.
     # Pointer-based wrappers are provided here so the harness body can store
     # results in local variables without triggering StructRet at the call site.
+    "range_tree": """\
+static struct range_node __bpf_range_tree_node0;
+static u32 __bpf_range_tree_used;
+
+static void __bpf_range_tree_zero_node(struct range_node *rn)
+{
+    rn->rn_rbnode.__rb_parent_color = 0;
+    rn->rn_rbnode.rb_right = 0;
+    rn->rn_rbnode.rb_left = 0;
+    rn->rb_range_size.__rb_parent_color = 0;
+    rn->rb_range_size.rb_right = 0;
+    rn->rb_range_size.rb_left = 0;
+    rn->rn_start = 0;
+    rn->rn_last = 0;
+    rn->__rn_subtree_last = 0;
+}
+
+static void *__bpf_range_tree_alloc(size_t size, unsigned int flags, int node)
+{
+    (void)flags;
+    (void)node;
+    if (size != sizeof(struct range_node))
+        return 0;
+    if (__bpf_range_tree_used)
+        return 0;
+    __bpf_range_tree_used = 1;
+    __bpf_range_tree_zero_node(&__bpf_range_tree_node0);
+    return &__bpf_range_tree_node0;
+}
+
+static void __bpf_range_tree_free(const void *ptr)
+{
+    (void)ptr;
+}
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -4344,6 +4446,7 @@ def main():
         # all functions as non-static StructRet, which the BPF backend rejects.
         # The shim redefines all functions as static __always_inline.
         "tnum":                  SHIM / "kernel/bpf/tnum.c",
+        "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",
