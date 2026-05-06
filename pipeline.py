@@ -392,6 +392,46 @@ HARNESS_BODIES = {
     BPF_ASSERT(parse_option_str("foo,bar,baz", "bar"));
     return val + ints[0] + (int)(bytes >> 10);""",
 
+    "lib_sha1": """\
+    /* SHA-1 generic block/hash path. */
+    __u32 key = 0;
+    __u64 *v = bpf_map_lookup_elem(&input_map, &key);
+    if (!v) return 0;
+    u8 data[SHA1_BLOCK_SIZE] = {0};
+    u8 out[SHA1_DIGEST_SIZE];
+    *(__u64 *)&data[0] = *v;
+    sha1(data, sizeof(data), out);
+    return out[0];""",
+
+    "gf128hash": """\
+    /* GHASH over one dynamic block, using the generic GF(2^128) path. */
+    __u32 map_key = 0;
+    __u64 *v = bpf_map_lookup_elem(&input_map, &map_key);
+    if (!v) return 0;
+    struct ghash_key gkey;
+    struct ghash_ctx gctx = {0};
+    u8 raw[GHASH_BLOCK_SIZE] = {0};
+    u8 data[GHASH_BLOCK_SIZE] = {0};
+    u8 out[GHASH_BLOCK_SIZE];
+    *(__u64 *)&raw[0] = *v;
+    *(__u64 *)&data[0] = *v >> 1;
+    ghash_preparekey(&gkey, raw);
+    gctx.key = &gkey;
+    ghash_update(&gctx, data, sizeof(data));
+    ghash_final(&gctx, out);
+    return out[0];""",
+
+    "gf128mul": """\
+    /* gf128mul_x8_ble with dynamic input.  Avoid gf128mul_lle(): it uses
+     * PTR_ALIGN() on a stack pointer, which BPF verifier rejects. */
+    __u32 key = 0;
+    __u64 *v = bpf_map_lookup_elem(&input_map, &key);
+    if (!v) return 0;
+    le128 x = { .a = cpu_to_le64(*v), .b = cpu_to_le64(*v >> 1) };
+    le128 r;
+    gf128mul_x8_ble(&r, &x);
+    return (int)(le64_to_cpu(r.a) ^ le64_to_cpu(r.b));""",
+
     "cmpdi2": """\
     /* __cmpdi2: assert the result is always in {0, 1, 2}.
      *
@@ -1776,9 +1816,10 @@ EXTRA_CFLAGS = {
     # inftrees.h caused 'code' to be undefined when inflate.h was parsed.
     # The EXTRA_PRE_INCLUDE handles INFTREES_H blocking for inflate.c's include.
     "zlib_inflate": [f"-I{KSRC}/lib/zlib_inflate"],
-    # lib/crypto/sha256.c (v7.0-rc8) uses C99 for-loop variable declarations
+    # lib/crypto SHA implementations use C99 for-loop variable declarations
     # (e.g. 'for (size_t i = 0; ...)') which are not valid in -std=gnu89.
-    # Override to gnu11 for this target only.
+    # Override to gnu11 for these targets only.
+    "lib_sha1": ["-std=gnu11"],
     "lib_sha256": ["-std=gnu11"],
     # lib/crypto/sha256.c also includes lib/crypto/sha256.c via a relative path
     # so add the crypto directory to the include path.
@@ -3202,6 +3243,87 @@ static __always_inline unsigned long __ffs(unsigned long word)
 /* Force __crypto_xor to be inlined into the BPF program */
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
+    "lib_sha1": """\
+/* Use the generic SHA-1 implementation and avoid unresolved string/FIPS externs. */
+#undef CONFIG_CRYPTO_LIB_SHA1_ARCH
+#undef CONFIG_CRYPTO_FIPS
+#define _LINUX_STRING_H_
+#include <linux/types.h>
+#include <linux/stddef.h>
+static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    const unsigned char *s = src;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = s[i];
+    return dst;
+}
+static inline void *memset(void *dst, int c, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = (unsigned char)c;
+    return dst;
+}
+static inline int memcmp(const void *a, const void *b, __kernel_size_t n)
+{
+    const unsigned char *p = a, *q = b;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) {
+        if (p[i] != q[i]) return p[i] - q[i];
+    }
+    return 0;
+}
+#define memzero_explicit(p, n) memset((p), 0, (n))
+""",
+    "gf128hash": """\
+/* BPF has no 128-bit integer support, so use the generic 32-bit clmul path. */
+#undef CONFIG_ARCH_SUPPORTS_INT128
+#define _LINUX_STRING_H_
+#include <linux/types.h>
+#include <linux/stddef.h>
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    const unsigned char *s = src;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = s[i];
+    return dst;
+}
+static inline void *memset(void *dst, int c, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = (unsigned char)c;
+    return dst;
+}
+#define memzero_explicit(p, n) memset((p), 0, (n))
+""",
+    "gf128mul": """\
+/* gf128mul.c has allocation helpers for its 64k table path.  The harness only
+ * exercises gf128mul_x8_ble(), but libbpf still needs emitted externs resolved. */
+#define _LINUX_SLAB_H
+#define GFP_KERNEL 0
+static inline void *__bpf_gf128mul_kzalloc(__kernel_size_t size, unsigned int flags)
+    { (void)size; (void)flags; return (void *)0; }
+static inline void __bpf_gf128mul_kfree(const void *p)
+    { (void)p; }
+static inline void *__bpf_gf128mul_memset(void *dst, int c, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    __kernel_size_t i;
+    for (i = 0; i < n; i++) d[i] = (unsigned char)c;
+    return dst;
+}
+#define kzalloc(size, flags) __bpf_gf128mul_kzalloc((size), (flags))
+#define kfree(p) __bpf_gf128mul_kfree((p))
+#define kfree_sensitive(p) __bpf_gf128mul_kfree((p))
+#define kzalloc_obj(p, ...) ((typeof(&(p)))__bpf_gf128mul_kzalloc(sizeof(p), GFP_KERNEL))
+#define memset(dst, c, n) __bpf_gf128mul_memset((dst), (c), (n))
+""",
     "lib_chacha": """\
 /* Provide memcpy and memset as static inline to avoid extern BTF references.
  * memcpy is used by hchacha_block_generic() in chacha-block-generic.c.
@@ -4160,6 +4282,7 @@ def main():
         "int_log":               KSRC / "lib/math/int_log.c",
         # lib/crypto/ subdirectory (pure cipher/hash primitives)
         "lib_aes":               KSRC / "lib/crypto/aes.c",
+        "lib_sha1":              KSRC / "lib/crypto/sha1.c",
         "lib_sha256":            KSRC / "lib/crypto/sha256.c",
         "lib_chacha":            KSRC / "lib/crypto/chacha.c",
         "lib_blake2s":           KSRC / "lib/crypto/blake2s.c",
@@ -4167,6 +4290,8 @@ def main():
         "arc4":                  KSRC / "lib/crypto/arc4.c",
         "crypto_utils":          KSRC / "lib/crypto/utils.c",
         "chacha_block":          KSRC / "lib/crypto/chacha-block-generic.c",
+        "gf128hash":             KSRC / "lib/crypto/gf128hash.c",
+        "gf128mul":              KSRC / "lib/crypto/gf128mul.c",
         "nh":                    KSRC / "lib/crypto/nh.c",
         # lib/zstd/ subdirectory (reorganised in kernel v7.0)
         "zstd_entropy_common":   KSRC / "lib/zstd/common/entropy_common.c",
