@@ -367,12 +367,30 @@ HARNESS_BODIES = {
     return ctz + clz;""",
 
     "cmdline": """\
-    /* get_option parses an integer from a string */
-    char buf[] = "42 rest";
-    char *p = buf;
-    int val;
+    /* cmdline.c command-line parser helpers. */
+    char opt_buf[] = "42,7-9";
+    char *p = opt_buf;
+    int val = 0;
     int ret = get_option(&p, &val);
-    return ret ? val : -1;""",
+    BPF_ASSERT(ret == 2);
+    BPF_ASSERT(val == 42);
+
+    int ints[5] = {0};
+    char *tail = get_options("1,3-5", 5, ints);
+    BPF_ASSERT(*tail == '\\0');
+    BPF_ASSERT(ints[0] == 4);
+    BPF_ASSERT(ints[1] == 1);
+    BPF_ASSERT(ints[2] == 3);
+    BPF_ASSERT(ints[3] == 4);
+    BPF_ASSERT(ints[4] == 5);
+
+    char *endp = NULL;
+    unsigned long long bytes = memparse("2K", &endp);
+    BPF_ASSERT(bytes == 2048);
+    BPF_ASSERT(*endp == '\\0');
+
+    BPF_ASSERT(parse_option_str("foo,bar,baz", "bar"));
+    return val + ints[0] + (int)(bytes >> 10);""",
 
     "cmpdi2": """\
     /* __cmpdi2: assert the result is always in {0, 1, 2}.
@@ -1633,6 +1651,9 @@ EXTRA_INCLUDES = {
     # kstrtox uses _ctype (from ctype.c).
     "kstrtox":   [KSRC / "lib/ctype.c"],
 
+    # cmdline.c uses isspace via next_arg().
+    "cmdline":   [KSRC / "lib/ctype.c"],
+
     # string uses _ctype (from ctype.c).
     "string":    [KSRC / "lib/ctype.c"],
 
@@ -1930,6 +1951,18 @@ static inline u32 get_random_u32_below(u32 ceil) { return 0; }
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
+""",
+    # cmdline.c depends on lib/vsprintf.c and lib/string_helpers.c for small
+    # parsing/string helpers. Pulling those whole files is too large; provide
+    # bounded local replacements and force cmdline.c functions inline so char **
+    # cursor updates do not spill pointer values into caller stack frames.
+    "cmdline": """\
+#define simple_strtoull __bpf_cmdline_simple_strtoull
+#define simple_strtol __bpf_cmdline_simple_strtol
+#define strlen __bpf_cmdline_strlen
+#define strncmp __bpf_cmdline_strncmp
+#define skip_spaces __bpf_cmdline_skip_spaces
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
     # checksum.c defines ip_fast_csum() which asm/checksum_64.h also defines as
     # a static inline. Block the arch header to avoid the redefinition.
@@ -3558,6 +3591,106 @@ EXTRA_PREAMBLE = {
     "crypto_utils": """
 #pragma clang attribute pop
 """,
+    "cmdline": """\
+#pragma clang attribute pop
+static int __bpf_cmdline_digit(unsigned char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+__attribute__((always_inline)) unsigned long long __bpf_cmdline_simple_strtoull(const char *cp,
+                                                                                char **endp,
+                                                                                unsigned int base)
+{
+    const char *p = cp;
+    unsigned long long result = 0;
+
+    if (!base) {
+        base = 10;
+        if (p[0] == '0') {
+            base = 8;
+            p++;
+            if (p[0] == 'x' || p[0] == 'X') {
+                base = 16;
+                p++;
+            }
+        }
+    }
+
+    for (int i = 0; i < 32; i++) {
+        int digit = __bpf_cmdline_digit(*p);
+
+        if (digit < 0 || digit >= base)
+            break;
+        result = result * base + digit;
+        p++;
+    }
+
+    if (endp)
+        *endp = (char *)p;
+    return result;
+}
+
+__attribute__((always_inline)) long __bpf_cmdline_simple_strtol(const char *cp,
+                                                                char **endp,
+                                                                unsigned int base)
+{
+    if (*cp == '-')
+        return -(long)__bpf_cmdline_simple_strtoull(cp + 1, endp, base);
+    return (long)__bpf_cmdline_simple_strtoull(cp, endp, base);
+}
+
+__kernel_size_t __bpf_cmdline_strlen(const char *s)
+{
+    __kernel_size_t n = 0;
+
+    for (int i = 0; i < 64; i++) {
+        if (!s[i])
+            break;
+        n++;
+    }
+
+    return n;
+}
+
+int __bpf_cmdline_strncmp(const char *s1, const char *s2, __kernel_size_t n)
+{
+    for (int i = 0; i < 64; i++) {
+        unsigned char c1, c2;
+
+        if ((__kernel_size_t)i >= n)
+            break;
+        c1 = s1[i];
+        c2 = s2[i];
+        if (c1 != c2)
+            return c1 - c2;
+        if (!c1)
+            break;
+    }
+
+    return 0;
+}
+
+char *__bpf_cmdline_skip_spaces(const char *str)
+{
+    const char *p = str;
+
+    for (int i = 0; i < 64; i++) {
+        if (*p != ' ' && *p != '\\t' && *p != '\\n' &&
+            *p != '\\r' && *p != '\\f' && *p != '\\v')
+            break;
+        p++;
+    }
+
+    return (char *)p;
+}
+""",
     # lib_sha256: provide a sha256_blocks_generic wrapper that uses a static W[64]
     # array (placed in .data, not on the BPF stack) to avoid exceeding the 512-byte
     # BPF call-chain stack limit.  The original sha256_blocks_generic was renamed to
@@ -3956,6 +4089,7 @@ def main():
         # --- Baseline: already passing before Step 1 ---
         "bcd":                   KSRC / "lib/bcd.c",
         "clz_tab":               KSRC / "lib/clz_tab.c",
+        "cmdline":               KSRC / "lib/cmdline.c",
         "cmpdi2":                KSRC / "lib/cmpdi2.c",
         "muldi3":                KSRC / "lib/muldi3.c",
         "ashldi3":               KSRC / "lib/ashldi3.c",
