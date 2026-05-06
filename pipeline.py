@@ -1100,6 +1100,148 @@ HARNESS_BODIES = {
     attr.key_size = 1;
     BPF_ASSERT(queue_stack_map_alloc_check(&attr) == -EINVAL);
     return (int)out;""",
+    "bpf_insn_array": """\
+    /* bpf_insn_array: verifier/JIT instruction jump-table metadata.
+     *
+     * The target-specific pre-include models only the BPF map, program, BTF,
+     * and atomic fields touched by this file. The harness keeps max_entries
+     * fixed at three so offset adjustment and JIT pointer update loops stay
+     * verifier-trackable.
+     *
+     * Covered here:
+     *   1. Allocation sizing, attribute validation, lookup/update/delete, and
+     *      direct-value address helpers.
+     *   2. BTF checks and frozen-map init/release/used-state handling.
+     *   3. Offset adjustment, deleted-entry handling, ready checks, and JIT
+     *      instruction pointer finalization.
+     */
+    struct __bpf_insn_array_alloc storage;
+    struct bpf_insn_array *insn_array = &storage.insn_array;
+    struct bpf_map *map = &insn_array->map;
+    union bpf_attr attr = {};
+    struct bpf_insn_array_value update = {};
+    struct bpf_insn_array_value *lookup;
+    struct bpf_map *alloc_map;
+    struct btf_type i32_type = { .kind = 32 };
+    struct btf_type i64_type = { .kind = 64 };
+    struct btf_type bad_type = { .kind = 1 };
+    struct bpf_insn insns[8] = {};
+    struct bpf_prog_aux aux = {};
+    struct bpf_prog prog = {};
+    struct bpf_map *maps[1];
+    u32 offsets[8] = {};
+    u8 image[64] = {};
+    u32 key0 = 0, key1 = 1, key2 = 2, next = 0;
+    u64 imm = 0;
+
+    __bpf_insn_array_zero(&storage);
+    map->map_type = BPF_MAP_TYPE_INSN_ARRAY;
+    map->key_size = 4;
+    map->value_size = sizeof(struct bpf_insn_array_value);
+    map->max_entries = 3;
+    map->map_flags = 0;
+    map->numa_node = NUMA_NO_NODE;
+    map->frozen = true;
+    insn_array->ips = storage.ips;
+    insn_array->values[0].orig_off = 1;
+    insn_array->values[1].orig_off = 3;
+    insn_array->values[2].orig_off = 5;
+
+    BPF_ASSERT(insn_array_alloc_size(3) == sizeof(storage));
+    attr.key_size = 4;
+    attr.value_size = sizeof(struct bpf_insn_array_value);
+    attr.max_entries = 3;
+    BPF_ASSERT(insn_array_alloc_check(&attr) == 0);
+    attr.map_flags = BPF_F_RDONLY_PROG;
+    BPF_ASSERT(insn_array_alloc_check(&attr) == -EINVAL);
+    attr.map_flags = 0;
+    attr.key_size = 8;
+    BPF_ASSERT(insn_array_alloc_check(&attr) == -EINVAL);
+    attr.key_size = 4;
+
+    lookup = insn_array_lookup_elem(map, &key1);
+    BPF_ASSERT(lookup == &insn_array->values[1]);
+    BPF_ASSERT(insn_array_lookup_elem(map, &key2) ==
+               &insn_array->values[2]);
+    key2 = 3;
+    BPF_ASSERT(insn_array_lookup_elem(map, &key2) == 0);
+    key2 = 2;
+
+    update.orig_off = 2;
+    BPF_ASSERT(insn_array_update_elem(map, &key0, &update, 0) == 0);
+    BPF_ASSERT(insn_array->values[0].orig_off == 2);
+    BPF_ASSERT(insn_array_update_elem(map, &key0, &update,
+                                      BPF_NOEXIST) == -EEXIST);
+    update.jitted_off = 1;
+    BPF_ASSERT(insn_array_update_elem(map, &key0, &update, 0) == -EINVAL);
+    update.jitted_off = 0;
+    key2 = 3;
+    BPF_ASSERT(insn_array_update_elem(map, &key2, &update, 0) == -E2BIG);
+    key2 = 2;
+    insn_array->values[0].orig_off = 1;
+
+    BPF_ASSERT(insn_array_delete_elem(map, &key0) == -EINVAL);
+    BPF_ASSERT(bpf_array_get_next_key(map, 0, &next) == 0);
+    BPF_ASSERT(next == 0);
+    BPF_ASSERT(bpf_array_get_next_key(map, &key1, &next) == 0);
+    BPF_ASSERT(next == 2);
+    BPF_ASSERT(bpf_array_get_next_key(map, &key2, &next) == -ENOENT);
+
+    BPF_ASSERT(insn_array_check_btf(map, 0, &i32_type, &i64_type) == 0);
+    BPF_ASSERT(insn_array_check_btf(map, 0, &bad_type, &i64_type) == -EINVAL);
+    BPF_ASSERT(insn_array_check_btf(map, 0, &i32_type, &bad_type) == -EINVAL);
+    BPF_ASSERT(insn_array_mem_usage(map) == sizeof(storage));
+    BPF_ASSERT(insn_array_map_direct_value_addr(map, &imm, 0) == 0);
+    BPF_ASSERT(imm == (u64)(unsigned long)insn_array->ips);
+    BPF_ASSERT(insn_array_map_direct_value_addr(map, &imm,
+               sizeof(long) * 3) == -EACCES);
+    BPF_ASSERT(insn_array_map_direct_value_addr(map, &imm, 4) == -EACCES);
+
+    maps[0] = map;
+    aux.used_map_cnt = 1;
+    aux.used_maps = maps;
+    aux.subprog_start = 1;
+    prog.len = 8;
+    prog.insnsi = insns;
+    prog.aux = &aux;
+    BPF_ASSERT(bpf_insn_array_init(map, &prog) == 0);
+    BPF_ASSERT(insn_array->values[0].xlated_off == 1);
+    BPF_ASSERT(insn_array->values[1].xlated_off == 3);
+    BPF_ASSERT(insn_array->values[2].xlated_off == 5);
+    BPF_ASSERT(bpf_insn_array_init(map, &prog) == -EBUSY);
+    bpf_insn_array_release(map);
+    BPF_ASSERT(insn_array->used.counter == 0);
+
+    BPF_ASSERT(bpf_insn_array_ready(map) == -EFAULT);
+    bpf_insn_array_adjust(map, 2, 3);
+    BPF_ASSERT(insn_array->values[0].xlated_off == 1);
+    BPF_ASSERT(insn_array->values[1].xlated_off == 5);
+    BPF_ASSERT(insn_array->values[2].xlated_off == 7);
+    bpf_insn_array_adjust_after_remove(map, 5, 2);
+    BPF_ASSERT(insn_array->values[0].xlated_off == 1);
+    BPF_ASSERT(insn_array->values[1].xlated_off == INSN_DELETED);
+    BPF_ASSERT(insn_array->values[2].xlated_off == 5);
+
+    offsets[0] = 8;
+    offsets[4] = 24;
+    bpf_prog_update_insn_ptrs(&prog, offsets, image);
+    BPF_ASSERT(insn_array->values[0].jitted_off == 8);
+    BPF_ASSERT(insn_array->values[2].jitted_off == 24);
+    BPF_ASSERT(insn_array->ips[0] == (long)(image + 8));
+    BPF_ASSERT(insn_array->ips[2] == (long)(image + 24));
+    BPF_ASSERT(bpf_insn_array_ready(map) == 0);
+
+    __bpf_insn_array_allocated = 0;
+    alloc_map = insn_array_alloc(&attr);
+    BPF_ASSERT(alloc_map == &__bpf_insn_array_alloc.insn_array.map);
+    BPF_ASSERT(__bpf_insn_array_alloc.insn_array.map.map_flags ==
+               BPF_F_RDONLY_PROG);
+    BPF_ASSERT(__bpf_insn_array_alloc.insn_array.ips ==
+               __bpf_insn_array_alloc.ips);
+    insn_array_free(alloc_map);
+    BPF_ASSERT(__bpf_insn_array_allocated == 0);
+
+    return (int)(insn_array->values[2].jitted_off + next);""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -2885,6 +3027,155 @@ static __always_inline void *memset(void *dst, int c, size_t n)
 }
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
+    # bpf_insn_array: block linux/bpf.h and provide just the map/prog/BTF
+    # surface used by this compact instruction-array source.
+    "bpf_insn_array": """\
+#include <linux/errno.h>
+#define _LINUX_BPF_H 1
+#define _LINUX_BTF_IDS_H 1
+#ifndef NUMA_NO_NODE
+#define NUMA_NO_NODE (-1)
+#endif
+#define BPF_NOEXIST 1
+#define BPF_F_RDONLY_PROG (1U << 7)
+#define BPF_MAP_TYPE_INSN_ARRAY 1
+#define BPF_LD 0x00
+#define BPF_DW 0x18
+#define BPF_IMM 0x00
+#define BTF_ID_LIST_SINGLE(name, prefix, typename) static u32 name[1];
+#define ERR_PTR(error) ((void *)(long)(error))
+#define guard(name) (void)
+#ifndef DECLARE_FLEX_ARRAY
+#define DECLARE_FLEX_ARRAY(type, name) struct { } __empty_##name; type name[]
+#endif
+#ifndef container_of
+#define container_of(ptr, type, member) \
+    ((type *)((char *)(ptr) - __builtin_offsetof(type, member)))
+#endif
+struct mutex {
+    int dummy;
+};
+struct btf {
+    int dummy;
+};
+struct btf_type {
+    u32 kind;
+};
+struct bpf_insn {
+    u8 code;
+    u8 dst_reg:4;
+    u8 src_reg:4;
+    s16 off;
+    s32 imm;
+};
+struct bpf_insn_array_value {
+    u32 orig_off;
+    u32 xlated_off;
+    u32 jitted_off;
+    u32 __pad;
+};
+union bpf_attr {
+    struct {
+        u32 map_type;
+        u32 key_size;
+        u32 value_size;
+        u32 max_entries;
+        u32 map_flags;
+        u32 inner_map_fd;
+        u32 numa_node;
+    };
+};
+struct bpf_map {
+    const struct bpf_map_ops *ops;
+    u32 map_type;
+    u32 key_size;
+    u32 value_size;
+    u32 max_entries;
+    u32 map_flags;
+    int numa_node;
+    struct mutex freeze_mutex;
+    bool frozen;
+};
+struct bpf_prog_aux {
+    u32 used_map_cnt;
+    struct bpf_map **used_maps;
+    u32 subprog_start;
+};
+struct bpf_prog {
+    u32 len;
+    struct bpf_insn *insnsi;
+    struct bpf_prog_aux *aux;
+};
+struct bpf_map_ops {
+    int (*map_alloc_check)(union bpf_attr *attr);
+    struct bpf_map *(*map_alloc)(union bpf_attr *attr);
+    void (*map_free)(struct bpf_map *map);
+    int (*map_get_next_key)(struct bpf_map *map, void *key, void *next_key);
+    void *(*map_lookup_elem)(struct bpf_map *map, void *key);
+    long (*map_update_elem)(struct bpf_map *map, void *key, void *value,
+                            u64 flags);
+    long (*map_delete_elem)(struct bpf_map *map, void *key);
+    int (*map_check_btf)(struct bpf_map *map, const struct btf *btf,
+                         const struct btf_type *key_type,
+                         const struct btf_type *value_type);
+    u64 (*map_mem_usage)(const struct bpf_map *map);
+    int (*map_direct_value_addr)(const struct bpf_map *map, u64 *imm,
+                                 u32 off);
+    const u32 *map_btf_id;
+};
+static inline int atomic_xchg(atomic_t *v, int i)
+{
+    int old = v->counter;
+
+    v->counter = i;
+    return old;
+}
+static inline void atomic_set(atomic_t *v, int i)
+{
+    v->counter = i;
+}
+static inline bool btf_type_is_i32(const struct btf_type *type)
+{
+    return type && type->kind == 32;
+}
+static inline bool btf_type_is_i64(const struct btf_type *type)
+{
+    return type && type->kind == 64;
+}
+static inline void bpf_map_init_from_attr(struct bpf_map *map,
+                                          union bpf_attr *attr)
+{
+    map->key_size = attr->key_size;
+    map->value_size = attr->value_size;
+    map->max_entries = attr->max_entries;
+    map->map_flags = attr->map_flags;
+    map->numa_node = NUMA_NO_NODE;
+}
+static __always_inline void copy_map_value(struct bpf_map *map, void *dst,
+                                           const void *src)
+{
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+    u32 i;
+
+    (void)map;
+    for (i = 0; i < sizeof(struct bpf_insn_array_value); i++)
+        d[i] = s[i];
+}
+static int bpf_array_get_next_key(struct bpf_map *map, void *key,
+                                  void *next_key)
+{
+    u32 index = key ? *(u32 *)key + 1 : 0;
+
+    if (index >= map->max_entries)
+        return -ENOENT;
+    *(u32 *)next_key = index;
+    return 0;
+}
+static void *bpf_map_area_alloc(u64 size, int numa_node);
+static void bpf_map_area_free(void *base);
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     # lpm_trie: fully self-contained shim -- no EXTRA_PRE_INCLUDE needed.
     # cordic_calc_iq() returns struct cordic_iq by value -- BPF does not allow
     # aggregate (struct) returns (StructRet ABI).
@@ -4378,6 +4669,65 @@ static void bpf_map_area_free(void *base)
     __bpf_qs_allocated = 0;
 }
 """,
+    "bpf_insn_array": """\
+#pragma clang attribute pop
+struct __bpf_insn_array_alloc {
+    struct bpf_insn_array insn_array;
+    struct bpf_insn_array_value values[3];
+    long ips[3];
+};
+
+static struct __bpf_insn_array_alloc __bpf_insn_array_alloc;
+static u8 __bpf_insn_array_allocated;
+
+static void __bpf_insn_array_zero(struct __bpf_insn_array_alloc *storage)
+{
+    storage->insn_array.map.ops = 0;
+    storage->insn_array.map.map_type = 0;
+    storage->insn_array.map.key_size = 0;
+    storage->insn_array.map.value_size = 0;
+    storage->insn_array.map.max_entries = 0;
+    storage->insn_array.map.map_flags = 0;
+    storage->insn_array.map.numa_node = 0;
+    storage->insn_array.map.freeze_mutex.dummy = 0;
+    storage->insn_array.map.frozen = false;
+    storage->insn_array.used.counter = 0;
+    storage->insn_array.ips = storage->ips;
+    storage->values[0].orig_off = 0;
+    storage->values[0].xlated_off = 0;
+    storage->values[0].jitted_off = 0;
+    storage->values[0].__pad = 0;
+    storage->values[1].orig_off = 0;
+    storage->values[1].xlated_off = 0;
+    storage->values[1].jitted_off = 0;
+    storage->values[1].__pad = 0;
+    storage->values[2].orig_off = 0;
+    storage->values[2].xlated_off = 0;
+    storage->values[2].jitted_off = 0;
+    storage->values[2].__pad = 0;
+    storage->ips[0] = 0;
+    storage->ips[1] = 0;
+    storage->ips[2] = 0;
+}
+
+static void *bpf_map_area_alloc(u64 size, int numa_node)
+{
+    (void)numa_node;
+    if (size > sizeof(__bpf_insn_array_alloc))
+        return 0;
+    if (__bpf_insn_array_allocated)
+        return 0;
+    __bpf_insn_array_allocated = 1;
+    __bpf_insn_array_zero(&__bpf_insn_array_alloc);
+    return &__bpf_insn_array_alloc;
+}
+
+static void bpf_map_area_free(void *base)
+{
+    (void)base;
+    __bpf_insn_array_allocated = 0;
+}
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -4837,6 +5187,7 @@ def main():
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
+        "bpf_insn_array":        KSRC / "kernel/bpf/bpf_insn_array.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",

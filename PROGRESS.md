@@ -1,10 +1,10 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 117 compiled, 117 verified, 0 skipped.
+**Current status:** 118 compiled, 118 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding `kernel/bpf/queue_stack_maps.c`: 117 compiled, 117 verified, 0 skipped.
+- Full local pipeline after adding `kernel/bpf/bpf_insn_array.c`: 118 compiled, 118 verified, 0 skipped.
 - CI guardrails now fail on compile failures, verifier failures, skipped objects, and object-open failures.
 
 ## Target plan
@@ -39,4 +39,9 @@
 
 - Added the real `kernel/bpf/queue_stack_maps.c` target with focused BPF map metadata, BTF ID, rqspinlock, and map-area allocation stubs.
 - The harness verifies FIFO queue push/peek/pop, empty-pop zeroing, stack peek/pop, full-map replacement with `BPF_EXIST`, validation failures, and allocator success/free.
-- Keep BPF-core targets first; likely follow-ups are focused real-source harnesses for `bpf_insn_array.c` or smaller map infrastructure files before returning to deferred `lib/` work.
+
+## Notes for `kernel/bpf/bpf_insn_array.c`
+
+- Added the real `kernel/bpf/bpf_insn_array.c` target with focused BPF map, program, BTF, atomic, and allocation stubs.
+- The harness verifies allocation checks, lookup/update/delete, BTF checks, direct value address calculation, frozen-map init/release, offset adjustment/removal, ready checks, and JIT instruction pointer updates.
+- Keep BPF-core targets first; likely follow-ups are smaller map infrastructure files before returning to deferred `lib/` work.
