@@ -1565,6 +1565,188 @@ HARNESS_BODIES = {
     errors |= sk1.sk_user_data != NULL;
 
     return (int)(errors + __bpf_reuseport_frees + next + (seed & 1));""",
+    "prog_iter": """\
+    /* prog_iter: BPF program iterator sequence operations and registration. */
+    struct bpf_iter_seq_prog_info info = {};
+    struct seq_file seq = { .private = &info };
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    loff_t pos = 0;
+    void *v;
+    void *next;
+    u32 errors = 0;
+
+    info.prog_id = seed & 3;
+    pos = seed & 1;
+    next = NULL;
+    __bpf_iter_reset();
+    v = bpf_prog_seq_start(&seq, &pos);
+    if (v) {
+        errors |= bpf_prog_seq_show(&seq, v) != 7;
+        next = bpf_prog_seq_next(&seq, v, &pos);
+        bpf_prog_seq_stop(&seq, next);
+    } else {
+        bpf_prog_seq_stop(&seq, NULL);
+    }
+    errors |= bpf_prog_iter_init() != 0;
+
+    return (int)(errors + __bpf_iter_runs + __bpf_iter_prog_puts +
+                 __bpf_iter_regs + info.prog_id + pos + (v != NULL) +
+                 (next != NULL) + (seed & 1));""",
+    "link_iter": """\
+    /* link_iter: BPF link iterator sequence operations and registration. */
+    struct bpf_iter_seq_link_info info = {};
+    struct seq_file seq = { .private = &info };
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    loff_t pos = 0;
+    void *v;
+    void *next;
+    u32 errors = 0;
+
+    info.link_id = seed & 3;
+    pos = seed & 1;
+    next = NULL;
+    __bpf_iter_reset();
+    v = bpf_link_seq_start(&seq, &pos);
+    if (v) {
+        errors |= bpf_link_seq_show(&seq, v) != 7;
+        next = bpf_link_seq_next(&seq, v, &pos);
+        bpf_link_seq_stop(&seq, next);
+    } else {
+        bpf_link_seq_stop(&seq, NULL);
+    }
+    errors |= bpf_link_iter_init() != 0;
+
+    return (int)(errors + __bpf_iter_runs + __bpf_iter_link_puts +
+                 __bpf_iter_regs + info.link_id + pos + (v != NULL) +
+                 (next != NULL) + (seed & 1));""",
+    "map_iter": """\
+    /* map_iter: sequence operations, map attach validation, fdinfo/link-info,
+     * and the element-count kfunc. */
+    struct bpf_iter_seq_map_info seq_info = {};
+    struct seq_file seq = { .private = &seq_info };
+    struct seq_file fdseq = {};
+    struct bpf_prog_aux aux_cfg = {
+        .max_rdonly_access = 4,
+        .max_rdwr_access = 8,
+    };
+    struct bpf_prog prog = { .aux = &aux_cfg };
+    union bpf_iter_link_info linfo = {};
+    struct bpf_iter_aux_info aux = {};
+    struct bpf_link_info link_info = {};
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    loff_t pos = 0;
+    void *v;
+    void *next = NULL;
+    s64 sum;
+    int rc;
+    u32 errors = 0;
+
+    seq_info.map_id = seed & 3;
+    pos = seed & 1;
+    __bpf_iter_reset();
+    v = bpf_map_seq_start(&seq, &pos);
+    if (v) {
+        errors |= bpf_map_seq_show(&seq, v) != 7;
+        next = bpf_map_seq_next(&seq, v, &pos);
+        bpf_map_seq_stop(&seq, next);
+    } else {
+        bpf_map_seq_stop(&seq, NULL);
+    }
+
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EBADF;
+    linfo.map.map_fd = 1;
+    __bpf_iter_map0.map_type = (seed & 2) ? BPF_MAP_TYPE_PERCPU_ARRAY :
+                                           BPF_MAP_TYPE_HASH;
+    __bpf_iter_map0.key_size = 4 + (seed & 3);
+    __bpf_iter_map0.value_size = 8;
+    __bpf_iter_map0.id = 1234;
+    aux_cfg.max_rdonly_access = 1 + (seed & 3);
+    aux_cfg.max_rdwr_access = 1 + (seed & 7);
+    rc = bpf_iter_attach_map(&prog, &linfo, &aux);
+    errors |= rc != 0;
+    if (!rc) {
+        errors |= aux.map != &__bpf_iter_map0;
+        bpf_iter_map_show_fdinfo(&aux, &fdseq);
+        errors |= bpf_iter_map_fill_link_info(&aux, &link_info) != 0;
+        errors |= link_info.iter.map.map_id != 1234;
+        bpf_iter_detach_map(&aux);
+    }
+
+    aux_cfg.max_rdwr_access = 32;
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_HASH;
+    __bpf_iter_map0.key_size = 4;
+    __bpf_iter_map0.value_size = 8;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EACCES;
+    aux_cfg.max_rdwr_access = 8;
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_PERCPU_ARRAY;
+    __bpf_iter_map0.value_size = 4;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
+    bpf_iter_detach_map(&aux);
+    __bpf_iter_map0.map_type = 999;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EINVAL;
+
+    __bpf_iter_map0.elem_count = __bpf_iter_elem_counts;
+    __bpf_iter_elem_counts[0] = (s64)(1 + (seed & 7));
+    __bpf_iter_elem_counts[1] = (s64)(1 + ((seed >> 3) & 7));
+    sum = bpf_map_sum_elem_count(&__bpf_iter_map0);
+    errors |= sum <= 0;
+    __bpf_iter_map0.elem_count = NULL;
+    errors |= bpf_map_sum_elem_count(&__bpf_iter_map0) != 0;
+    errors |= bpf_map_sum_elem_count(NULL) != 0;
+
+    errors |= bpf_map_iter_init() != 0;
+    errors |= init_subsystem() != 0;
+
+    return (int)(errors + __bpf_iter_runs + __bpf_iter_map_puts +
+                 __bpf_iter_map_puts_uref + __bpf_iter_regs +
+                 __bpf_iter_kfunc_regs + seq_info.map_id + pos +
+                 (v != NULL) + (next != NULL) + fdseq.writes +
+                 (u64)sum + (seed & 1));""",
+    "dmabuf_iter": """\
+    /* dmabuf_iter: sequence resume/drop behavior, registration, and kfunc
+     * iterator state transitions. */
+    struct dmabuf_iter_priv priv = {};
+    struct seq_file seq = { .private = &priv };
+    struct seq_file fdseq = {};
+    struct bpf_iter_dmabuf iter = {};
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    loff_t pos = 0;
+    void *v;
+    void *next = NULL;
+    u32 errors = 0;
+
+    __bpf_iter_reset();
+    errors |= dmabuf_iter_seq_init(&priv, NULL) != 0;
+    pos = seed & 1;
+    if (pos && (seed & 2))
+        priv.dmabuf = &__bpf_iter_dmabuf1;
+    v = dmabuf_iter_seq_start(&seq, &pos);
+    if (v) {
+        errors |= dmabuf_iter_seq_show(&seq, v) != 7;
+        next = dmabuf_iter_seq_next(&seq, v, &pos);
+        dmabuf_iter_seq_stop(&seq, next ? next : v);
+    }
+    dmabuf_iter_seq_fini(&priv);
+
+    errors |= bpf_iter_dmabuf_new(&iter) != 0;
+    errors |= bpf_iter_dmabuf_next(&iter) != &__bpf_iter_dmabuf0;
+    errors |= bpf_iter_dmabuf_next(&iter) != &__bpf_iter_dmabuf1;
+    bpf_iter_dmabuf_destroy(&iter);
+
+    bpf_iter_dmabuf_show_fdinfo(NULL, &fdseq);
+    errors |= dmabuf_iter_init() != 0;
+
+    return (int)(errors + __bpf_iter_runs + __bpf_iter_dmabuf_puts +
+                 __bpf_iter_regs + fdseq.writes + pos + (v != NULL) +
+                 (next != NULL) + (seed & 1));""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -2586,6 +2768,281 @@ EXTRA_CFLAGS = {
                    "-DETH_ALEN=6"],
 }
 
+BPF_ITER_PRE_INCLUDE = """\
+#include <linux/errno.h>
+#define _LINUX_BPF_H 1
+#define _LINUX_FS_H
+#define __LINUX_FILTER_H__
+#define _LINUX_KERNEL_H
+#define _LINUX_BTF_IDS_H
+#define __DMA_BUF_H__
+#define _LINUX_SEQ_FILE_H
+#define __init
+#define __bpf_kfunc
+#define __bpf_kfunc_start_defs()
+#define __bpf_kfunc_end_defs()
+#define __bpf_md_ptr(type, name) type name
+#define __aligned(x) __attribute__((aligned(x)))
+#define DEFINE_BPF_ITER_FUNC(target, args...) int bpf_iter_ ## target(args) { return 0; }
+#define BTF_ID_LIST_SINGLE(name, prefix, typename) static u32 name[1];
+#define BTF_ID_LIST_GLOBAL_SINGLE(name, prefix, typename) static u32 name[1];
+#define BTF_KFUNCS_START(name) static u32 name[] = {
+#define BTF_ID_FLAGS(kind, name) 0,
+#define BTF_KFUNCS_END(name) };
+#define late_initcall(fn)
+#define THIS_MODULE ((void *)0)
+#define offsetof(type, member) __builtin_offsetof(type, member)
+#define READ_ONCE(x) (x)
+#define BUILD_BUG_ON(cond) do { } while (0)
+#define PTR_TO_BTF_ID_OR_NULL 1
+#define PTR_TRUSTED 2
+#define PTR_TO_BUF 4
+#define PTR_MAYBE_NULL 8
+#define MEM_RDONLY 16
+#define BPF_ITER_RESCHED 1
+#define BPF_PROG_TYPE_UNSPEC 0
+#define BPF_MAP_TYPE_HASH 1
+#define BPF_MAP_TYPE_ARRAY 2
+#define BPF_MAP_TYPE_PERCPU_HASH 3
+#define BPF_MAP_TYPE_PERCPU_ARRAY 4
+#define BPF_MAP_TYPE_LRU_HASH 5
+#define BPF_MAP_TYPE_LRU_PERCPU_HASH 6
+#define ERR_PTR(error) ((void *)(long)(error))
+#define PTR_ERR(ptr) ((long)(ptr))
+#define IS_ERR(ptr) ((unsigned long)(void *)(ptr) >= (unsigned long)-4095)
+#define round_up(x, y) ((((x) + (y) - 1) / (y)) * (y))
+#define num_possible_cpus() 2
+#define for_each_possible_cpu(cpu) for ((cpu) = 0; (cpu) < 2; (cpu)++)
+#define per_cpu_ptr(ptr, cpu) (&((ptr)[cpu]))
+
+struct seq_file {
+    void *private;
+    u32 writes;
+};
+struct seq_operations {
+    void *(*start)(struct seq_file *seq, loff_t *pos);
+    void *(*next)(struct seq_file *seq, void *v, loff_t *pos);
+    void (*stop)(struct seq_file *seq, void *v);
+    int (*show)(struct seq_file *seq, void *v);
+};
+struct bpf_iter_meta {
+    struct seq_file *seq;
+};
+struct bpf_map;
+struct bpf_iter__bpf_map_elem {
+    __bpf_md_ptr(struct bpf_iter_meta *, meta);
+    __bpf_md_ptr(struct bpf_map *, map);
+    __bpf_md_ptr(void *, key);
+    __bpf_md_ptr(void *, value);
+};
+struct bpf_ctx_arg_aux {
+    u32 offset;
+    u32 reg_type;
+    u32 btf_id;
+};
+struct bpf_prog;
+struct bpf_iter_aux_info;
+struct bpf_link_info;
+union bpf_iter_link_info;
+struct bpf_iter_seq_info {
+    const struct seq_operations *seq_ops;
+    int (*init_seq_private)(void *priv, struct bpf_iter_aux_info *aux);
+    void (*fini_seq_private)(void *priv);
+    u32 seq_priv_size;
+};
+struct bpf_iter_reg {
+    const char *target;
+    int (*attach_target)(struct bpf_prog *prog,
+                         union bpf_iter_link_info *linfo,
+                         struct bpf_iter_aux_info *aux);
+    void (*detach_target)(struct bpf_iter_aux_info *aux);
+    void (*show_fdinfo)(const struct bpf_iter_aux_info *aux,
+                        struct seq_file *seq);
+    int (*fill_link_info)(const struct bpf_iter_aux_info *aux,
+                          struct bpf_link_info *info);
+    const void *get_func_proto;
+    u32 ctx_arg_info_size;
+    u32 feature;
+    struct bpf_ctx_arg_aux ctx_arg_info[4];
+    const struct bpf_iter_seq_info *seq_info;
+};
+struct bpf_prog_aux {
+    u32 max_rdonly_access;
+    u32 max_rdwr_access;
+};
+struct bpf_prog {
+    struct bpf_prog_aux *aux;
+};
+struct bpf_map {
+    u32 id;
+    u32 map_type;
+    u32 key_size;
+    u32 value_size;
+    s64 *elem_count;
+};
+struct bpf_link {
+    u32 id;
+};
+struct dma_buf {
+    u32 id;
+};
+struct bpf_iter_aux_info {
+    struct bpf_map *map;
+};
+union bpf_iter_link_info {
+    struct {
+        u32 map_fd;
+    } map;
+};
+struct bpf_link_info {
+    struct {
+        struct {
+            u32 map_id;
+        } map;
+    } iter;
+};
+struct btf_kfunc_id_set {
+    void *owner;
+    const void *set;
+};
+
+static struct bpf_prog_aux __bpf_iter_driver_aux;
+static struct bpf_prog __bpf_iter_driver_prog = { .aux = &__bpf_iter_driver_aux };
+static struct bpf_prog __bpf_iter_prog0;
+static struct bpf_link __bpf_iter_link0;
+static s64 __bpf_iter_elem_counts[2];
+static struct bpf_map __bpf_iter_map0;
+static struct dma_buf __bpf_iter_dmabuf0;
+static struct dma_buf __bpf_iter_dmabuf1;
+static volatile u32 __bpf_iter_runs;
+static volatile u32 __bpf_iter_regs;
+static volatile u32 __bpf_iter_kfunc_regs;
+static volatile u32 __bpf_iter_prog_puts;
+static volatile u32 __bpf_iter_link_puts;
+static volatile u32 __bpf_iter_map_puts;
+static volatile u32 __bpf_iter_map_puts_uref;
+static volatile u32 __bpf_iter_dmabuf_puts;
+
+static inline void __bpf_iter_reset(void)
+{
+    __bpf_iter_runs = 0;
+    __bpf_iter_regs = 0;
+    __bpf_iter_kfunc_regs = 0;
+    __bpf_iter_prog_puts = 0;
+    __bpf_iter_link_puts = 0;
+    __bpf_iter_map_puts = 0;
+    __bpf_iter_map_puts_uref = 0;
+    __bpf_iter_dmabuf_puts = 0;
+    __bpf_iter_prog0.aux = &__bpf_iter_driver_aux;
+    __bpf_iter_link0.id = 1;
+    __bpf_iter_map0.id = 1234;
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_HASH;
+    __bpf_iter_map0.key_size = 4;
+    __bpf_iter_map0.value_size = 8;
+    __bpf_iter_map0.elem_count = 0;
+    __bpf_iter_elem_counts[0] = 0;
+    __bpf_iter_elem_counts[1] = 0;
+    __bpf_iter_dmabuf0.id = 1;
+    __bpf_iter_dmabuf1.id = 2;
+}
+
+static inline struct bpf_prog *bpf_iter_get_info(struct bpf_iter_meta *meta,
+                                                 bool in_stop)
+{
+    (void)meta;
+    (void)in_stop;
+    return &__bpf_iter_driver_prog;
+}
+static inline int bpf_iter_run_prog(struct bpf_prog *prog, void *ctx)
+{
+    (void)prog;
+    (void)ctx;
+    __bpf_iter_runs++;
+    return 7;
+}
+static inline int bpf_iter_reg_target(const struct bpf_iter_reg *reg_info)
+{
+    (void)reg_info;
+    __bpf_iter_regs++;
+    return 0;
+}
+static inline struct bpf_prog *bpf_prog_get_curr_or_next(u32 *id)
+{
+    if (*id <= 1)
+        return &__bpf_iter_prog0;
+    return 0;
+}
+static inline void bpf_prog_put(struct bpf_prog *prog)
+{
+    (void)prog;
+    __bpf_iter_prog_puts++;
+}
+static inline struct bpf_link *bpf_link_get_curr_or_next(u32 *id)
+{
+    if (*id <= 1)
+        return &__bpf_iter_link0;
+    return 0;
+}
+static inline void bpf_link_put(struct bpf_link *link)
+{
+    (void)link;
+    __bpf_iter_link_puts++;
+}
+static inline struct bpf_map *bpf_map_get_curr_or_next(u32 *id)
+{
+    if (*id <= 1)
+        return &__bpf_iter_map0;
+    return 0;
+}
+static inline void bpf_map_put(struct bpf_map *map)
+{
+    (void)map;
+    __bpf_iter_map_puts++;
+}
+static inline struct bpf_map *bpf_map_get_with_uref(u32 fd)
+{
+    if (fd == 1)
+        return &__bpf_iter_map0;
+    return ERR_PTR(-EBADF);
+}
+static inline void bpf_map_put_with_uref(struct bpf_map *map)
+{
+    (void)map;
+    __bpf_iter_map_puts_uref++;
+}
+static inline int __bpf_iter_seq_write(struct seq_file *seq)
+{
+    seq->writes++;
+    return 0;
+}
+#define seq_printf(seq, fmt, ...) __bpf_iter_seq_write(seq)
+#define seq_puts(seq, str) __bpf_iter_seq_write(seq)
+static inline int register_btf_kfunc_id_set(int prog_type,
+                                            const struct btf_kfunc_id_set *set)
+{
+    (void)prog_type;
+    (void)set;
+    __bpf_iter_kfunc_regs++;
+    return 0;
+}
+static inline struct dma_buf *dma_buf_iter_begin(void)
+{
+    return &__bpf_iter_dmabuf0;
+}
+static inline struct dma_buf *dma_buf_iter_next(struct dma_buf *dmabuf)
+{
+    if (dmabuf == &__bpf_iter_dmabuf0)
+        return &__bpf_iter_dmabuf1;
+    return 0;
+}
+static inline void dma_buf_put(struct dma_buf *dmabuf)
+{
+    (void)dmabuf;
+    __bpf_iter_dmabuf_puts++;
+}
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+"""
+
 # Extra C code injected into the harness BEFORE the source file include,
 # keyed by src_name. Used for per-file stubs and workarounds.
 #
@@ -2593,6 +3050,10 @@ EXTRA_CFLAGS = {
 # (immediately after the BPF map definition). Use it for macros and forward
 # declarations that must be visible when the source file is parsed.
 EXTRA_PRE_INCLUDE = {
+    "prog_iter": BPF_ITER_PRE_INCLUDE,
+    "link_iter": BPF_ITER_PRE_INCLUDE,
+    "map_iter": BPF_ITER_PRE_INCLUDE,
+    "dmabuf_iter": BPF_ITER_PRE_INCLUDE,
     # dim.c uses DIV_ROUND_UP(npkts * USEC_PER_MSEC, delta_us) where npkts is
     # u32 and USEC_PER_MSEC is 1000L (signed). The result is signed, causing
     # the BPF backend to generate sdiv which it cannot select.
@@ -5614,6 +6075,18 @@ static inline void bpf_map_put(struct bpf_map *map)
     "reuseport_array": """\
 #pragma clang attribute pop
 """,
+    "prog_iter": """\
+#pragma clang attribute pop
+""",
+    "link_iter": """\
+#pragma clang attribute pop
+""",
+    "map_iter": """\
+#pragma clang attribute pop
+""",
+    "dmabuf_iter": """\
+#pragma clang attribute pop
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -6077,6 +6550,10 @@ def main():
         "map_in_map":            KSRC / "kernel/bpf/map_in_map.c",
         "dispatcher":            KSRC / "kernel/bpf/dispatcher.c",
         "reuseport_array":       KSRC / "kernel/bpf/reuseport_array.c",
+        "prog_iter":             KSRC / "kernel/bpf/prog_iter.c",
+        "link_iter":             KSRC / "kernel/bpf/link_iter.c",
+        "map_iter":              KSRC / "kernel/bpf/map_iter.c",
+        "dmabuf_iter":           KSRC / "kernel/bpf/dmabuf_iter.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",

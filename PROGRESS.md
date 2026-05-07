@@ -1,10 +1,11 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 121 compiled, 121 verified, 0 skipped.
+**Current status:** 125 compiled, 125 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding `kernel/bpf/reuseport_array.c`: 121 compiled, 121 verified, 0 skipped.
+- Full local pipeline after adding `kernel/bpf/prog_iter.c`, `kernel/bpf/link_iter.c`, `kernel/bpf/map_iter.c`, and `kernel/bpf/dmabuf_iter.c`: 125 compiled, 125 verified, 0 skipped.
+- Previous full local pipeline after adding `kernel/bpf/reuseport_array.c`: 121 compiled, 121 verified, 0 skipped.
 - CI guardrails now fail on compile failures, verifier failures, skipped objects, and object-open failures.
 
 ## Target plan
@@ -63,3 +64,10 @@
 - The harness verifies allocation checks/allocation, memory accounting, lookup, fd cookie lookup, update validation, update early error paths, delete, next-key, detach cleanup, and free cleanup.
 - Dynamic keys are used only on non-dereferencing paths; BPF loses pointer type information when a socket pointer is loaded from a variable-index stack slot and then dereferenced.
 - Keep BPF-core targets first; likely follow-ups are smaller map infrastructure files before returning to deferred `lib/` work.
+
+## Notes for `kernel/bpf/*_iter.c`
+
+- Added real-source targets for `prog_iter.c`, `link_iter.c`, `map_iter.c`, and `dmabuf_iter.c` with shared iterator, seq_file, BPF registration, map attach, kfunc, and dma-buf traversal stubs.
+- The harnesses use map-provided runtime seeds plus volatile stub counters so iterator start/next/show/stop and attach paths are not constant-folded away.
+- Covered BPF program/link/map sequence iteration, stop-path behavior, iterator registration, map iterator attach validation/fdinfo/link-info, `bpf_map_sum_elem_count()`, dma-buf seq resume/fini behavior, and dma-buf kfunc iterator transitions.
+- Deferred heavier iterator files remain `bpf_iter.c`, `cgroup_iter.c`, `kmem_cache_iter.c`, and `task_iter.c`; `btf_iter.c` is just a tools include wrapper and is lower value for this harness.
