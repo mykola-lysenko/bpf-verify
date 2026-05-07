@@ -272,6 +272,11 @@ static inline void fortify_panic(const char *name) {{ }}
  * rejecting programs where the false branch is provably unreachable but the
  * verifier still explores it (e.g., pointer equality comparisons). */
 #define BPF_ASSERT(cond) do {{ if (!(cond)) {{ return -1; }} }} while(0)
+/* BPF_PROVE: verifier-enforced property assertion.
+ * Use this only for conditions that should be statically provable. If the
+ * condition can be false, or if the verifier cannot prove it true, the null
+ * store makes loading fail. */
+#define BPF_PROVE(cond) do {{ if (!(cond)) {{ volatile int *__bpf_bad = (volatile int *)0; *__bpf_bad = 0; }} }} while(0)
 
 /* BPF map for dynamic (non-constant) inputs.
  * IMPORTANT: This MUST be defined BEFORE the kernel source include.
@@ -2289,6 +2294,90 @@ HARNESS_BODIES = {
                  __bpf_tcx_syncs + __bpf_tcx_skey_inc +
                  __bpf_tcx_skey_dec + __bpf_tcx_link_settles +
                  __bpf_mprog_prog_puts + (seed & 1));""",
+    "timeconv": """\
+    /* kernel/time/timeconv.c: prove representative UTC calendar conversions. */
+    struct tm tm = {};
+
+    time64_to_tm(0, 0, &tm);
+    BPF_PROVE(tm.tm_year == 70);
+    BPF_PROVE(tm.tm_mon == 0);
+    BPF_PROVE(tm.tm_mday == 1);
+    BPF_PROVE(tm.tm_hour == 0);
+    BPF_PROVE(tm.tm_min == 0);
+    BPF_PROVE(tm.tm_sec == 0);
+    BPF_PROVE(tm.tm_wday == 4);
+    BPF_PROVE(tm.tm_yday == 0);
+
+    time64_to_tm(951782400LL, 0, &tm);
+    BPF_PROVE(tm.tm_year == 100);
+    BPF_PROVE(tm.tm_mon == 1);
+    BPF_PROVE(tm.tm_mday == 29);
+    BPF_PROVE(tm.tm_wday == 2);
+    BPF_PROVE(tm.tm_yday == 59);
+
+    time64_to_tm(2147483647LL, 0, &tm);
+    BPF_PROVE(tm.tm_year == 138);
+    BPF_PROVE(tm.tm_mon == 0);
+    BPF_PROVE(tm.tm_mday == 19);
+    BPF_PROVE(tm.tm_hour == 3);
+    BPF_PROVE(tm.tm_min == 14);
+    BPF_PROVE(tm.tm_sec == 7);
+
+    time64_to_tm(-1LL, 0, &tm);
+    BPF_PROVE(tm.tm_year == 69);
+    BPF_PROVE(tm.tm_mon == 11);
+    BPF_PROVE(tm.tm_mday == 31);
+    BPF_PROVE(tm.tm_hour == 23);
+    BPF_PROVE(tm.tm_min == 59);
+    BPF_PROVE(tm.tm_sec == 59);
+    return (int)tm.tm_yday;""",
+    "timecounter": """\
+    /* kernel/time/timecounter.c: prove cycle delta, wrap, and adjtime paths. */
+    struct __bpf_timecounter_hw hw = {};
+    struct timecounter tc = {};
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 now, future, past;
+
+    hw.cc.read = __bpf_timecounter_read;
+    hw.cc.mask = CYCLECOUNTER_MASK(8);
+    hw.cc.mult = 2;
+    hw.cc.shift = 1;
+    hw.now = 250;
+
+    timecounter_init(&tc, &hw.cc, 1000);
+    BPF_PROVE(tc.cc == &hw.cc);
+    BPF_PROVE(tc.cycle_last == 250);
+    BPF_PROVE(tc.nsec == 1000);
+    BPF_PROVE(tc.mask == 1);
+    BPF_PROVE(tc.frac == 0);
+
+    hw.now = 5;
+    now = timecounter_read(&tc);
+    BPF_PROVE(now == 1011);
+    BPF_PROVE(tc.cycle_last == 5);
+
+    hw.now = 10;
+    now = timecounter_read(&tc);
+    BPF_PROVE(now == 1016);
+    BPF_PROVE(tc.cycle_last == 10);
+
+    future = timecounter_cyc2time(&tc, 14);
+    BPF_PROVE(future == 1020);
+    past = timecounter_cyc2time(&tc, 7);
+    BPF_PROVE(past == 1013);
+
+    timecounter_adjtime(&tc, -10);
+    BPF_PROVE(tc.nsec == 1006);
+
+    if (input) {
+        hw.now = 100;
+        timecounter_init(&tc, &hw.cc, *input & 0xff);
+        hw.now = (100 + (*input & 31)) & hw.cc.mask;
+        now = timecounter_read(&tc);
+        return (int)(now + future + past);
+    }
+    return (int)(now + future + past);""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -6150,6 +6239,79 @@ void __bpf_tcx_mprog_clear_all(struct bpf_mprog_entry *entry,
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """
 
+TIMECONV_PRE_INCLUDE = """\
+#define time64_to_tm static __inline __attribute__((always_inline)) time64_to_tm
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+"""
+
+TIMECOUNTER_PRE_INCLUDE = """\
+#define _LINUX_TIMECOUNTER_H
+#define CYCLECOUNTER_MASK(bits) (u64)((bits) < 64 ? ((1ULL << (bits)) - 1) : -1)
+
+struct cyclecounter {
+    u64 (*read)(struct cyclecounter *cc);
+    u64 mask;
+    u32 mult;
+    u32 shift;
+};
+struct timecounter {
+    struct cyclecounter *cc;
+    u64 cycle_last;
+    u64 nsec;
+    u64 mask;
+    u64 frac;
+};
+struct __bpf_timecounter_hw {
+    struct cyclecounter cc;
+    u64 now;
+};
+static __inline __attribute__((always_inline))
+u64 cyclecounter_cyc2ns(const struct cyclecounter *cc, u64 cycles,
+                        u64 mask, u64 *frac)
+{
+    u64 ns = cycles;
+
+    ns = (ns * cc->mult) + *frac;
+    *frac = ns & mask;
+    return ns >> cc->shift;
+}
+static __inline __attribute__((always_inline))
+void timecounter_adjtime(struct timecounter *tc, s64 delta)
+{
+    tc->nsec += delta;
+}
+static __inline __attribute__((always_inline))
+u64 cc_cyc2ns_backwards(const struct cyclecounter *cc, u64 cycles, u64 frac)
+{
+    return ((cycles * cc->mult) - frac) >> cc->shift;
+}
+static __inline __attribute__((always_inline))
+u64 timecounter_cyc2time(const struct timecounter *tc, u64 cycle_tstamp)
+{
+    const struct cyclecounter *cc = tc->cc;
+    u64 delta = (cycle_tstamp - tc->cycle_last) & cc->mask;
+    u64 nsec = tc->nsec, frac = tc->frac;
+
+    if (delta > cc->mask / 2) {
+        delta = (tc->cycle_last - cycle_tstamp) & cc->mask;
+        nsec -= cc_cyc2ns_backwards(cc, delta, frac);
+    } else {
+        nsec += cyclecounter_cyc2ns(cc, delta, tc->mask, &frac);
+    }
+
+    return nsec;
+}
+static __inline __attribute__((always_inline))
+u64 __bpf_timecounter_read(struct cyclecounter *cc)
+{
+    return ((struct __bpf_timecounter_hw *)cc)->now;
+}
+
+#define timecounter_init static __inline __attribute__((always_inline)) timecounter_init
+#define timecounter_read static __inline __attribute__((always_inline)) timecounter_read
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+"""
+
 # Extra C code injected into the harness BEFORE the source file include,
 # keyed by src_name. Used for per-file stubs and workarounds.
 #
@@ -6173,6 +6335,8 @@ EXTRA_PRE_INCLUDE = {
     "bpf_inode_storage": BPF_INODE_STORAGE_PRE_INCLUDE,
     "mprog": BPF_MPROG_PRE_INCLUDE,
     "tcx": BPF_TCX_PRE_INCLUDE,
+    "timeconv": TIMECONV_PRE_INCLUDE,
+    "timecounter": TIMECOUNTER_PRE_INCLUDE,
     # dim.c uses DIV_ROUND_UP(npkts * USEC_PER_MSEC, delta_us) where npkts is
     # u32 and USEC_PER_MSEC is 1000L (signed). The result is signed, causing
     # the BPF backend to generate sdiv which it cannot select.
@@ -9233,6 +9397,15 @@ static inline void bpf_map_put(struct bpf_map *map)
 #undef bpf_mprog_foreach_tuple
 #pragma clang attribute pop
 """,
+    "timeconv": """\
+#undef time64_to_tm
+#pragma clang attribute pop
+""",
+    "timecounter": """\
+#undef timecounter_init
+#undef timecounter_read
+#pragma clang attribute pop
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -9716,6 +9889,9 @@ def main():
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",
         "disasm":                SHIM / "kernel/bpf/disasm.c",
+        # Phase 7: kernel/time/ targets
+        "timeconv":              KSRC / "kernel/time/timeconv.c",
+        "timecounter":           KSRC / "kernel/time/timecounter.c",
         # Phase 3 targets
         "string_helpers":       SHIM / "lib/string_helpers.c",
         "refcount":             SHIM / "lib/refcount.c",

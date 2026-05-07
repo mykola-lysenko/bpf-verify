@@ -1,10 +1,11 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 137 compiled, 137 verified, 0 skipped.
+**Current status:** 139 compiled, 139 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding `kernel/bpf/mprog.c` and `kernel/bpf/tcx.c`: 137 compiled, 137 verified, 0 skipped.
+- Full local pipeline after adding `kernel/time/timeconv.c` and `kernel/time/timecounter.c`: 139 compiled, 139 verified, 0 skipped.
+- Previous full local pipeline after adding `kernel/bpf/mprog.c` and `kernel/bpf/tcx.c`: 137 compiled, 137 verified, 0 skipped.
 - Previous full local pipeline after adding the small `kernel/bpf/` support batch (`bpf_lsm_proto.c`, `sysfs_btf.c`, `bpf_cgrp_storage.c`, `bpf_task_storage.c`, and `bpf_inode_storage.c`): 135 compiled, 135 verified, 0 skipped.
 - Previous full local pipeline after adding the remaining iterator targets (`cgroup_iter.c`, `kmem_cache_iter.c`, `task_iter.c`, `bpf_iter.c`, and `btf_iter.c`): 130 compiled, 130 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/bpf/prog_iter.c`, `kernel/bpf/link_iter.c`, `kernel/bpf/map_iter.c`, and `kernel/bpf/dmabuf_iter.c`: 125 compiled, 125 verified, 0 skipped.
@@ -13,8 +14,8 @@
 
 ## Target plan
 
-1. Continue with `kernel/bpf/` files first.
-2. Save deferred `lib/` and `lib/crypto/` files as the second step.
+1. Park additional `kernel/bpf/` files for now; return later.
+2. Continue with non-BPF folders, starting with tractable `kernel/time/` files before returning to deferred `lib/`, `lib/crypto/`, or top-level `crypto/` work.
 
 ## Notes for `cmdline.c`
 
@@ -91,3 +92,10 @@
 - `mprog.c` covers attach, replace, relative insert, detach, query, revision mismatch, duplicate attach, and prog/link release accounting.
 - `tcx.c` covers netdevice attach/query/detach, missing-device attach rejection, link attach/detach, and uninstall cleanup.
 - `tcx.c` intentionally uses focused inlined mprog stubs because the real mprog implementation is verified separately; reloading stored kernel pointers from `.bss` causes the BPF verifier to treat them as scalars before TCX dereferences them.
+
+## Notes for `kernel/time/`
+
+- Added real-source targets for `timeconv.c` and `timecounter.c`.
+- `timeconv.c` uses verifier-enforced compile-time proofs for representative UTC conversions: Unix epoch, 2000-02-29, 2038 boundary, and pre-epoch `-1`.
+- `timecounter.c` covers init, wraparound cycle delta conversion, forward/backward `timecounter_cyc2time()`, `timecounter_adjtime()`, and a small dynamic map-seeded read path.
+- `timekeeping_debug.c` was tested and left out of this batch because even with debugfs/per-CPU shims it pulls scheduler/PID internals through the include chain; that is not a good small `kernel/time/` target.
