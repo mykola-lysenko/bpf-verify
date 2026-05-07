@@ -1,10 +1,10 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 118 compiled, 118 verified, 0 skipped.
+**Current status:** 120 compiled, 120 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding `kernel/bpf/bpf_insn_array.c`: 118 compiled, 118 verified, 0 skipped.
+- Full local pipeline after adding `kernel/bpf/map_in_map.c` and `kernel/bpf/dispatcher.c`: 120 compiled, 120 verified, 0 skipped.
 - CI guardrails now fail on compile failures, verifier failures, skipped objects, and object-open failures.
 
 ## Target plan
@@ -44,4 +44,16 @@
 
 - Added the real `kernel/bpf/bpf_insn_array.c` target with focused BPF map, program, BTF, atomic, and allocation stubs.
 - The harness verifies allocation checks, lookup/update/delete, BTF checks, direct value address calculation, frozen-map init/release, offset adjustment/removal, ready checks, and JIT instruction pointer updates.
+
+## Notes for `kernel/bpf/map_in_map.c`
+
+- Added the real `kernel/bpf/map_in_map.c` target with focused BPF map, BTF record, array-map, and allocation stubs.
+- The harness verifies metadata allocation/copying, array-specific metadata preservation, metadata equality, nested-map rejection, unsupported-map rejection, bad-fd handling, deferred-free flags, put accounting, and sys-lookup id return.
+- `bpf_map_fd_get_ptr()` remains intentionally out of scope because the real path invokes `ops->map_meta_equal` through an indirect function pointer, which is not valid BPF verifier input.
+
+## Notes for `kernel/bpf/dispatcher.c`
+
+- Added the real `kernel/bpf/dispatcher.c` target with bounded dispatcher slots and modeled refcount, mutex, JIT image allocation, and text-copy surfaces.
+- The harness verifies add/remove refcount transitions, duplicate registration handling, full-dispatcher rejection, arch fallback from `bpf_dispatcher_prepare()`, and allocation/list transitions through `bpf_dispatcher_change_prog()`.
+- The dispatcher helpers are forced inline for this harness because BPF subprograms cannot store pointers into the caller's stack frame.
 - Keep BPF-core targets first; likely follow-ups are smaller map infrastructure files before returning to deferred `lib/` work.

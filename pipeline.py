@@ -1242,6 +1242,160 @@ HARNESS_BODIES = {
     BPF_ASSERT(__bpf_insn_array_allocated == 0);
 
     return (int)(insn_array->values[2].jitted_off + next);""",
+    "map_in_map": """\
+    /* map_in_map: metadata handling for BPF map-in-map targets.
+     *
+     * Covered here:
+     *   1. bpf_map_meta_alloc() copies base and array-specific metadata.
+     *   2. bpf_map_meta_equal() compares structural metadata and BTF records.
+     *   3. bpf_map_fd_put_ptr() deferred-free flags and bpf_map_fd_sys_lookup_elem().
+     *
+     * bpf_map_fd_get_ptr() is intentionally not called: the real source calls
+     * map_meta_equal through map ops, which becomes a BPF indirect call.
+     */
+    struct bpf_array *inner_array = &__bpf_map_in_map_inner_array;
+    struct bpf_map *inner = &inner_array->map;
+    struct bpf_map *meta;
+    struct bpf_array *meta_array;
+    struct bpf_map outer = {};
+
+    __bpf_map_in_map_zero_array(inner_array);
+    inner->ops = &array_map_ops;
+    inner->map_type = 42;
+    inner->key_size = 4;
+    inner->value_size = 8;
+    inner->map_flags = 3;
+    inner->max_entries = 16;
+    inner->id = 1234;
+    inner->record = &__bpf_map_in_map_record;
+    inner->btf = &__bpf_map_in_map_btf;
+    inner->bypass_spec_v1 = true;
+    inner_array->elem_size = 16;
+    inner_array->index_mask = 31;
+    __bpf_map_in_map_allocated = 0;
+
+    meta = bpf_map_meta_alloc(11);
+    BPF_ASSERT(meta == &__bpf_map_in_map_meta_array.map);
+    BPF_ASSERT(meta->map_type == inner->map_type);
+    BPF_ASSERT(meta->key_size == inner->key_size);
+    BPF_ASSERT(meta->value_size == inner->value_size);
+    BPF_ASSERT(meta->map_flags == inner->map_flags);
+    BPF_ASSERT(meta->max_entries == inner->max_entries);
+    BPF_ASSERT(meta->record == inner->record);
+    BPF_ASSERT(meta->btf == inner->btf);
+    BPF_ASSERT(meta->ops == &array_map_ops);
+    BPF_ASSERT(meta->bypass_spec_v1 == true);
+    meta_array = container_of(meta, struct bpf_array, map);
+    BPF_ASSERT(meta_array->index_mask == inner_array->index_mask);
+    BPF_ASSERT(meta_array->elem_size == inner_array->elem_size);
+    BPF_ASSERT(bpf_map_meta_equal(meta, inner));
+    inner->value_size = 16;
+    BPF_ASSERT(!bpf_map_meta_equal(meta, inner));
+    inner->value_size = 8;
+    bpf_map_meta_free(meta);
+    BPF_ASSERT(__bpf_map_in_map_allocated == 0);
+
+    inner->inner_map_meta = inner;
+    meta = bpf_map_meta_alloc(11);
+    BPF_ASSERT(IS_ERR(meta));
+    BPF_ASSERT(PTR_ERR(meta) == -EINVAL);
+    inner->inner_map_meta = 0;
+    inner->ops = &__bpf_map_in_map_no_meta_ops;
+    meta = bpf_map_meta_alloc(11);
+    BPF_ASSERT(IS_ERR(meta));
+    BPF_ASSERT(PTR_ERR(meta) == -ENOTSUPP);
+    inner->ops = &array_map_ops;
+    meta = bpf_map_meta_alloc(-1);
+    BPF_ASSERT(IS_ERR(meta));
+    BPF_ASSERT(PTR_ERR(meta) == -EBADF);
+
+    outer.sleepable_refcnt.counter = 1;
+    bpf_map_fd_put_ptr(&outer, inner, true);
+    BPF_ASSERT(inner->free_after_mult_rcu_gp);
+    BPF_ASSERT(!inner->free_after_rcu_gp);
+    BPF_ASSERT(__bpf_map_in_map_puts == 1);
+    inner->free_after_mult_rcu_gp = false;
+    outer.sleepable_refcnt.counter = 0;
+    bpf_map_fd_put_ptr(&outer, inner, true);
+    BPF_ASSERT(inner->free_after_rcu_gp);
+    BPF_ASSERT(__bpf_map_in_map_puts == 2);
+    BPF_ASSERT(bpf_map_fd_sys_lookup_elem(inner) == 1234);
+
+    return __bpf_map_in_map_puts;""",
+    "dispatcher": """\
+    /* dispatcher: program slot accounting and update allocation path.
+     *
+     * Covered here:
+     *   1. bpf_dispatcher_add_prog()/remove_prog() refcount transitions.
+     *   2. full-table rejection via bpf_dispatcher_find_free().
+     *   3. bpf_dispatcher_prepare() arch fallback and change_prog() allocation.
+     */
+    struct bpf_dispatcher d = {};
+    struct bpf_prog p0 = { .bpf_func = 0x1000 };
+    struct bpf_prog p1 = { .bpf_func = 0x2000 };
+    struct bpf_prog p2 = { .bpf_func = 0x3000 };
+    struct bpf_prog p3 = { .bpf_func = 0x4000 };
+    struct bpf_prog p4 = { .bpf_func = 0x5000 };
+
+    __bpf_dispatcher_prog_incs = 0;
+    __bpf_dispatcher_prog_puts = 0;
+    __bpf_dispatcher_pack_allocated = 0;
+    __bpf_dispatcher_exec_allocated = 0;
+
+    BPF_ASSERT(!bpf_dispatcher_add_prog(&d, NULL));
+    BPF_ASSERT(bpf_dispatcher_find_free(&d) == &d.progs[0]);
+    BPF_ASSERT(bpf_dispatcher_add_prog(&d, &p0));
+    BPF_ASSERT(d.num_progs == 1);
+    BPF_ASSERT(d.progs[0].prog == &p0);
+    BPF_ASSERT(d.progs[0].users.refs == 1);
+    BPF_ASSERT(p0.refs == 1);
+    BPF_ASSERT(__bpf_dispatcher_prog_incs == 1);
+
+    BPF_ASSERT(!bpf_dispatcher_add_prog(&d, &p0));
+    BPF_ASSERT(d.num_progs == 1);
+    BPF_ASSERT(d.progs[0].users.refs == 2);
+    BPF_ASSERT(p0.refs == 1);
+    BPF_ASSERT(!bpf_dispatcher_remove_prog(&d, &p0));
+    BPF_ASSERT(d.progs[0].users.refs == 1);
+    BPF_ASSERT(d.num_progs == 1);
+    BPF_ASSERT(bpf_dispatcher_remove_prog(&d, &p0));
+    BPF_ASSERT(d.num_progs == 0);
+    BPF_ASSERT(p0.refs == 0);
+    BPF_ASSERT(__bpf_dispatcher_prog_puts == 1);
+
+    BPF_ASSERT(bpf_dispatcher_add_prog(&d, &p0));
+    BPF_ASSERT(bpf_dispatcher_add_prog(&d, &p1));
+    BPF_ASSERT(bpf_dispatcher_add_prog(&d, &p2));
+    BPF_ASSERT(bpf_dispatcher_add_prog(&d, &p3));
+    BPF_ASSERT(d.num_progs == BPF_DISPATCHER_MAX);
+    BPF_ASSERT(!bpf_dispatcher_add_prog(&d, &p4));
+    BPF_ASSERT(p4.refs == 0);
+    BPF_ASSERT(bpf_dispatcher_prepare(&d, __bpf_dispatcher_image,
+                                      __bpf_dispatcher_rw_image) == -ENOTSUPP);
+
+    BPF_ASSERT(bpf_dispatcher_remove_prog(&d, &p0));
+    BPF_ASSERT(bpf_dispatcher_remove_prog(&d, &p1));
+    BPF_ASSERT(bpf_dispatcher_remove_prog(&d, &p2));
+    BPF_ASSERT(bpf_dispatcher_remove_prog(&d, &p3));
+    BPF_ASSERT(d.num_progs == 0);
+
+    bpf_dispatcher_change_prog(&d, NULL, &p0);
+    BPF_ASSERT(d.image == __bpf_dispatcher_image);
+    BPF_ASSERT(d.rw_image == __bpf_dispatcher_rw_image);
+    BPF_ASSERT(d.num_progs == 1);
+    BPF_ASSERT(p0.refs == 1);
+    BPF_ASSERT(__bpf_dispatcher_pack_allocated == 1);
+    BPF_ASSERT(__bpf_dispatcher_exec_allocated == 1);
+
+    bpf_dispatcher_change_prog(&d, &p0, &p1);
+    BPF_ASSERT(d.num_progs == 1);
+    BPF_ASSERT(p0.refs == 0);
+    BPF_ASSERT(p1.refs == 1);
+    bpf_dispatcher_change_prog(&d, &p1, NULL);
+    BPF_ASSERT(d.num_progs == 0);
+    BPF_ASSERT(p1.refs == 0);
+
+    return (int)(__bpf_dispatcher_prog_incs + __bpf_dispatcher_prog_puts);""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -3027,6 +3181,246 @@ static __always_inline void *memset(void *dst, int c, size_t n)
 }
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
+    # map_in_map: block deep BPF/BTF/slab headers and model only the map
+    # metadata contract this file manipulates.
+    "map_in_map": """\
+#include <linux/errno.h>
+#define _LINUX_SLAB_H 1
+#define _LINUX_BPF_H 1
+#define _LINUX_BTF_H 1
+#define GFP_USER 0
+#define CLASS(type, name) int name =
+#define ERR_PTR(error) ((void *)(long)(error))
+#define ERR_CAST(ptr) ((void *)(ptr))
+#define PTR_ERR(ptr) ((long)(ptr))
+#define IS_ERR(ptr) ((unsigned long)(void *)(ptr) >= (unsigned long)-4095)
+#undef READ_ONCE
+#undef WRITE_ONCE
+#define READ_ONCE(x) (x)
+#define WRITE_ONCE(x, v) do { (x) = (v); } while (0)
+#ifndef container_of
+#define container_of(ptr, type, member) \
+    ((type *)((char *)(ptr) - __builtin_offsetof(type, member)))
+#endif
+struct file {
+    int dummy;
+};
+struct btf {
+    u32 refs;
+};
+struct btf_record {
+    u32 id;
+};
+struct bpf_map;
+struct bpf_map_ops {
+    bool (*map_meta_equal)(const struct bpf_map *meta0,
+                           const struct bpf_map *meta1);
+};
+struct bpf_map {
+    const struct bpf_map_ops *ops;
+    struct bpf_map *inner_map_meta;
+    u32 map_type;
+    u32 key_size;
+    u32 value_size;
+    u32 max_entries;
+    u32 map_flags;
+    u32 id;
+    struct btf_record *record;
+    struct btf *btf;
+    bool bypass_spec_v1;
+    bool free_after_mult_rcu_gp;
+    bool free_after_rcu_gp;
+    atomic64_t sleepable_refcnt;
+};
+struct bpf_array {
+    struct bpf_map map;
+    u32 elem_size;
+    u32 index_mask;
+};
+static bool __bpf_map_in_map_meta_equal_stub(const struct bpf_map *meta0,
+                                             const struct bpf_map *meta1);
+extern const struct bpf_map_ops array_map_ops;
+extern const struct bpf_map_ops percpu_array_map_ops;
+extern const struct bpf_map_ops __bpf_map_in_map_no_meta_ops;
+static struct bpf_map *__bpf_map_get(int fd);
+static void *__bpf_map_in_map_alloc(size_t size, unsigned int flags);
+static void __bpf_map_in_map_free(void *ptr);
+#define kzalloc(size, flags) __bpf_map_in_map_alloc((size), (flags))
+#define kfree(ptr) __bpf_map_in_map_free(ptr)
+static inline struct btf_record *btf_record_dup(struct btf_record *record)
+{
+    return record;
+}
+static inline bool btf_record_equal(const struct btf_record *a,
+                                    const struct btf_record *b)
+{
+    return a == b;
+}
+static inline void bpf_map_free_record(struct bpf_map *map)
+{
+    (void)map;
+}
+static inline void btf_get(struct btf *btf)
+{
+    (void)btf;
+}
+static inline void btf_put(struct btf *btf)
+{
+    (void)btf;
+}
+static inline s64 atomic64_read(const atomic64_t *v)
+{
+    return v->counter;
+}
+static inline void bpf_map_inc(struct bpf_map *map)
+{
+    (void)map;
+}
+static inline void bpf_map_put(struct bpf_map *map);
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
+    # dispatcher: block large networking/static-call headers and model the
+    # dispatcher slots, refcounts, and JIT image allocation surface.
+    "dispatcher": """\
+#include <linux/errno.h>
+#define _LINUX_HASH_H
+#define _LINUX_BPF_H 1
+#define __LINUX_FILTER_H__
+#define _LINUX_STATIC_CALL_H
+#define __weak
+#define uintptr_t unsigned long
+#define PAGE_SIZE 64
+#define BPF_DISPATCHER_MAX 4
+#define NULL ((void *)0)
+#define IS_ERR(ptr) ((unsigned long)(void *)(ptr) >= (unsigned long)-4095)
+#define __BPF_DISPATCHER_UPDATE(_d, _new) do { \
+    (void)(_d); \
+    (void)(_new); \
+} while (0)
+#define bpf_jit_fill_hole_with_zero ((void *)0)
+
+struct bpf_insn {
+    u8 code;
+};
+typedef unsigned long bpf_func_t;
+typedef struct {
+    int refs;
+} refcount_t;
+struct mutex {
+    u32 locked;
+};
+struct bpf_ksym {
+    unsigned long start;
+    unsigned long end;
+};
+struct bpf_prog {
+    bpf_func_t bpf_func;
+    u32 refs;
+};
+struct bpf_dispatcher_prog {
+    struct bpf_prog *prog;
+    refcount_t users;
+};
+struct bpf_dispatcher {
+    struct mutex mutex;
+    void *func;
+    struct bpf_dispatcher_prog progs[BPF_DISPATCHER_MAX];
+    int num_progs;
+    void *image;
+    void *rw_image;
+    u32 image_off;
+    struct bpf_ksym ksym;
+};
+
+static u8 __bpf_dispatcher_image[PAGE_SIZE];
+static u8 __bpf_dispatcher_rw_image[PAGE_SIZE];
+static u32 __bpf_dispatcher_prog_incs;
+static u32 __bpf_dispatcher_prog_puts;
+static u8 __bpf_dispatcher_pack_allocated;
+static u8 __bpf_dispatcher_exec_allocated;
+
+static inline void refcount_set(refcount_t *r, int n)
+{
+    r->refs = n;
+}
+static inline void refcount_inc(refcount_t *r)
+{
+    r->refs++;
+}
+static inline bool refcount_dec_and_test(refcount_t *r)
+{
+    r->refs--;
+    return r->refs == 0;
+}
+static inline void mutex_lock(struct mutex *mutex)
+{
+    mutex->locked = 1;
+}
+static inline void mutex_unlock(struct mutex *mutex)
+{
+    mutex->locked = 0;
+}
+static inline void bpf_prog_inc(struct bpf_prog *prog)
+{
+    prog->refs++;
+    __bpf_dispatcher_prog_incs++;
+}
+static inline void bpf_prog_put(struct bpf_prog *prog)
+{
+    prog->refs--;
+    __bpf_dispatcher_prog_puts++;
+}
+static inline void *bpf_prog_pack_alloc(unsigned int size, void *fill)
+{
+    (void)fill;
+    if (size != PAGE_SIZE || __bpf_dispatcher_pack_allocated)
+        return NULL;
+    __bpf_dispatcher_pack_allocated = 1;
+    return __bpf_dispatcher_image;
+}
+static inline void bpf_prog_pack_free(void *image, unsigned int size)
+{
+    (void)image;
+    (void)size;
+    __bpf_dispatcher_pack_allocated = 0;
+}
+static inline void *bpf_jit_alloc_exec(unsigned int size)
+{
+    if (size != PAGE_SIZE || __bpf_dispatcher_exec_allocated)
+        return NULL;
+    __bpf_dispatcher_exec_allocated = 1;
+    return __bpf_dispatcher_rw_image;
+}
+static inline void bpf_image_ksym_init(void *data, unsigned int size,
+                                       struct bpf_ksym *ksym)
+{
+    ksym->start = (unsigned long)data;
+    ksym->end = ksym->start + size;
+}
+static inline void bpf_image_ksym_add(struct bpf_ksym *ksym)
+{
+    (void)ksym;
+}
+static inline void *bpf_arch_text_copy(void *dst, void *src, unsigned int len)
+{
+    (void)src;
+    (void)len;
+    return dst;
+}
+static inline void synchronize_rcu(void)
+{
+}
+static inline unsigned int bpf_dispatcher_nop_func(const void *ctx,
+                                                   const struct bpf_insn *insnsi,
+                                                   bpf_func_t bpf_func)
+{
+    (void)ctx;
+    (void)insnsi;
+    (void)bpf_func;
+    return 0;
+}
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     # bpf_insn_array: block linux/bpf.h and provide just the map/prog/BTF
     # surface used by this compact instruction-array source.
     "bpf_insn_array": """\
@@ -4728,6 +5122,90 @@ static void bpf_map_area_free(void *base)
     __bpf_insn_array_allocated = 0;
 }
 """,
+    "map_in_map": """\
+#pragma clang attribute pop
+static struct bpf_array __bpf_map_in_map_meta_array;
+static struct bpf_array __bpf_map_in_map_inner_array;
+static struct btf __bpf_map_in_map_btf;
+static struct btf_record __bpf_map_in_map_record;
+static u32 __bpf_map_in_map_puts;
+static u8 __bpf_map_in_map_allocated;
+
+const struct bpf_map_ops array_map_ops = {
+    .map_meta_equal = __bpf_map_in_map_meta_equal_stub,
+};
+const struct bpf_map_ops percpu_array_map_ops = {
+    .map_meta_equal = __bpf_map_in_map_meta_equal_stub,
+};
+const struct bpf_map_ops __bpf_map_in_map_no_meta_ops = {
+    .map_meta_equal = 0,
+};
+
+static bool __bpf_map_in_map_meta_equal_stub(const struct bpf_map *meta0,
+                                             const struct bpf_map *meta1)
+{
+    return bpf_map_meta_equal(meta0, meta1);
+}
+
+static void __bpf_map_in_map_zero_map(struct bpf_map *map)
+{
+    map->ops = 0;
+    map->inner_map_meta = 0;
+    map->map_type = 0;
+    map->key_size = 0;
+    map->value_size = 0;
+    map->max_entries = 0;
+    map->map_flags = 0;
+    map->id = 0;
+    map->record = 0;
+    map->btf = 0;
+    map->bypass_spec_v1 = false;
+    map->free_after_mult_rcu_gp = false;
+    map->free_after_rcu_gp = false;
+    map->sleepable_refcnt.counter = 0;
+}
+
+static void __bpf_map_in_map_zero_array(struct bpf_array *array)
+{
+    __bpf_map_in_map_zero_map(&array->map);
+    array->elem_size = 0;
+    array->index_mask = 0;
+}
+
+static struct bpf_map *__bpf_map_get(int fd)
+{
+    if (fd < 0)
+        return ERR_PTR(-EBADF);
+    return &__bpf_map_in_map_inner_array.map;
+}
+
+static void *__bpf_map_in_map_alloc(size_t size, unsigned int flags)
+{
+    (void)flags;
+    if (size != sizeof(struct bpf_array))
+        return 0;
+    if (__bpf_map_in_map_allocated)
+        return 0;
+    __bpf_map_in_map_allocated = 1;
+    __bpf_map_in_map_zero_array(&__bpf_map_in_map_meta_array);
+    return &__bpf_map_in_map_meta_array;
+}
+
+static void __bpf_map_in_map_free(void *ptr)
+{
+    (void)ptr;
+    __bpf_map_in_map_allocated = 0;
+}
+
+static inline void bpf_map_put(struct bpf_map *map)
+{
+    (void)map;
+    __bpf_map_in_map_puts++;
+}
+""",
+    "dispatcher": """\
+#pragma clang attribute pop
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -5188,6 +5666,8 @@ def main():
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
         "bpf_insn_array":        KSRC / "kernel/bpf/bpf_insn_array.c",
+        "map_in_map":            KSRC / "kernel/bpf/map_in_map.c",
+        "dispatcher":            KSRC / "kernel/bpf/dispatcher.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",
