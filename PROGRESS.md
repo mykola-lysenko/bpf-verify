@@ -1,10 +1,11 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 135 compiled, 135 verified, 0 skipped.
+**Current status:** 137 compiled, 137 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding the small `kernel/bpf/` support batch (`bpf_lsm_proto.c`, `sysfs_btf.c`, `bpf_cgrp_storage.c`, `bpf_task_storage.c`, and `bpf_inode_storage.c`): 135 compiled, 135 verified, 0 skipped.
+- Full local pipeline after adding `kernel/bpf/mprog.c` and `kernel/bpf/tcx.c`: 137 compiled, 137 verified, 0 skipped.
+- Previous full local pipeline after adding the small `kernel/bpf/` support batch (`bpf_lsm_proto.c`, `sysfs_btf.c`, `bpf_cgrp_storage.c`, `bpf_task_storage.c`, and `bpf_inode_storage.c`): 135 compiled, 135 verified, 0 skipped.
 - Previous full local pipeline after adding the remaining iterator targets (`cgroup_iter.c`, `kmem_cache_iter.c`, `task_iter.c`, `bpf_iter.c`, and `btf_iter.c`): 130 compiled, 130 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/bpf/prog_iter.c`, `kernel/bpf/link_iter.c`, `kernel/bpf/map_iter.c`, and `kernel/bpf/dmabuf_iter.c`: 125 compiled, 125 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/bpf/reuseport_array.c`: 121 compiled, 121 verified, 0 skipped.
@@ -83,3 +84,10 @@
 - `bpf_lsm_proto.c` covers the nullable `mmap_file` BPF LSM hook definition.
 - `sysfs_btf.c` covers BTF sysfs mmap accept/reject paths; `btf_vmlinux_init()` remains compiled but is not invoked because the real init path depends on linker-provided BTF section symbols.
 - The storage harnesses cover fd/pidfd/cgroup lookup, update, delete, helper get/delete, map allocation/free wrapper paths, and object free teardown using focused local-storage stubs rather than the full `bpf_local_storage.c` implementation.
+
+## Notes for `kernel/bpf/mprog.c` and `kernel/bpf/tcx.c`
+
+- Added real-source targets for `mprog.c` and `tcx.c` using shared BPF program/link metadata and TCX netdevice stubs.
+- `mprog.c` covers attach, replace, relative insert, detach, query, revision mismatch, duplicate attach, and prog/link release accounting.
+- `tcx.c` covers netdevice attach/query/detach, missing-device attach rejection, link attach/detach, and uninstall cleanup.
+- `tcx.c` intentionally uses focused inlined mprog stubs because the real mprog implementation is verified separately; reloading stored kernel pointers from `.bss` causes the BPF verifier to treat them as scalars before TCX dereferences them.
