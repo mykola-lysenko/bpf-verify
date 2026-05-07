@@ -1,10 +1,10 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 120 compiled, 120 verified, 0 skipped.
+**Current status:** 121 compiled, 121 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding `kernel/bpf/map_in_map.c` and `kernel/bpf/dispatcher.c`: 120 compiled, 120 verified, 0 skipped.
+- Full local pipeline after adding `kernel/bpf/reuseport_array.c`: 121 compiled, 121 verified, 0 skipped.
 - CI guardrails now fail on compile failures, verifier failures, skipped objects, and object-open failures.
 
 ## Target plan
@@ -56,4 +56,10 @@
 - Added the real `kernel/bpf/dispatcher.c` target with bounded dispatcher slots and modeled refcount, mutex, JIT image allocation, and text-copy surfaces.
 - The harness verifies add/remove refcount transitions, duplicate registration handling, full-dispatcher rejection, arch fallback from `bpf_dispatcher_prepare()`, and allocation/list transitions through `bpf_dispatcher_change_prog()`.
 - The dispatcher helpers are forced inline for this harness because BPF subprograms cannot store pointers into the caller's stack frame.
+
+## Notes for `kernel/bpf/reuseport_array.c`
+
+- Added the real `kernel/bpf/reuseport_array.c` target with focused BPF map, socket, reuseport, RCU, lock, fd, and map-area stubs.
+- The harness verifies allocation checks/allocation, memory accounting, lookup, fd cookie lookup, update validation, update early error paths, delete, next-key, detach cleanup, and free cleanup.
+- Dynamic keys are used only on non-dereferencing paths; BPF loses pointer type information when a socket pointer is loaded from a variable-index stack slot and then dereferenced.
 - Keep BPF-core targets first; likely follow-ups are smaller map infrastructure files before returning to deferred `lib/` work.

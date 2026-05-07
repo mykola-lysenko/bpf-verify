@@ -1396,6 +1396,175 @@ HARNESS_BODIES = {
     BPF_ASSERT(p1.refs == 0);
 
     return (int)(__bpf_dispatcher_prog_incs + __bpf_dispatcher_prog_puts);""",
+    "reuseport_array": """\
+    /* reuseport_array: reuseport socket array map behavior.
+     *
+     * Covered here:
+     *   1. allocation validation/allocation and memory accounting.
+     *   2. lookup, fd-lookup cookie return, delete, free, and detach cleanup.
+     *   3. update precondition validation and fd-update early error paths.
+     */
+    struct __bpf_reuseport_array_4 storage = {};
+    struct reuseport_array *array = (struct reuseport_array *)&storage;
+    struct bpf_map *map = &storage.map;
+    struct sock_reuseport reuse = {};
+    struct sock sk0 = {};
+    struct sock sk1 = {};
+    union bpf_attr attr = {};
+    struct sock *found;
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    u64 cookie = 0;
+    u64 fd64 = 0;
+    int fd = -1;
+    int rc = 0;
+    u32 key = 0;
+    u32 next = 0;
+    u32 errors = 0;
+
+    map->key_size = sizeof(u32);
+    map->value_size = sizeof(u64);
+    map->max_entries = 4;
+    __bpf_reuseport_init_sock(&sk0, IPPROTO_UDP, AF_INET, SOCK_DGRAM,
+                              &reuse, 0x12345678ULL);
+    __bpf_reuseport_init_sock(&sk1, IPPROTO_TCP, AF_INET6, SOCK_STREAM,
+                              &reuse, 0xabcdef01ULL);
+
+    attr.key_size = sizeof(u32);
+    attr.value_size = sizeof(u16);
+    attr.max_entries = 4;
+    errors |= reuseport_array_alloc_check(&attr) != -EINVAL;
+    attr.value_size = sizeof(u64);
+    errors |= reuseport_array_alloc_check(&attr) != 0;
+    errors |= reuseport_array_mem_usage(map) !=
+              sizeof(struct bpf_map) + 4 * sizeof(struct sock *);
+
+    __bpf_reuseport_allocated = 0;
+    __bpf_reuseport_frees = 0;
+    map = reuseport_array_alloc(&attr);
+    errors |= IS_ERR(map);
+    if (!IS_ERR(map)) {
+        errors |= map != &__bpf_reuseport_alloc_array.map;
+        errors |= map->key_size != sizeof(u32);
+        errors |= map->value_size != sizeof(u64);
+        errors |= map->max_entries != 4;
+        map->max_entries = 0;
+        reuseport_array_free(map);
+        errors |= __bpf_reuseport_allocated != 0;
+        errors |= __bpf_reuseport_frees != 1;
+    }
+
+    map = &storage.map;
+    storage.ptrs[0] = &sk0;
+    storage.ptrs[1] = &sk0;
+    storage.ptrs[2] = &sk1;
+    storage.ptrs[3] = &sk1;
+    key = seed & 3;
+    found = reuseport_array_lookup_elem(map, &key);
+    errors |= !found;
+    key = 1;
+    errors |= bpf_fd_reuseport_array_lookup_elem(map, &key, &cookie) != 0;
+    errors |= cookie == 0;
+    key = 4;
+    errors |= reuseport_array_lookup_elem(map, &key) != NULL;
+    map->value_size = sizeof(u32);
+    key = 1;
+    errors |= bpf_fd_reuseport_array_lookup_elem(map, &key, &cookie) != -ENOSPC;
+    map->value_size = sizeof(u64);
+
+    errors |= reuseport_array_update_check(array, &sk0, NULL, &reuse,
+                                           BPF_NOEXIST) != 0;
+    errors |= reuseport_array_update_check(array, &sk0, &sk1, &reuse,
+                                           BPF_NOEXIST) != -EEXIST;
+    errors |= reuseport_array_update_check(array, &sk0, NULL, &reuse,
+                                           BPF_EXIST) != -ENOENT;
+    sk0.sk_protocol = 1;
+    errors |= reuseport_array_update_check(array, &sk0, NULL, &reuse,
+                                           BPF_NOEXIST) != -ENOTSUPP;
+    sk0.sk_protocol = IPPROTO_UDP;
+    sk0.sk_family = 1;
+    errors |= reuseport_array_update_check(array, &sk0, NULL, &reuse,
+                                           BPF_NOEXIST) != -ENOTSUPP;
+    sk0.sk_family = AF_INET;
+    sk0.sk_type = 1;
+    errors |= reuseport_array_update_check(array, &sk0, NULL, &reuse,
+                                           BPF_NOEXIST) != -ENOTSUPP;
+    sk0.sk_type = SOCK_DGRAM;
+    sk0.sk_flags = 0;
+    errors |= reuseport_array_update_check(array, &sk0, NULL, &reuse,
+                                           BPF_NOEXIST) != -EINVAL;
+    sk0.sk_flags = 1UL << SOCK_RCU_FREE;
+    sk0.hashed = false;
+    errors |= reuseport_array_update_check(array, &sk0, NULL, &reuse,
+                                           BPF_NOEXIST) != -EINVAL;
+    sk0.hashed = true;
+    errors |= reuseport_array_update_check(array, &sk0, NULL, NULL,
+                                           BPF_NOEXIST) != -EINVAL;
+    sk0.sk_user_data = &storage.ptrs[1];
+    errors |= reuseport_array_update_check(array, &sk0, NULL, &reuse,
+                                           BPF_NOEXIST) != -EBUSY;
+    sk0.sk_user_data = NULL;
+
+    key = seed & 7;
+    fd64 = seed;
+    rc = bpf_fd_reuseport_array_update_elem(map, &key, &fd64, seed & 3);
+    errors ^= rc & 1;
+    errors |= bpf_fd_reuseport_array_update_elem(map, &key, &fd64,
+                                                 BPF_EXIST + 1) != -EINVAL;
+    key = 4;
+    errors |= bpf_fd_reuseport_array_update_elem(map, &key, &fd64,
+                                                 BPF_ANY) != -E2BIG;
+    key = 1;
+    fd64 = (u64)S32_MAX + 1;
+    errors |= bpf_fd_reuseport_array_update_elem(map, &key, &fd64,
+                                                 BPF_ANY) != -EINVAL;
+    map->value_size = sizeof(u32);
+    errors |= bpf_fd_reuseport_array_update_elem(map, &key, &fd,
+                                                 BPF_ANY) != -EBADF;
+    map->value_size = sizeof(u64);
+
+    key = 1;
+    storage.ptrs[0] = &sk0;
+    storage.ptrs[1] = &sk0;
+    storage.ptrs[2] = &sk1;
+    storage.ptrs[3] = &sk1;
+    errors |= reuseport_array_delete_elem(map, &key) != 0;
+    errors |= reuseport_array_lookup_elem(map, &key) != NULL;
+    errors |= reuseport_array_delete_elem(map, &key) != -ENOENT;
+    key = 4;
+    errors |= reuseport_array_delete_elem(map, &key) != -E2BIG;
+
+    errors |= reuseport_array_get_next_key(map, NULL, &next) != 0;
+    errors |= next != 0;
+    key = seed & 7;
+    rc = reuseport_array_get_next_key(map, &key, &next);
+    if (key < 3)
+        errors |= rc != 0 || next != key + 1;
+    else if (key == 3)
+        errors |= rc != -ENOENT;
+    else
+        errors |= rc != 0 || next != 0;
+
+    storage.ptrs[0] = &sk1;
+    sk1.sk_user_data = &storage.ptrs[0];
+    bpf_sk_reuseport_detach(&sk1);
+    errors |= storage.ptrs[0] != NULL;
+    errors |= sk1.sk_user_data != NULL;
+
+    storage.ptrs[0] = &sk0;
+    storage.ptrs[1] = &sk1;
+    storage.ptrs[2] = NULL;
+    storage.ptrs[3] = NULL;
+    sk0.sk_user_data = &storage.ptrs[0];
+    sk1.sk_user_data = &storage.ptrs[1];
+    reuseport_array_free(map);
+    errors |= storage.ptrs[0] != NULL;
+    errors |= storage.ptrs[1] != NULL;
+    errors |= sk0.sk_user_data != NULL;
+    errors |= sk1.sk_user_data != NULL;
+
+    return (int)(errors + __bpf_reuseport_frees + next + (seed & 1));""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -3421,6 +3590,242 @@ static inline unsigned int bpf_dispatcher_nop_func(const void *ctx,
 }
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
+    # reuseport_array: block networking headers and model only the socket,
+    # reuseport, RCU, and map allocation surface used by this file.
+    "reuseport_array": """\
+#include <linux/errno.h>
+#define _LINUX_BPF_H 1
+#define _LINUX_ERR_H
+#define __SOCK_DIAG_H__
+#define _SOCK_REUSEPORT_H
+#define _LINUX_BTF_IDS_H
+#define __rcu
+#define S32_MAX 2147483647
+#define U32_MAX ((u32)~0U)
+#define AF_INET 2
+#define AF_INET6 10
+#define IPPROTO_TCP 6
+#define IPPROTO_UDP 17
+#define SOCK_STREAM 1
+#define SOCK_DGRAM 2
+#define BPF_ANY 0
+#define BPF_NOEXIST 1
+#define BPF_EXIST 2
+#define BPF_F_NUMA_NODE (1U << 2)
+#define NUMA_NO_NODE (-1)
+#define ERR_PTR(error) ((void *)(long)(error))
+#define PTR_ERR(ptr) ((long)(ptr))
+#define IS_ERR(ptr) ((unsigned long)(void *)(ptr) >= (unsigned long)-4095)
+#define BTF_ID_LIST_SINGLE(name, prefix, typename) static u32 name[1];
+#define READ_ONCE(x) (x)
+#define WRITE_ONCE(x, v) do { (x) = (v); } while (0)
+#define unlikely(x) (x)
+#define struct_size(p, member, count) \
+    (sizeof(*(p)) + sizeof(*(p)->member) * (count))
+#define rcu_access_pointer(p) (p)
+#define rcu_dereference(p) (p)
+#define rcu_dereference_protected(p, c) (p)
+#define rcu_assign_pointer(p, v) do { (p) = (v); } while (0)
+#define RCU_INIT_POINTER(p, v) do { (p) = (v); } while (0)
+#define SK_USER_DATA_NOCOPY 0UL
+#define SK_USER_DATA_BPF 0UL
+#define SK_USER_DATA_PTRMASK (~0UL)
+
+typedef struct {
+    u32 locked;
+} spinlock_t;
+typedef struct {
+    u32 locked;
+} rwlock_t;
+static spinlock_t reuseport_lock;
+
+struct sock_reuseport {
+    u8 has_conns;
+};
+enum sock_flags {
+    SOCK_RCU_FREE = 0,
+};
+struct sock {
+    rwlock_t sk_callback_lock;
+    void *sk_user_data;
+    struct sock_reuseport *sk_reuseport_cb;
+    u16 sk_protocol;
+    u16 sk_type;
+    u16 sk_family;
+    unsigned long sk_flags;
+    bool hashed;
+    u64 cookie;
+};
+struct socket {
+    struct sock *sk;
+};
+union bpf_attr {
+    struct {
+        u32 map_type;
+        u32 key_size;
+        u32 value_size;
+        u32 max_entries;
+        u32 map_flags;
+        u32 numa_node;
+    };
+};
+struct bpf_map {
+    const struct bpf_map_ops *ops;
+    u32 map_type;
+    u32 key_size;
+    u32 value_size;
+    u32 max_entries;
+    u32 map_flags;
+    int numa_node;
+};
+struct bpf_map_ops {
+    bool (*map_meta_equal)(const struct bpf_map *meta0,
+                           const struct bpf_map *meta1);
+    int (*map_alloc_check)(union bpf_attr *attr);
+    struct bpf_map *(*map_alloc)(union bpf_attr *attr);
+    void (*map_free)(struct bpf_map *map);
+    void *(*map_lookup_elem)(struct bpf_map *map, void *key);
+    int (*map_get_next_key)(struct bpf_map *map, void *key, void *next_key);
+    long (*map_delete_elem)(struct bpf_map *map, void *key);
+    u64 (*map_mem_usage)(const struct bpf_map *map);
+    const u32 *map_btf_id;
+};
+struct __bpf_reuseport_array_4 {
+    struct bpf_map map;
+    struct sock *ptrs[4];
+};
+static struct __bpf_reuseport_array_4 __bpf_reuseport_alloc_array;
+static u8 __bpf_reuseport_allocated;
+static u32 __bpf_reuseport_frees;
+
+static inline void spin_lock_bh(spinlock_t *lock)
+{
+    lock->locked = 1;
+}
+static inline void spin_unlock_bh(spinlock_t *lock)
+{
+    lock->locked = 0;
+}
+static inline void write_lock_bh(rwlock_t *lock)
+{
+    lock->locked = 1;
+}
+static inline void write_unlock_bh(rwlock_t *lock)
+{
+    lock->locked = 0;
+}
+static inline void rcu_read_lock(void)
+{
+}
+static inline void rcu_read_unlock(void)
+{
+}
+static inline bool sock_flag(const struct sock *sk, enum sock_flags flag)
+{
+    return sk->sk_flags & (1UL << flag);
+}
+static inline bool sk_hashed(const struct sock *sk)
+{
+    return sk->hashed;
+}
+static inline void *__locked_read_sk_user_data_with_flags(const struct sock *sk,
+                                                          unsigned long flags)
+{
+    (void)flags;
+    return sk->sk_user_data;
+}
+static inline u64 __sock_gen_cookie(struct sock *sk)
+{
+    return sk->cookie;
+}
+static inline struct socket *sockfd_lookup(int fd, int *err)
+{
+    (void)fd;
+    *err = -EBADF;
+    return NULL;
+}
+static inline void sockfd_put(struct socket *socket)
+{
+    (void)socket;
+}
+static inline int array_map_alloc_check(union bpf_attr *attr)
+{
+    if (attr->key_size != sizeof(u32) || !attr->max_entries ||
+        attr->max_entries > 4)
+        return -EINVAL;
+    return 0;
+}
+static inline int bpf_map_attr_numa_node(const union bpf_attr *attr)
+{
+    return (attr->map_flags & BPF_F_NUMA_NODE) ?
+           (int)attr->numa_node : NUMA_NO_NODE;
+}
+static inline void bpf_map_init_from_attr(struct bpf_map *map,
+                                          union bpf_attr *attr)
+{
+    map->map_type = attr->map_type;
+    map->key_size = attr->key_size;
+    map->value_size = attr->value_size;
+    map->max_entries = attr->max_entries;
+    map->map_flags = attr->map_flags;
+    map->numa_node = bpf_map_attr_numa_node(attr);
+}
+static inline bool bpf_map_meta_equal(const struct bpf_map *meta0,
+                                      const struct bpf_map *meta1)
+{
+    (void)meta0;
+    (void)meta1;
+    return true;
+}
+static inline void __bpf_reuseport_zero_array(struct __bpf_reuseport_array_4 *array)
+{
+    array->map.ops = 0;
+    array->map.map_type = 0;
+    array->map.key_size = 0;
+    array->map.value_size = 0;
+    array->map.max_entries = 0;
+    array->map.map_flags = 0;
+    array->map.numa_node = 0;
+    array->ptrs[0] = 0;
+    array->ptrs[1] = 0;
+    array->ptrs[2] = 0;
+    array->ptrs[3] = 0;
+}
+static inline void *__bpf_reuseport_area_alloc(u64 size, int numa_node)
+{
+    (void)numa_node;
+    if (size > sizeof(__bpf_reuseport_alloc_array) || __bpf_reuseport_allocated)
+        return 0;
+    __bpf_reuseport_allocated = 1;
+    __bpf_reuseport_zero_array(&__bpf_reuseport_alloc_array);
+    return &__bpf_reuseport_alloc_array;
+}
+static inline void __bpf_reuseport_area_free(void *ptr)
+{
+    (void)ptr;
+    __bpf_reuseport_allocated = 0;
+    __bpf_reuseport_frees++;
+}
+#define bpf_map_area_alloc(size, numa_node) \
+    __bpf_reuseport_area_alloc((size), (numa_node))
+#define bpf_map_area_free(ptr) __bpf_reuseport_area_free(ptr)
+static inline void __bpf_reuseport_init_sock(struct sock *sk, u16 protocol,
+                                             u16 family, u16 type,
+                                             struct sock_reuseport *reuse,
+                                             u64 cookie)
+{
+    sk->sk_callback_lock.locked = 0;
+    sk->sk_user_data = 0;
+    sk->sk_reuseport_cb = reuse;
+    sk->sk_protocol = protocol;
+    sk->sk_family = family;
+    sk->sk_type = type;
+    sk->sk_flags = 1UL << SOCK_RCU_FREE;
+    sk->hashed = true;
+    sk->cookie = cookie;
+}
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     # bpf_insn_array: block linux/bpf.h and provide just the map/prog/BTF
     # surface used by this compact instruction-array source.
     "bpf_insn_array": """\
@@ -5206,6 +5611,9 @@ static inline void bpf_map_put(struct bpf_map *map)
     "dispatcher": """\
 #pragma clang attribute pop
 """,
+    "reuseport_array": """\
+#pragma clang attribute pop
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -5668,6 +6076,7 @@ def main():
         "bpf_insn_array":        KSRC / "kernel/bpf/bpf_insn_array.c",
         "map_in_map":            KSRC / "kernel/bpf/map_in_map.c",
         "dispatcher":            KSRC / "kernel/bpf/dispatcher.c",
+        "reuseport_array":       KSRC / "kernel/bpf/reuseport_array.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",
