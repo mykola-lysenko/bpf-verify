@@ -3009,6 +3009,89 @@ HARNESS_BODIES = {
     (void)arc4_crypt;
     return 0;
 """,
+    "crypto_tea": """\
+    /* crypto/tea.c: exercise TEA, XTEA, and XETA setkey/encrypt/decrypt paths. */
+    struct crypto_tfm tfm = {};
+    u8 key[TEA_KEY_SIZE];
+    u8 plain[TEA_BLOCK_SIZE];
+    u8 enc[TEA_BLOCK_SIZE];
+    u8 dec[TEA_BLOCK_SIZE];
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x123456789abcdef0ULL;
+    int errors = 0;
+    int i;
+
+    for (i = 0; i < TEA_KEY_SIZE; i++)
+        key[i] = (u8)(seed >> ((i & 7) * 8)) ^ (u8)(0x33 + i);
+    for (i = 0; i < TEA_BLOCK_SIZE; i++)
+        plain[i] = (u8)(seed >> ((i & 7) * 8)) ^ (u8)(0xa5 + i);
+
+    tea_setkey(&tfm, key, sizeof(key));
+    tea_encrypt(&tfm, enc, plain);
+    tea_decrypt(&tfm, dec, enc);
+    for (i = 0; i < TEA_BLOCK_SIZE; i++)
+        errors |= dec[i] != plain[i];
+
+    xtea_setkey(&tfm, key, sizeof(key));
+    xtea_encrypt(&tfm, enc, plain);
+    xtea_decrypt(&tfm, dec, enc);
+    for (i = 0; i < XTEA_BLOCK_SIZE; i++)
+        errors |= dec[i] != plain[i];
+
+    xtea_setkey(&tfm, key, sizeof(key));
+    xeta_encrypt(&tfm, enc, plain);
+    xeta_decrypt(&tfm, dec, enc);
+    for (i = 0; i < XTEA_BLOCK_SIZE; i++)
+        errors |= dec[i] != plain[i];
+
+    return errors + dec[0];""",
+    "crypto_arc4": """\
+    /* crypto/arc4.c: exercise lskcipher setkey/init and continuation crypt wrapper. */
+    struct crypto_lskcipher tfm = {};
+    u8 key[16];
+    u8 plain[8];
+    u8 out[8];
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x0f1e2d3c4b5a6978ULL;
+    int i;
+
+    for (i = 0; i < 16; i++)
+        key[i] = (u8)(seed >> ((i & 7) * 8)) ^ (u8)(i + 1);
+    for (i = 0; i < 8; i++)
+        plain[i] = (u8)(seed >> ((i & 7) * 8)) ^ (u8)(0x80 + i);
+
+    crypto_arc4_init(&tfm);
+    crypto_arc4_setkey(&tfm, key, sizeof(key));
+    crypto_arc4_crypt(&tfm, plain, out, 0,
+                      (u8 *)&__bpf_arc4_siv, CRYPTO_LSKCIPHER_FLAG_CONT);
+    return key[0];""",
+    "crypto_sm4_generic": """\
+    /* crypto/sm4_generic.c: exercise SM4 setkey/encrypt/decrypt wrapper paths. */
+    struct crypto_tfm tfm = {};
+    u8 key[SM4_KEY_SIZE];
+    u8 plain[SM4_BLOCK_SIZE];
+    u8 enc[SM4_BLOCK_SIZE];
+    u8 dec[SM4_BLOCK_SIZE];
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x0011223344556677ULL;
+    int errors = 0;
+    int i;
+
+    for (i = 0; i < SM4_KEY_SIZE; i++) {
+        key[i] = (u8)(seed >> ((i & 7) * 8)) ^ (u8)(0x11 * i);
+        plain[i] = (u8)(seed >> ((i & 7) * 8)) ^ (u8)(0x5a + i);
+    }
+
+    errors |= sm4_setkey(&tfm, key, sizeof(key));
+    sm4_encrypt(&tfm, enc, plain);
+    sm4_decrypt(&tfm, dec, enc);
+    for (i = 0; i < SM4_BLOCK_SIZE; i++)
+        errors |= dec[i] != plain[i];
+
+    return errors + dec[0];""",
     "crypto_utils": """
     /* crypto_utils: __crypto_xor test */
     __u32 key0 = 0, key1 = 1;
@@ -3207,6 +3290,10 @@ EXTRA_INCLUDES = {
     # chacha-block-generic.c) and crypto_xor_cpy -> __crypto_xor (from utils.c).
     "lib_chacha": [KSRC / "lib/crypto/chacha-block-generic.c",
                    KSRC / "lib/crypto/utils.c"],
+
+    # crypto/arc4.c is the Crypto API wrapper; include the lib/crypto primitive
+    # so the wrapper's setkey/crypt callbacks resolve inside the same BPF TU.
+    "crypto_arc4": [KSRC / "lib/crypto/arc4.c"],
 
     # zlib_inflate uses inflate_fast (from inffast.c).
     "zlib_inflate": [KSRC / "lib/zlib_inflate/inffast.c"],
@@ -6312,6 +6399,145 @@ u64 __bpf_timecounter_read(struct cyclecounter *cc)
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """
 
+CRYPTO_CIPHER_PRE_INCLUDE = """\
+#define _CRYPTO_ALGAPI_H
+#define _LINUX_CRYPTO_H
+#define _LINUX_INIT_H
+#define _LINUX_MM_H
+#define __init
+#define __exit
+#define MODULE_ALIAS_CRYPTO(name)
+#define CRYPTO_ALG_TYPE_CIPHER 0x00000001
+
+struct crypto_tfm {
+    u8 ctx[256] __attribute__((aligned(8)));
+};
+
+struct cipher_alg {
+    unsigned int cia_min_keysize;
+    unsigned int cia_max_keysize;
+    int (*cia_setkey)(struct crypto_tfm *tfm, const u8 *key,
+                      unsigned int keylen);
+    void (*cia_encrypt)(struct crypto_tfm *tfm, u8 *dst, const u8 *src);
+    void (*cia_decrypt)(struct crypto_tfm *tfm, u8 *dst, const u8 *src);
+};
+
+struct crypto_alg {
+    const char *cra_name;
+    const char *cra_driver_name;
+    int cra_priority;
+    u32 cra_flags;
+    unsigned int cra_blocksize;
+    unsigned int cra_ctxsize;
+    unsigned int cra_alignmask;
+    void *cra_module;
+    union {
+        struct cipher_alg cipher;
+    } cra_u;
+};
+
+static __inline __attribute__((always_inline))
+void *crypto_tfm_ctx(struct crypto_tfm *tfm)
+{
+    return tfm->ctx;
+}
+
+static __inline __attribute__((always_inline))
+int crypto_register_alg(struct crypto_alg *alg)
+{
+    return 0;
+}
+
+static __inline __attribute__((always_inline))
+void crypto_unregister_alg(struct crypto_alg *alg)
+{
+}
+
+static __inline __attribute__((always_inline))
+int crypto_register_algs(struct crypto_alg *algs, unsigned int count)
+{
+    return 0;
+}
+
+static __inline __attribute__((always_inline))
+void crypto_unregister_algs(struct crypto_alg *algs, unsigned int count)
+{
+}
+"""
+
+CRYPTO_ARC4_PRE_INCLUDE = CRYPTO_CIPHER_PRE_INCLUDE + """\
+#define _CRYPTO_INTERNAL_SKCIPHER_H
+#define _LINUX_SCHED_H
+#define CRYPTO_LSKCIPHER_FLAG_CONT 0x00000001
+#define pr_warn_ratelimited(fmt, ...) do { } while (0)
+
+#include <crypto/arc4.h>
+
+struct crypto_lskcipher {
+    int dummy;
+};
+
+struct lskcipher_alg {
+    struct {
+        struct crypto_alg base;
+        unsigned int min_keysize;
+        unsigned int max_keysize;
+        unsigned int statesize;
+    } co;
+    int (*setkey)(struct crypto_lskcipher *tfm, const u8 *key,
+                  unsigned int keylen);
+    int (*encrypt)(struct crypto_lskcipher *tfm, const u8 *src, u8 *dst,
+                   unsigned int nbytes, u8 *siv, u32 flags);
+    int (*decrypt)(struct crypto_lskcipher *tfm, const u8 *src, u8 *dst,
+                   unsigned int nbytes, u8 *siv, u32 flags);
+    int (*init)(struct crypto_lskcipher *tfm);
+};
+
+struct task_struct {
+    char comm[16];
+    long pid;
+};
+
+static struct task_struct __bpf_current = {
+    .comm = "bpf-verify",
+    .pid = 1,
+};
+static struct arc4_ctx __bpf_arc4_ctx;
+static struct arc4_ctx __bpf_arc4_siv;
+
+#define current (&__bpf_current)
+
+static __inline __attribute__((always_inline))
+void *crypto_lskcipher_ctx(struct crypto_lskcipher *tfm)
+{
+    return &__bpf_arc4_ctx;
+}
+
+static __inline __attribute__((always_inline))
+int crypto_register_lskcipher(struct lskcipher_alg *alg)
+{
+    return 0;
+}
+
+static __inline __attribute__((always_inline))
+void crypto_unregister_lskcipher(struct lskcipher_alg *alg)
+{
+}
+"""
+
+CRYPTO_SM4_GENERIC_PRE_INCLUDE = CRYPTO_CIPHER_PRE_INCLUDE + """\
+#include <linux/errno.h>
+static __inline __attribute__((always_inline))
+u32 __bpf_rol32(u32 word, unsigned int shift)
+{
+    return (word << (shift & 31)) | (word >> ((0 - shift) & 31));
+}
+#define rol32(word, shift) __bpf_rol32((word), (shift))
+#undef __alias
+#define __alias(symbol)
+#include "{ksrc}/crypto/sm4.c"
+"""
+
 # Extra C code injected into the harness BEFORE the source file include,
 # keyed by src_name. Used for per-file stubs and workarounds.
 #
@@ -6337,6 +6563,9 @@ EXTRA_PRE_INCLUDE = {
     "tcx": BPF_TCX_PRE_INCLUDE,
     "timeconv": TIMECONV_PRE_INCLUDE,
     "timecounter": TIMECOUNTER_PRE_INCLUDE,
+    "crypto_tea": CRYPTO_CIPHER_PRE_INCLUDE,
+    "crypto_arc4": CRYPTO_ARC4_PRE_INCLUDE,
+    "crypto_sm4_generic": CRYPTO_SM4_GENERIC_PRE_INCLUDE,
     # dim.c uses DIV_ROUND_UP(npkts * USEC_PER_MSEC, delta_us) where npkts is
     # u32 and USEC_PER_MSEC is 1000L (signed). The result is signed, causing
     # the BPF backend to generate sdiv which it cannot select.
@@ -9892,6 +10121,10 @@ def main():
         # Phase 7: kernel/time/ targets
         "timeconv":              KSRC / "kernel/time/timeconv.c",
         "timecounter":           KSRC / "kernel/time/timecounter.c",
+        # Phase 8: top-level crypto/ targets
+        "crypto_tea":            KSRC / "crypto/tea.c",
+        "crypto_arc4":           KSRC / "crypto/arc4.c",
+        "crypto_sm4_generic":    KSRC / "crypto/sm4_generic.c",
         # Phase 3 targets
         "string_helpers":       SHIM / "lib/string_helpers.c",
         "refcount":             SHIM / "lib/refcount.c",

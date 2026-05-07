@@ -1,10 +1,11 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 139 compiled, 139 verified, 0 skipped.
+**Current status:** 142 compiled, 142 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding `kernel/time/timeconv.c` and `kernel/time/timecounter.c`: 139 compiled, 139 verified, 0 skipped.
+- Full local pipeline after adding top-level `crypto/tea.c`, `crypto/arc4.c`, and `crypto/sm4_generic.c`: 142 compiled, 142 verified, 0 skipped.
+- Previous full local pipeline after adding `kernel/time/timeconv.c` and `kernel/time/timecounter.c`: 139 compiled, 139 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/bpf/mprog.c` and `kernel/bpf/tcx.c`: 137 compiled, 137 verified, 0 skipped.
 - Previous full local pipeline after adding the small `kernel/bpf/` support batch (`bpf_lsm_proto.c`, `sysfs_btf.c`, `bpf_cgrp_storage.c`, `bpf_task_storage.c`, and `bpf_inode_storage.c`): 135 compiled, 135 verified, 0 skipped.
 - Previous full local pipeline after adding the remaining iterator targets (`cgroup_iter.c`, `kmem_cache_iter.c`, `task_iter.c`, `bpf_iter.c`, and `btf_iter.c`): 130 compiled, 130 verified, 0 skipped.
@@ -15,7 +16,8 @@
 ## Target plan
 
 1. Park additional `kernel/bpf/` files for now; return later.
-2. Continue with non-BPF folders, starting with tractable `kernel/time/` files before returning to deferred `lib/`, `lib/crypto/`, or top-level `crypto/` work.
+2. Continue with top-level `crypto/` wrapper files where the algorithm state is small or can be modeled without full Crypto API registration.
+3. Treat `drivers/` as a later, narrow-scope pass only; broad driver coverage is too dependent on MMIO, IRQ, DMA, firmware, and bus scaffolding.
 
 ## Notes for `cmdline.c`
 
@@ -99,3 +101,10 @@
 - `timeconv.c` uses verifier-enforced compile-time proofs for representative UTC conversions: Unix epoch, 2000-02-29, 2038 boundary, and pre-epoch `-1`.
 - `timecounter.c` covers init, wraparound cycle delta conversion, forward/backward `timecounter_cyc2time()`, `timecounter_adjtime()`, and a small dynamic map-seeded read path.
 - `timekeeping_debug.c` was tested and left out of this batch because even with debugfs/per-CPU shims it pulls scheduler/PID internals through the include chain; that is not a good small `kernel/time/` target.
+
+## Notes for top-level `crypto/`
+
+- Added real-source targets for `crypto/tea.c`, `crypto/arc4.c`, and `crypto/sm4_generic.c`.
+- `crypto/tea.c` covers TEA, XTEA, and XETA setkey/encrypt/decrypt round-trips with map-seeded input.
+- `crypto/sm4_generic.c` covers SM4 setkey/encrypt/decrypt through the top-level Crypto API wrapper, with `crypto/sm4.c` included in the same translation unit and a local `rol32` shim.
+- `crypto/arc4.c` covers lskcipher init/setkey and the continuation wrapper's zero-length crypt path. The non-zero ARC4 data path remains verifier-limited because `arc4_ctx` is too large for stack placement, and when placed in global data the verifier reloads `ctx->x`/`ctx->y` as unbounded scalars before indexing `S[]`.
