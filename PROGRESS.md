@@ -1,10 +1,11 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 125 compiled, 125 verified, 0 skipped.
+**Current status:** 130 compiled, 130 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding `kernel/bpf/prog_iter.c`, `kernel/bpf/link_iter.c`, `kernel/bpf/map_iter.c`, and `kernel/bpf/dmabuf_iter.c`: 125 compiled, 125 verified, 0 skipped.
+- Full local pipeline after adding the remaining iterator targets (`cgroup_iter.c`, `kmem_cache_iter.c`, `task_iter.c`, `bpf_iter.c`, and `btf_iter.c`): 130 compiled, 130 verified, 0 skipped.
+- Previous full local pipeline after adding `kernel/bpf/prog_iter.c`, `kernel/bpf/link_iter.c`, `kernel/bpf/map_iter.c`, and `kernel/bpf/dmabuf_iter.c`: 125 compiled, 125 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/bpf/reuseport_array.c`: 121 compiled, 121 verified, 0 skipped.
 - CI guardrails now fail on compile failures, verifier failures, skipped objects, and object-open failures.
 
@@ -68,6 +69,9 @@
 ## Notes for `kernel/bpf/*_iter.c`
 
 - Added real-source targets for `prog_iter.c`, `link_iter.c`, `map_iter.c`, and `dmabuf_iter.c` with shared iterator, seq_file, BPF registration, map attach, kfunc, and dma-buf traversal stubs.
+- Added real-source targets for the remaining iterator files: `cgroup_iter.c`, `kmem_cache_iter.c`, `task_iter.c`, `bpf_iter.c`, and `btf_iter.c`.
 - The harnesses use map-provided runtime seeds plus volatile stub counters so iterator start/next/show/stop and attach paths are not constant-folded away.
 - Covered BPF program/link/map sequence iteration, stop-path behavior, iterator registration, map iterator attach validation/fdinfo/link-info, `bpf_map_sum_elem_count()`, dma-buf seq resume/fini behavior, and dma-buf kfunc iterator transitions.
-- Deferred heavier iterator files remain `bpf_iter.c`, `cgroup_iter.c`, `kmem_cache_iter.c`, and `task_iter.c`; `btf_iter.c` is just a tools include wrapper and is lower value for this harness.
+- The second iterator batch covers cgroup attach validation and seq traversal, slab cache kfunc/list traversal, task/task_file sequence paths, the core numeric iterator, and BTF field iteration.
+- `bpf_iter.c` intentionally verifies the built-in numeric iterator path only; the file/link read path remains compiled but is not invoked because it is driven by indirect seq_file callbacks that are not valid verifier input.
+- `task_iter.c` intentionally skips VMA sequence traversal in the harness; task attach, task/task_file seq paths, registration, and open-coded task iterator kfuncs are covered.

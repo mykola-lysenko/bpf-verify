@@ -1747,6 +1747,269 @@ HARNESS_BODIES = {
     return (int)(errors + __bpf_iter_runs + __bpf_iter_dmabuf_puts +
                  __bpf_iter_regs + fdseq.writes + pos + (v != NULL) +
                  (next != NULL) + (seed & 1));""",
+    "cgroup_iter": """\
+    /* cgroup_iter: cgroup attach validation, seq traversal, fdinfo/link-info,
+     * and css kfunc iterator state. */
+    struct cgroup_iter_priv priv = {};
+    struct seq_file seq = { .private = &priv };
+    struct seq_file fdseq = {};
+    union bpf_iter_link_info linfo = {};
+    struct bpf_iter_aux_info aux = {};
+    struct bpf_link_info link_info = {};
+    struct bpf_iter_css css_it = {};
+    struct cgroup_subsys_state *css;
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    u32 order = BPF_CGROUP_ITER_DESCENDANTS_PRE + (seed & 1);
+    loff_t pos = 1;
+    void *v;
+    void *next = NULL;
+    u32 errors = 0;
+
+    __bpf_iter_cgroup_reset();
+    linfo.cgroup.order = 99;
+    errors |= bpf_iter_attach_cgroup(NULL, &linfo, &aux) != -EINVAL;
+    linfo.cgroup.order = order;
+    linfo.cgroup.cgroup_fd = 1;
+    linfo.cgroup.cgroup_id = 10;
+    errors |= bpf_iter_attach_cgroup(NULL, &linfo, &aux) != -EINVAL;
+
+    aux.cgroup.start = &__bpf_iter_cgroup_root;
+    aux.cgroup.order = order;
+
+    errors |= cgroup_iter_seq_init(&priv, &aux) != 0;
+    v = cgroup_iter_seq_start(&seq, &pos);
+    errors |= !IS_ERR(v);
+    cgroup_iter_seq_stop(&seq, v);
+
+    pos = 0;
+    v = cgroup_iter_seq_start(&seq, &pos);
+    if (v && !IS_ERR(v)) {
+        next = cgroup_iter_seq_next(&seq, v, &pos);
+        cgroup_iter_seq_stop(&seq, NULL);
+    } else {
+        errors |= 1;
+        cgroup_iter_seq_stop(&seq, NULL);
+    }
+    cgroup_iter_seq_fini(&priv);
+
+    bpf_iter_cgroup_show_fdinfo(&aux, &fdseq);
+    errors |= fdseq.writes == 0;
+    errors |= bpf_iter_cgroup_fill_link_info(&aux, &link_info) != 0;
+    errors |= link_info.iter.cgroup.order != order;
+    errors |= link_info.iter.cgroup.cgroup_id == 0;
+    bpf_iter_detach_cgroup(&aux);
+
+    errors |= bpf_iter_css_new(&css_it, &__bpf_iter_cgroup_root.self, 99) != -EINVAL;
+    errors |= bpf_iter_css_new(&css_it, &__bpf_iter_cgroup_root.self, order) != 0;
+    css = bpf_iter_css_next(&css_it);
+    errors |= css == NULL;
+    css = bpf_iter_css_next(&css_it);
+    bpf_iter_css_destroy(&css_it);
+
+    errors |= bpf_cgroup_iter_init() != 0;
+
+    return (int)(errors + __bpf_iter_runs + __bpf_iter_regs +
+                 __bpf_iter_cgroup_locks + __bpf_iter_cgroup_unlocks +
+                 __bpf_iter_cgroup_css_gets + __bpf_iter_cgroup_css_puts +
+                 __bpf_iter_cgroup_puts + fdseq.writes + pos +
+                 (next != NULL) + (css != NULL) + (seed & 1));""",
+    "kmem_cache_iter": """\
+    /* kmem_cache_iter: list-backed seq traversal, kfunc iterator refcount
+     * transitions, stop-path handling, fdinfo, and registration. */
+    struct bpf_iter_kmem_cache it = {};
+    union kmem_cache_iter_priv priv = {};
+    struct seq_file seq = { .private = &priv };
+    struct seq_file fdseq = {};
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    loff_t pos = seed & 1;
+    void *v;
+    void *next = NULL;
+    u32 errors = 0;
+
+    __bpf_iter_kmem_reset();
+    errors |= bpf_iter_kmem_cache_new(&it) != 0;
+    v = bpf_iter_kmem_cache_next(&it);
+    errors |= v != &__bpf_iter_kmem0;
+    next = bpf_iter_kmem_cache_next(&it);
+    errors |= next != &__bpf_iter_kmem1;
+    bpf_iter_kmem_cache_destroy(&it);
+
+    v = kmem_cache_iter_seq_start(&seq, &pos);
+    if (v) {
+        errors |= kmem_cache_iter_seq_show(&seq, v) != 7;
+        next = kmem_cache_iter_seq_next(&seq, v, &pos);
+        kmem_cache_iter_seq_stop(&seq, next ? next : v);
+    } else {
+        kmem_cache_iter_seq_stop(&seq, NULL);
+    }
+    priv.kit.pos = NULL;
+    kmem_cache_iter_seq_stop(&seq, NULL);
+
+    bpf_iter_kmem_cache_show_fdinfo(NULL, &fdseq);
+    errors |= fdseq.writes != 1;
+    errors |= bpf_kmem_cache_iter_init() != 0;
+
+    return (int)(errors + __bpf_iter_runs + __bpf_iter_regs +
+                 __bpf_iter_kmem_destroys + fdseq.writes + pos +
+                 (v != NULL) + (next != NULL) + (seed & 1));""",
+    "task_iter": """\
+    /* task_iter: task attach metadata, task/task_file sequence operations,
+     * registration, and open-coded task iterator kfunc state. */
+    struct bpf_iter_seq_task_info task_info = {};
+    struct bpf_iter_seq_task_file_info file_info = {};
+    struct seq_file task_seq = { .private = &task_info };
+    struct seq_file file_seq = { .private = &file_info };
+    struct seq_file fdseq = {};
+    union bpf_iter_link_info linfo = {};
+    struct bpf_iter_aux_info aux = {};
+    struct bpf_link_info link_info = {};
+    struct bpf_iter_task task_it = {};
+    struct task_struct *task;
+    struct file *file;
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    loff_t pos = seed & 1;
+    void *next = NULL;
+    u32 errors = 0;
+
+    __bpf_iter_task_reset();
+    linfo.task.tid = 1;
+    linfo.task.pid = 1;
+    errors |= bpf_iter_attach_task(NULL, &linfo, &aux) != -EINVAL;
+    linfo.task.tid = 1;
+    linfo.task.pid = 0;
+    errors |= bpf_iter_attach_task(NULL, &linfo, &aux) != 0;
+    errors |= aux.task.type != BPF_TASK_ITER_TID;
+    errors |= aux.task.pid != 1;
+    errors |= bpf_iter_fill_link_info(&aux, &link_info) != 0;
+    errors |= link_info.iter.task.tid != 1;
+    bpf_iter_task_show_fdinfo(&aux, &fdseq);
+
+    errors |= init_seq_pidns(&task_info, &aux) != 0;
+    task = task_seq_start(&task_seq, &pos);
+    if (task) {
+        errors |= task_seq_show(&task_seq, task) != 7;
+        next = task_seq_next(&task_seq, task, &pos);
+        task_seq_stop(&task_seq, next);
+    } else {
+        task_seq_stop(&task_seq, NULL);
+    }
+    fini_seq_pidns(&task_info);
+
+    aux.task.type = BPF_TASK_ITER_ALL;
+    aux.task.pid = 1;
+    pos = seed & 1;
+    errors |= init_seq_pidns(&file_info, &aux) != 0;
+    file = task_file_seq_start(&file_seq, &pos);
+    if (file) {
+        errors |= task_file_seq_show(&file_seq, file) != 7;
+        next = task_file_seq_next(&file_seq, file, &pos);
+        task_file_seq_stop(&file_seq, next);
+    } else {
+        task_file_seq_stop(&file_seq, NULL);
+    }
+    fini_seq_pidns(&file_info);
+
+    errors |= bpf_iter_task_new(&task_it, NULL, BPF_TASK_ITER_PROC_THREADS) != -EINVAL;
+    errors |= bpf_iter_task_new(&task_it, NULL, BPF_TASK_ITER_ALL_PROCS) != 0;
+    task = bpf_iter_task_next(&task_it);
+    errors |= task == NULL;
+    task = bpf_iter_task_next(&task_it);
+    bpf_iter_task_destroy(&task_it);
+
+    errors |= task_iter_init() != 0;
+
+    return (int)(errors + __bpf_iter_runs + __bpf_iter_regs +
+                 __bpf_iter_task_gets + __bpf_iter_task_puts +
+                 __bpf_iter_file_gets + __bpf_iter_file_puts +
+                 __bpf_iter_pid_ns_gets + __bpf_iter_pid_ns_puts +
+                 fdseq.writes + pos + (next != NULL) +
+                 (task != NULL) + (seed & 1));""",
+    "bpf_iter": """\
+    /* bpf_iter core: open-coded numeric iterator state and bounds. The
+     * file/link read path remains compiled but is intentionally not invoked
+     * from BPF because it is driven by indirect seq_file callbacks. */
+    struct bpf_iter_num it = {};
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    int start = seed & 3;
+    int end = start + 1 + ((seed >> 2) & 3);
+    int *value;
+    int sum = 0;
+    u32 i;
+    u32 errors = 0;
+
+    __bpf_iter_core_reset();
+    errors |= bpf_iter_num_new(&it, end, start) != -EINVAL;
+    errors |= bpf_iter_num_new(&it, 0, BPF_MAX_LOOPS + 2) != -E2BIG;
+    errors |= bpf_iter_num_new(&it, start, end) != 0;
+    for (i = 0; i < 5; i++) {
+        value = bpf_iter_num_next(&it);
+        if (!value)
+            break;
+        sum += *value;
+    }
+    bpf_iter_num_destroy(&it);
+    errors |= bpf_iter_num_next(&it) != NULL;
+
+    return (int)(errors + sum + i + __bpf_iter_core_allocs +
+                 __bpf_iter_core_frees + (seed & 1));""",
+    "btf_iter": """\
+    /* btf_iter: BTF type/member field offset iteration for IDs and strings. */
+    struct {
+        struct btf_type type;
+        struct btf_member members[2];
+    } rec = {};
+    struct btf_field_iter it = {};
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+    u32 *field;
+    u32 sum = 0;
+    u32 errors = 0;
+
+    rec.type.name_off = 3;
+    rec.type.info = (BTF_KIND_STRUCT << 24) | 2;
+    rec.members[0].name_off = 5;
+    rec.members[0].type = 10 + (seed & 1);
+    rec.members[1].name_off = 7;
+    rec.members[1].type = 20 + (seed & 1);
+
+    errors |= btf_field_iter_init(&it, &rec.type, BTF_FIELD_ITER_IDS) != 0;
+    field = btf_field_iter_next(&it);
+    errors |= !field;
+    if (field)
+        sum += *field;
+    field = btf_field_iter_next(&it);
+    errors |= !field;
+    if (field)
+        sum += *field;
+    errors |= btf_field_iter_next(&it) != NULL;
+
+    errors |= btf_field_iter_init(&it, &rec.type, BTF_FIELD_ITER_STRS) != 0;
+    field = btf_field_iter_next(&it);
+    errors |= !field;
+    if (field)
+        sum += *field;
+    field = btf_field_iter_next(&it);
+    errors |= !field;
+    if (field)
+        sum += *field;
+    field = btf_field_iter_next(&it);
+    errors |= !field;
+    if (field)
+        sum += *field;
+    errors |= btf_field_iter_next(&it) != NULL;
+
+    errors |= btf_field_iter_init(&it, &rec.type, 99) != -EINVAL;
+
+    return (int)(errors + sum + (seed & 1));""",
     # ---------------------------------------------------------------
     # Phase 6 (continued): lpm_trie
     # ---------------------------------------------------------------
@@ -2827,8 +3090,11 @@ struct seq_operations {
 };
 struct bpf_iter_meta {
     struct seq_file *seq;
+    u64 session_id;
+    u64 seq_num;
 };
 struct bpf_map;
+struct cgroup;
 struct bpf_iter__bpf_map_elem {
     __bpf_md_ptr(struct bpf_iter_meta *, meta);
     __bpf_md_ptr(struct bpf_map *, map);
@@ -2869,11 +3135,20 @@ struct bpf_iter_reg {
 struct bpf_prog_aux {
     u32 max_rdonly_access;
     u32 max_rdwr_access;
+    u32 attach_btf_id;
+    const char *attach_func_name;
 };
 struct bpf_prog {
     struct bpf_prog_aux *aux;
+    u32 type;
+    u32 expected_attach_type;
+    bool sleepable;
+};
+struct bpf_map_ops {
+    const struct bpf_iter_seq_info *iter_seq_info;
 };
 struct bpf_map {
+    const struct bpf_map_ops *ops;
     u32 id;
     u32 map_type;
     u32 key_size;
@@ -2881,24 +3156,59 @@ struct bpf_map {
     s64 *elem_count;
 };
 struct bpf_link {
+    const void *ops;
+    struct bpf_prog *prog;
     u32 id;
 };
 struct dma_buf {
     u32 id;
 };
+enum bpf_iter_task_type {
+    BPF_TASK_ITER_ALL = 0,
+    BPF_TASK_ITER_TID,
+    BPF_TASK_ITER_TGID,
+};
 struct bpf_iter_aux_info {
     struct bpf_map *map;
+    struct {
+        struct cgroup *start;
+        int order;
+    } cgroup;
+    struct {
+        enum bpf_iter_task_type type;
+        u32 pid;
+    } task;
 };
 union bpf_iter_link_info {
     struct {
         u32 map_fd;
     } map;
+    struct {
+        u32 order;
+        u32 cgroup_fd;
+        u64 cgroup_id;
+    } cgroup;
+    struct {
+        u32 tid;
+        u32 pid;
+        u32 pid_fd;
+    } task;
 };
 struct bpf_link_info {
     struct {
+        u64 target_name;
+        u32 target_name_len;
         struct {
             u32 map_id;
         } map;
+        struct {
+            u32 order;
+            u64 cgroup_id;
+        } cgroup;
+        struct {
+            u32 tid;
+            u32 pid;
+        } task;
     } iter;
 };
 struct btf_kfunc_id_set {
@@ -2935,6 +3245,7 @@ static inline void __bpf_iter_reset(void)
     __bpf_iter_dmabuf_puts = 0;
     __bpf_iter_prog0.aux = &__bpf_iter_driver_aux;
     __bpf_iter_link0.id = 1;
+    __bpf_iter_map0.ops = 0;
     __bpf_iter_map0.id = 1234;
     __bpf_iter_map0.map_type = BPF_MAP_TYPE_HASH;
     __bpf_iter_map0.key_size = 4;
@@ -3043,6 +3354,1227 @@ static inline void dma_buf_put(struct dma_buf *dmabuf)
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """
 
+CGROUP_ITER_PRE_INCLUDE = BPF_ITER_PRE_INCLUDE + """\
+#define _LINUX_CGROUP_H
+#define __CGROUP_INTERNAL_H
+#define PATH_MAX 4096
+#define GFP_KERNEL 0
+#define BPF_CGROUP_ITER_ORDER_UNSPEC 0
+#define BPF_CGROUP_ITER_SELF_ONLY 1
+#define BPF_CGROUP_ITER_DESCENDANTS_PRE 2
+#define BPF_CGROUP_ITER_DESCENDANTS_POST 3
+#define BPF_CGROUP_ITER_ANCESTORS_UP 4
+#define BPF_CGROUP_ITER_CHILDREN 5
+
+struct cgroup_subsys_state {
+    struct cgroup *cgroup;
+    struct cgroup_subsys_state *parent;
+    u32 refs;
+};
+struct cgroup {
+    struct cgroup_subsys_state self;
+    u64 id;
+    bool dead;
+    u32 refs;
+};
+struct cgroup_namespace {
+    u32 id;
+};
+struct nsproxy {
+    struct cgroup_namespace *cgroup_ns;
+};
+struct task_struct {
+    struct nsproxy *nsproxy;
+};
+
+static struct cgroup_namespace __bpf_iter_cgroup_ns = { .id = 1 };
+static struct nsproxy __bpf_iter_nsproxy = { .cgroup_ns = &__bpf_iter_cgroup_ns };
+static struct task_struct __bpf_iter_current_task = { .nsproxy = &__bpf_iter_nsproxy };
+static struct cgroup __bpf_iter_cgroup_root;
+static struct cgroup __bpf_iter_cgroup_child;
+static char __bpf_iter_cgroup_path_buf[PATH_MAX];
+static volatile u32 __bpf_iter_cgroup_locks;
+static volatile u32 __bpf_iter_cgroup_unlocks;
+static volatile u32 __bpf_iter_cgroup_css_gets;
+static volatile u32 __bpf_iter_cgroup_css_puts;
+static volatile u32 __bpf_iter_cgroup_puts;
+
+#define current (&__bpf_iter_current_task)
+
+static inline void __bpf_iter_cgroup_reset(void)
+{
+    __bpf_iter_reset();
+    __bpf_iter_cgroup_locks = 0;
+    __bpf_iter_cgroup_unlocks = 0;
+    __bpf_iter_cgroup_css_gets = 0;
+    __bpf_iter_cgroup_css_puts = 0;
+    __bpf_iter_cgroup_puts = 0;
+    __bpf_iter_cgroup_root.self.cgroup = &__bpf_iter_cgroup_root;
+    __bpf_iter_cgroup_root.self.parent = 0;
+    __bpf_iter_cgroup_root.self.refs = 1;
+    __bpf_iter_cgroup_root.id = 10;
+    __bpf_iter_cgroup_root.dead = false;
+    __bpf_iter_cgroup_root.refs = 1;
+    __bpf_iter_cgroup_child.self.cgroup = &__bpf_iter_cgroup_child;
+    __bpf_iter_cgroup_child.self.parent = &__bpf_iter_cgroup_root.self;
+    __bpf_iter_cgroup_child.self.refs = 1;
+    __bpf_iter_cgroup_child.id = 11;
+    __bpf_iter_cgroup_child.dead = false;
+    __bpf_iter_cgroup_child.refs = 1;
+}
+static inline void cgroup_lock(void)
+{
+    __bpf_iter_cgroup_locks++;
+}
+static inline void cgroup_unlock(void)
+{
+    __bpf_iter_cgroup_unlocks++;
+}
+static inline bool cgroup_is_dead(const struct cgroup *cgrp)
+{
+    return cgrp->dead;
+}
+static inline void css_get(struct cgroup_subsys_state *css)
+{
+    css->refs++;
+    __bpf_iter_cgroup_css_gets++;
+}
+static inline void css_put(struct cgroup_subsys_state *css)
+{
+    if (css->refs)
+        css->refs--;
+    __bpf_iter_cgroup_css_puts++;
+}
+static inline struct cgroup_subsys_state *
+css_next_descendant_pre(struct cgroup_subsys_state *pos,
+                        struct cgroup_subsys_state *root)
+{
+    if (!pos)
+        return root;
+    if (pos == root)
+        return &__bpf_iter_cgroup_child.self;
+    return 0;
+}
+static inline struct cgroup_subsys_state *
+css_next_descendant_post(struct cgroup_subsys_state *pos,
+                         struct cgroup_subsys_state *root)
+{
+    if (!pos)
+        return &__bpf_iter_cgroup_child.self;
+    if (pos == &__bpf_iter_cgroup_child.self)
+        return root;
+    return 0;
+}
+static inline struct cgroup_subsys_state *
+css_next_child(struct cgroup_subsys_state *pos,
+               struct cgroup_subsys_state *root)
+{
+    (void)root;
+    if (!pos)
+        return &__bpf_iter_cgroup_child.self;
+    return 0;
+}
+static inline struct cgroup *cgroup_v1v2_get_from_fd(int fd)
+{
+    if (fd == 1)
+        return &__bpf_iter_cgroup_root;
+    return ERR_PTR(-EBADF);
+}
+static inline struct cgroup *cgroup_get_from_id(u64 id)
+{
+    if (id == __bpf_iter_cgroup_root.id)
+        return &__bpf_iter_cgroup_root;
+    if (id == __bpf_iter_cgroup_child.id)
+        return &__bpf_iter_cgroup_child;
+    return ERR_PTR(-ENOENT);
+}
+static inline struct cgroup *cgroup_get_from_path(const char *path)
+{
+    (void)path;
+    return &__bpf_iter_cgroup_root;
+}
+static inline void cgroup_put(struct cgroup *cgrp)
+{
+    if (cgrp->refs)
+        cgrp->refs--;
+    __bpf_iter_cgroup_puts++;
+}
+static inline u64 cgroup_id(const struct cgroup *cgrp)
+{
+    return cgrp->id;
+}
+static inline void *kzalloc(size_t size, int flags)
+{
+    (void)flags;
+    if (size > sizeof(__bpf_iter_cgroup_path_buf))
+        return 0;
+    __bpf_iter_cgroup_path_buf[0] = 0;
+    return __bpf_iter_cgroup_path_buf;
+}
+static inline void kfree(const void *ptr)
+{
+    (void)ptr;
+}
+static inline int cgroup_path_ns(struct cgroup *cgrp, char *buf, int buflen,
+                                 struct cgroup_namespace *ns)
+{
+    (void)cgrp;
+    (void)ns;
+    if (buflen > 1) {
+        buf[0] = '/';
+        buf[1] = 0;
+    }
+    return 0;
+}
+"""
+
+KMEM_CACHE_ITER_PRE_INCLUDE = BPF_ITER_PRE_INCLUDE + """\
+#define _LINUX_SLAB_H
+#define MM_SLAB_H
+
+struct mutex {
+    u32 locked;
+};
+struct kmem_cache {
+    struct list_head list;
+    int refcount;
+    u32 id;
+};
+
+static struct list_head slab_caches = { &slab_caches, &slab_caches };
+static struct mutex slab_mutex;
+static struct kmem_cache __bpf_iter_kmem0;
+static struct kmem_cache __bpf_iter_kmem1;
+static volatile u32 __bpf_iter_kmem_destroys;
+static volatile u32 __bpf_iter_kmem_empty;
+
+#ifndef container_of
+#define container_of(ptr, type, member) \
+    ((type *)((char *)(ptr) - __builtin_offsetof(type, member)))
+#endif
+#define list_empty(head) (__bpf_iter_kmem_empty)
+#define list_first_entry(head, type, member) (&__bpf_iter_kmem0)
+#define list_last_entry(head, type, member) (&__bpf_iter_kmem1)
+#define list_next_entry(pos, member) \
+    ((pos) == &__bpf_iter_kmem0 ? &__bpf_iter_kmem1 : (struct kmem_cache *)0)
+#define list_for_each_entry(pos, head, member) \
+    for (u32 __bpf_kmem_i = 0; \
+         __bpf_kmem_i < 2 && (((pos) = __bpf_iter_kmem_by_idx(__bpf_kmem_i)) != 0); \
+         __bpf_kmem_i++)
+
+static inline struct kmem_cache *__bpf_iter_kmem_by_idx(u32 idx)
+{
+    if (idx == 0)
+        return &__bpf_iter_kmem0;
+    if (idx == 1)
+        return &__bpf_iter_kmem1;
+    return 0;
+}
+static inline void __bpf_iter_kmem_reset(void)
+{
+    __bpf_iter_reset();
+    __bpf_iter_kmem_destroys = 0;
+    __bpf_iter_kmem_empty = 0;
+    slab_mutex.locked = 0;
+    __bpf_iter_kmem0.list.next = &__bpf_iter_kmem1.list;
+    __bpf_iter_kmem0.list.prev = &slab_caches;
+    __bpf_iter_kmem0.refcount = 1;
+    __bpf_iter_kmem0.id = 10;
+    __bpf_iter_kmem1.list.next = &slab_caches;
+    __bpf_iter_kmem1.list.prev = &__bpf_iter_kmem0.list;
+    __bpf_iter_kmem1.refcount = 1;
+    __bpf_iter_kmem1.id = 11;
+    slab_caches.next = &__bpf_iter_kmem0.list;
+    slab_caches.prev = &__bpf_iter_kmem1.list;
+}
+static inline void mutex_lock(struct mutex *mutex)
+{
+    mutex->locked = 1;
+}
+static inline void mutex_unlock(struct mutex *mutex)
+{
+    mutex->locked = 0;
+}
+static inline void kmem_cache_destroy(struct kmem_cache *s)
+{
+    s->refcount = 0;
+    __bpf_iter_kmem_destroys++;
+}
+"""
+
+TASK_ITER_PRE_INCLUDE = BPF_ITER_PRE_INCLUDE + """\
+#define _LINUX_INIT_H
+#define _LINUX_NAMEI_H
+#define _LINUX_PID_NS_H
+#define _BPF_MEM_ALLOC_H
+#define _LINUX_MM_TYPES_H
+#define _LINUX_MMAP_LOCK_H
+#define _LINUX_SCHED_MM_H
+#define __MMAP_UNLOCK_WORK_H__
+#undef CONFIG_CGROUPS
+#undef CONFIG_MMU
+#undef per_cpu_ptr
+#define per_cpu_ptr(ptr, cpu) (ptr)
+#define DEFINE_PER_CPU(type, name) static type name
+#define PIDTYPE_TGID 0
+#define PIDTYPE_PID 1
+#define PF_KTHREAD 0x00200000UL
+#define PAGE_SIZE 4096UL
+#define CSS_TASK_ITER_PROCS 1
+#define CSS_TASK_ITER_THREADED 2
+#define RET_INTEGER 1
+#define ARG_PTR_TO_BTF_ID 1
+#define ARG_ANYTHING 2
+#define ARG_PTR_TO_FUNC 3
+#define ARG_PTR_TO_STACK_OR_NULL 4
+#define BTF_TRACING_TYPE_TASK 0
+#define BTF_TRACING_TYPE_FILE 1
+#define BTF_TRACING_TYPE_VMA 2
+#define MAX_BTF_TRACING_TYPE 3
+#define BPF_CALL_5(name, t1, a1, t2, a2, t3, a3, t4, a4, t5, a5) \
+    static u64 name(t1 a1, t2 a2, t3 a3, t4 a4, t5 a5)
+#define thread_group_leader(task) true
+#ifndef container_of
+#define container_of(ptr, type, member) \
+    ((type *)((char *)(ptr) - __builtin_offsetof(type, member)))
+#endif
+
+typedef u64 (*bpf_callback_t)(u64, u64, u64, u64, u64);
+typedef struct {
+    u32 locked;
+} spinlock_t;
+struct pid_namespace {
+    u32 id;
+    u32 refs;
+};
+struct pid {
+    u32 nr;
+};
+struct file {
+    u32 id;
+    u32 refs;
+};
+struct files_struct {
+    struct file *file;
+};
+struct mm_struct {
+    u32 users;
+};
+struct vm_area_struct {
+    unsigned long vm_start;
+    unsigned long vm_end;
+    struct file *vm_file;
+    struct mm_struct *vm_mm;
+};
+struct task_struct {
+    struct files_struct *files;
+    struct task_struct *group_leader;
+    struct task_struct *next_thread;
+    struct mm_struct *mm;
+    unsigned long flags;
+    spinlock_t alloc_lock;
+    u32 pid;
+    u32 refs;
+};
+struct irq_work {
+    u32 busy;
+};
+struct mmap_unlock_irq_work {
+    struct irq_work irq_work;
+    struct mm_struct *mm;
+};
+struct bpf_mem_alloc {
+    u32 dummy;
+};
+struct vma_iterator {
+    struct mm_struct *mm;
+    unsigned long addr;
+};
+struct bpf_func_proto {
+    void *func;
+    bool gpl_only;
+    int ret_type;
+    int arg1_type;
+    int arg2_type;
+    int arg3_type;
+    int arg4_type;
+    int arg5_type;
+    const u32 *arg1_btf_id;
+};
+
+static u32 btf_tracing_ids[MAX_BTF_TRACING_TYPE] = { 1, 2, 3 };
+static struct pid_namespace __bpf_iter_pid_ns = { .id = 1, .refs = 1 };
+static struct pid __bpf_iter_pid = { .nr = 1 };
+static struct file __bpf_iter_file = { .id = 7, .refs = 1 };
+static struct files_struct __bpf_iter_files = { .file = &__bpf_iter_file };
+static struct mm_struct __bpf_iter_mm = { .users = 1 };
+static struct vm_area_struct __bpf_iter_vma = {
+    .vm_start = 0x1000,
+    .vm_end = 0x2000,
+    .vm_file = &__bpf_iter_file,
+    .vm_mm = &__bpf_iter_mm,
+};
+static struct task_struct init_task;
+static struct task_struct __bpf_iter_task0;
+static struct bpf_mem_alloc bpf_global_ma;
+static u64 __bpf_iter_task_vma_storage[16];
+static volatile u32 __bpf_iter_task_gets;
+static volatile u32 __bpf_iter_task_puts;
+static volatile u32 __bpf_iter_file_gets;
+static volatile u32 __bpf_iter_file_puts;
+static volatile u32 __bpf_iter_pid_ns_gets;
+static volatile u32 __bpf_iter_pid_ns_puts;
+static volatile u32 __bpf_iter_mm_gets;
+static volatile u32 __bpf_iter_mm_puts;
+
+#define current (&__bpf_iter_task0)
+
+static inline void __bpf_iter_task_reset(void)
+{
+    __bpf_iter_reset();
+    __bpf_iter_task_gets = 0;
+    __bpf_iter_task_puts = 0;
+    __bpf_iter_file_gets = 0;
+    __bpf_iter_file_puts = 0;
+    __bpf_iter_pid_ns_gets = 0;
+    __bpf_iter_pid_ns_puts = 0;
+    __bpf_iter_mm_gets = 0;
+    __bpf_iter_mm_puts = 0;
+    init_task.files = &__bpf_iter_files;
+    init_task.group_leader = &init_task;
+    init_task.next_thread = 0;
+    init_task.mm = &__bpf_iter_mm;
+    init_task.flags = 0;
+    init_task.alloc_lock.locked = 0;
+    init_task.pid = 0;
+    init_task.refs = 1;
+    __bpf_iter_task0.files = &__bpf_iter_files;
+    __bpf_iter_task0.group_leader = &__bpf_iter_task0;
+    __bpf_iter_task0.next_thread = 0;
+    __bpf_iter_task0.mm = &__bpf_iter_mm;
+    __bpf_iter_task0.flags = 0;
+    __bpf_iter_task0.alloc_lock.locked = 0;
+    __bpf_iter_task0.pid = 1;
+    __bpf_iter_task0.refs = 1;
+    __bpf_iter_file.refs = 1;
+    __bpf_iter_mm.users = 1;
+}
+static inline void rcu_read_lock(void) {}
+static inline void rcu_read_unlock(void) {}
+static inline struct pid *find_pid_ns(u32 nr, struct pid_namespace *ns)
+{
+    (void)ns;
+    if (nr <= 1)
+        return &__bpf_iter_pid;
+    return 0;
+}
+static inline struct pid *find_ge_pid(u32 nr, struct pid_namespace *ns)
+{
+    return find_pid_ns(nr <= 1 ? 1 : nr, ns);
+}
+static inline u32 pid_nr_ns(struct pid *pid, struct pid_namespace *ns)
+{
+    (void)ns;
+    return pid ? pid->nr : 0;
+}
+static inline struct task_struct *get_pid_task(struct pid *pid, int type)
+{
+    (void)type;
+    if (!pid)
+        return 0;
+    __bpf_iter_task0.refs++;
+    __bpf_iter_task_gets++;
+    return &__bpf_iter_task0;
+}
+static inline struct task_struct *find_task_by_pid_ns(u32 nr,
+                                                      struct pid_namespace *ns)
+{
+    (void)ns;
+    if (nr == 1)
+        return &__bpf_iter_task0;
+    return 0;
+}
+static inline struct task_struct *__next_thread(struct task_struct *task)
+{
+    return task->next_thread;
+}
+static inline u32 __task_pid_nr_ns(struct task_struct *task, int type,
+                                   struct pid_namespace *ns)
+{
+    (void)type;
+    (void)ns;
+    return task ? task->pid : 0;
+}
+static inline struct task_struct *get_task_struct(struct task_struct *task)
+{
+    task->refs++;
+    __bpf_iter_task_gets++;
+    return task;
+}
+static inline struct task_struct *get_task_struct_rcu(struct task_struct *task)
+{
+    get_task_struct(task);
+    return task;
+}
+static inline void put_task_struct(struct task_struct *task)
+{
+    if (task && task->refs)
+        task->refs--;
+    __bpf_iter_task_puts++;
+}
+static inline struct pid *pidfd_get_pid(int fd, unsigned int *flags)
+{
+    *flags = 0;
+    if (fd == 1)
+        return &__bpf_iter_pid;
+    return ERR_PTR(-EBADF);
+}
+static inline void put_pid(struct pid *pid)
+{
+    (void)pid;
+}
+static inline struct pid_namespace *task_active_pid_ns(struct task_struct *task)
+{
+    (void)task;
+    return &__bpf_iter_pid_ns;
+}
+static inline struct task_struct *next_task(struct task_struct *task)
+{
+    if (task == &init_task)
+        return &__bpf_iter_task0;
+    return &init_task;
+}
+static inline struct file *fget_task_next(struct task_struct *task,
+                                          unsigned int *fd)
+{
+    (void)task;
+    if (*fd <= 1) {
+        *fd = 1;
+        __bpf_iter_file.refs++;
+        __bpf_iter_file_gets++;
+        return &__bpf_iter_file;
+    }
+    return 0;
+}
+static inline void fput(struct file *file)
+{
+    if (file && file->refs)
+        file->refs--;
+    __bpf_iter_file_puts++;
+}
+static inline void get_file(struct file *file)
+{
+    if (file)
+        file->refs++;
+    __bpf_iter_file_gets++;
+}
+static inline struct pid_namespace *get_pid_ns(struct pid_namespace *ns)
+{
+    ns->refs++;
+    __bpf_iter_pid_ns_gets++;
+    return ns;
+}
+static inline void put_pid_ns(struct pid_namespace *ns)
+{
+    if (ns->refs)
+        ns->refs--;
+    __bpf_iter_pid_ns_puts++;
+}
+static inline struct mm_struct *get_task_mm(struct task_struct *task)
+{
+    (void)task;
+    __bpf_iter_mm.users++;
+    __bpf_iter_mm_gets++;
+    return &__bpf_iter_mm;
+}
+static inline void mmput(struct mm_struct *mm)
+{
+    if (mm && mm->users)
+        mm->users--;
+    __bpf_iter_mm_puts++;
+}
+static inline void mmput_async(struct mm_struct *mm)
+{
+    mmput(mm);
+}
+static inline void mmget(struct mm_struct *mm)
+{
+    mm->users++;
+    __bpf_iter_mm_gets++;
+}
+static inline int mmap_read_lock_killable(struct mm_struct *mm)
+{
+    (void)mm;
+    return 0;
+}
+static inline bool mmap_read_trylock(struct mm_struct *mm)
+{
+    (void)mm;
+    return true;
+}
+static inline void mmap_read_unlock(struct mm_struct *mm)
+{
+    (void)mm;
+}
+static inline void mmap_read_unlock_non_owner(struct mm_struct *mm)
+{
+    (void)mm;
+}
+static inline bool mmap_lock_is_contended(struct mm_struct *mm)
+{
+    (void)mm;
+    return false;
+}
+static inline struct vm_area_struct *find_vma(struct mm_struct *mm,
+                                              unsigned long addr)
+{
+    (void)mm;
+    if (addr < __bpf_iter_vma.vm_end)
+        return &__bpf_iter_vma;
+    return 0;
+}
+static inline void vma_iter_init(struct vma_iterator *vmi,
+                                 struct mm_struct *mm,
+                                 unsigned long addr)
+{
+    vmi->mm = mm;
+    vmi->addr = addr;
+}
+static inline struct vm_area_struct *vma_next(struct vma_iterator *vmi)
+{
+    return find_vma(vmi->mm, vmi->addr);
+}
+static inline struct vm_area_struct *lock_vma_under_rcu(struct mm_struct *mm,
+                                                        unsigned long addr)
+{
+    return find_vma(mm, addr);
+}
+static inline void vma_end_read(struct vm_area_struct *vma)
+{
+    (void)vma;
+}
+static inline bool spin_trylock(spinlock_t *lock)
+{
+    lock->locked = 1;
+    return true;
+}
+static inline void spin_unlock(spinlock_t *lock)
+{
+    lock->locked = 0;
+}
+static inline void *bpf_mem_alloc(struct bpf_mem_alloc *ma, size_t size)
+{
+    (void)ma;
+    if (size > sizeof(__bpf_iter_task_vma_storage))
+        return 0;
+    return __bpf_iter_task_vma_storage;
+}
+static inline void bpf_mem_free(struct bpf_mem_alloc *ma, void *ptr)
+{
+    (void)ma;
+    (void)ptr;
+}
+static inline bool bpf_mmap_unlock_get_irq_work(struct mmap_unlock_irq_work **work_ptr)
+{
+    *work_ptr = 0;
+    return false;
+}
+static inline void bpf_mmap_unlock_mm(struct mmap_unlock_irq_work *work,
+                                      struct mm_struct *mm)
+{
+    (void)work;
+    mmap_read_unlock(mm);
+}
+static inline void init_irq_work(struct irq_work *work,
+                                 void (*func)(struct irq_work *entry))
+{
+    (void)func;
+    work->busy = 0;
+}
+static inline void *memcpy(void *dst, const void *src, size_t n)
+{
+    char *d = dst;
+    const char *s = src;
+    while (n--)
+        *d++ = *s++;
+    return dst;
+}
+"""
+
+BPF_ITER_CORE_PRE_INCLUDE = """\
+#include <linux/errno.h>
+#define _LINUX_FS_H
+#define _LINUX_ANON_INODES_H
+#define __LINUX_FILTER_H__
+#define _LINUX_BPF_H 1
+#define __LINUX_RCUPDATE_TRACE_H
+#define __user
+#define __aligned(x) __attribute__((aligned(x)))
+#define __init
+#define __bpf_kfunc
+#define __bpf_kfunc_start_defs()
+#define __bpf_kfunc_end_defs()
+#define PAGE_SIZE 4096
+#define GFP_KERNEL 0
+#define GFP_USER 0
+#define __GFP_NOWARN 0
+#define O_RDONLY 0
+#define O_CLOEXEC 0
+#define BPF_LINK_TYPE_ITER 1
+#define BPF_MAX_LOOPS 16
+#define BPF_ITER_RESCHED 1
+#define BPF_ITER_FUNC_PREFIX \"bpf_iter_\"
+#define RET_INTEGER 1
+#define ARG_CONST_MAP_PTR 1
+#define ARG_PTR_TO_FUNC 2
+#define ARG_PTR_TO_STACK_OR_NULL 3
+#define ARG_ANYTHING 4
+#define PTR_TO_BTF_ID_OR_NULL 1
+#define PTR_TRUSTED 2
+#define PTR_TO_BUF 4
+#define PTR_MAYBE_NULL 8
+#define MEM_RDONLY 16
+#define ERR_PTR(error) ((void *)(long)(error))
+#define PTR_ERR(ptr) ((long)(ptr))
+#define IS_ERR(ptr) ((unsigned long)(void *)(ptr) >= (unsigned long)-4095)
+#define IS_ERR_OR_NULL(ptr) (!(ptr) || IS_ERR(ptr))
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define min_t(type, a, b) ((type)(a) < (type)(b) ? (type)(a) : (type)(b))
+#define xchg(ptr, val) ({ typeof(*(ptr)) __old = *(ptr); *(ptr) = (val); __old; })
+#define pr_info_ratelimited(fmt, ...) do { } while (0)
+#define cond_resched() do { } while (0)
+#define LIST_HEAD_INIT(name) { &(name), &(name) }
+#define DEFINE_MUTEX(name) struct mutex name
+#define atomic64_inc_return(v) (++((v)->counter))
+#define seq_has_overflowed(seq) ((seq)->count > (seq)->size)
+#define BPF_CALL_4(name, t1, a1, t2, a2, t3, a3, t4, a4) \
+    static u64 name(t1 a1, t2 a2, t3 a3, t4 a4)
+#define BUILD_BUG_ON(cond) do { } while (0)
+#ifndef container_of
+#define container_of(ptr, type, member) \
+    ((type *)((char *)(ptr) - __builtin_offsetof(type, member)))
+#endif
+
+typedef long ssize_t;
+typedef u64 (*bpf_callback_t)(u64, u64, u64, u64, u64);
+struct mutex {
+    u32 locked;
+};
+struct inode {
+    void *i_private;
+};
+struct file;
+struct file_operations {
+    int (*open)(struct inode *inode, struct file *file);
+    ssize_t (*read)(struct file *file, char __user *buf, size_t size,
+                    loff_t *ppos);
+    int (*release)(struct inode *inode, struct file *file);
+};
+struct file {
+    void *private_data;
+    struct inode *f_inode;
+    const struct file_operations *f_op;
+};
+struct seq_file;
+struct bpf_iter_aux_info;
+struct seq_operations {
+    void *(*start)(struct seq_file *seq, loff_t *pos);
+    void *(*next)(struct seq_file *seq, void *v, loff_t *pos);
+    void (*stop)(struct seq_file *seq, void *v);
+    int (*show)(struct seq_file *seq, void *v);
+};
+struct seq_file {
+    void *private;
+    struct mutex lock;
+    char *buf;
+    size_t size;
+    size_t count;
+    size_t from;
+    loff_t index;
+    const struct seq_operations *op;
+    struct file *file;
+};
+struct bpf_iter_meta {
+    struct seq_file *seq;
+    u64 session_id;
+    u64 seq_num;
+};
+struct bpf_ctx_arg_aux {
+    u32 offset;
+    u32 reg_type;
+    u32 btf_id;
+};
+struct bpf_iter_seq_info {
+    const struct seq_operations *seq_ops;
+    int (*init_seq_private)(void *priv, struct bpf_iter_aux_info *aux);
+    void (*fini_seq_private)(void *priv);
+    u32 seq_priv_size;
+};
+struct bpf_prog_aux {
+    u32 attach_btf_id;
+    const char *attach_func_name;
+};
+struct bpf_prog {
+    struct bpf_prog_aux *aux;
+    u32 type;
+    u32 expected_attach_type;
+    bool sleepable;
+};
+struct bpf_map;
+struct bpf_map_ops {
+    const struct bpf_iter_seq_info *iter_seq_info;
+    int (*map_for_each_callback)(struct bpf_map *map, void *callback_fn,
+                                 void *callback_ctx, u64 flags);
+};
+struct bpf_map {
+    const struct bpf_map_ops *ops;
+};
+struct bpf_iter_aux_info {
+    struct bpf_map *map;
+};
+union bpf_iter_link_info {
+    struct {
+        u32 map_fd;
+    } map;
+};
+struct bpf_link_info {
+    struct {
+        u64 target_name;
+        u32 target_name_len;
+    } iter;
+};
+enum bpf_func_id {
+    BPF_FUNC_unspec = 0,
+};
+struct bpf_func_proto {
+    void *func;
+    bool gpl_only;
+    int ret_type;
+    int arg1_type;
+    int arg2_type;
+    int arg3_type;
+    int arg4_type;
+};
+typedef int (*bpf_iter_attach_target_t)(struct bpf_prog *prog,
+                                        union bpf_iter_link_info *linfo,
+                                        struct bpf_iter_aux_info *aux);
+typedef void (*bpf_iter_detach_target_t)(struct bpf_iter_aux_info *aux);
+typedef void (*bpf_iter_show_fdinfo_t)(const struct bpf_iter_aux_info *aux,
+                                       struct seq_file *seq);
+typedef int (*bpf_iter_fill_link_info_t)(const struct bpf_iter_aux_info *aux,
+                                         struct bpf_link_info *info);
+typedef const struct bpf_func_proto *
+(*bpf_iter_get_func_proto_t)(enum bpf_func_id func_id,
+                             const struct bpf_prog *prog);
+struct bpf_iter_reg {
+    const char *target;
+    bpf_iter_attach_target_t attach_target;
+    bpf_iter_detach_target_t detach_target;
+    bpf_iter_show_fdinfo_t show_fdinfo;
+    bpf_iter_fill_link_info_t fill_link_info;
+    bpf_iter_get_func_proto_t get_func_proto;
+    u32 ctx_arg_info_size;
+    u32 feature;
+    struct bpf_ctx_arg_aux ctx_arg_info[4];
+    const struct bpf_iter_seq_info *seq_info;
+};
+struct bpf_link;
+struct bpf_link_ops {
+    void (*release)(struct bpf_link *link);
+    void (*dealloc)(struct bpf_link *link);
+    int (*update_prog)(struct bpf_link *link, struct bpf_prog *new_prog,
+                       struct bpf_prog *old_prog);
+    void (*show_fdinfo)(const struct bpf_link *link, struct seq_file *seq);
+    int (*fill_link_info)(const struct bpf_link *link,
+                          struct bpf_link_info *info);
+};
+struct bpf_link {
+    const struct bpf_link_ops *ops;
+    struct bpf_prog *prog;
+    u32 type;
+    u32 attach_type;
+};
+struct bpf_link_primer {
+    struct bpf_link *link;
+};
+union bpf_attr {
+    struct {
+        u32 target_fd;
+        u32 flags;
+        u64 iter_info;
+        u32 iter_info_len;
+        u32 attach_type;
+    } link_create;
+};
+typedef struct {
+    void *ptr;
+    bool is_kernel;
+} bpfptr_t;
+struct fd_prepare {
+    int err;
+    int fd;
+    struct file *file;
+};
+struct bpf_run_ctx {
+    u32 dummy;
+};
+struct bpf_iter_num {
+    __u64 __opaque[1];
+} __aligned(8);
+
+static u64 __bpf_iter_core_alloc_storage[64];
+static char __bpf_iter_core_seq_buf[PAGE_SIZE];
+static struct file __bpf_iter_core_file;
+static struct inode __bpf_iter_core_inode;
+static volatile u32 __bpf_iter_core_allocs;
+static volatile u32 __bpf_iter_core_frees;
+static volatile u32 __bpf_iter_core_prog_puts;
+static volatile u32 __bpf_iter_core_prog_incs;
+static volatile u32 __bpf_iter_core_link_sets;
+
+static inline void __bpf_iter_core_reset(void)
+{
+    __bpf_iter_core_allocs = 0;
+    __bpf_iter_core_frees = 0;
+    __bpf_iter_core_prog_puts = 0;
+    __bpf_iter_core_prog_incs = 0;
+    __bpf_iter_core_link_sets = 0;
+    __bpf_iter_core_file.private_data = 0;
+    __bpf_iter_core_file.f_inode = &__bpf_iter_core_inode;
+    __bpf_iter_core_file.f_op = 0;
+    __bpf_iter_core_inode.i_private = 0;
+}
+static inline void mutex_lock(struct mutex *mutex)
+{
+    mutex->locked = 1;
+}
+static inline void mutex_unlock(struct mutex *mutex)
+{
+    mutex->locked = 0;
+}
+static inline void INIT_LIST_HEAD(struct list_head *list)
+{
+    list->next = list;
+    list->prev = list;
+}
+static inline void list_add(struct list_head *entry, struct list_head *head)
+{
+    entry->next = head->next;
+    entry->prev = head;
+    head->next->prev = entry;
+    head->next = entry;
+}
+static inline void list_del(struct list_head *entry)
+{
+    entry->prev->next = entry->next;
+    entry->next->prev = entry->prev;
+    entry->next = entry;
+    entry->prev = entry;
+}
+#define list_for_each_entry(pos, head, member) \
+    for (pos = container_of((head)->next, typeof(*pos), member); \
+         &pos->member != (head); \
+         pos = container_of(pos->member.next, typeof(*pos), member))
+static inline void *__bpf_iter_core_alloc(size_t size)
+{
+    (void)size;
+    __bpf_iter_core_allocs++;
+    return __bpf_iter_core_alloc_storage;
+}
+#define kzalloc_obj(obj, ...) __bpf_iter_core_alloc(sizeof(obj))
+static inline void kfree(const void *ptr)
+{
+    (void)ptr;
+    __bpf_iter_core_frees++;
+}
+static inline void *kvmalloc(size_t size, int flags)
+{
+    (void)flags;
+    if (size > sizeof(__bpf_iter_core_seq_buf))
+        return 0;
+    return __bpf_iter_core_seq_buf;
+}
+static inline int copy_to_user(void *dst, const void *src, size_t n)
+{
+    (void)dst;
+    (void)src;
+    (void)n;
+    return 0;
+}
+static inline int put_user(char value, char *dst)
+{
+    *dst = value;
+    return 0;
+}
+static inline int __bpf_iter_core_seq_printf(struct seq_file *seq)
+{
+    seq->count++;
+    return 0;
+}
+#define seq_printf(seq, fmt, ...) __bpf_iter_core_seq_printf(seq)
+static inline char *u64_to_user_ptr(u64 value)
+{
+    return (char *)(long)value;
+}
+static inline struct file *anon_inode_getfile(const char *name,
+                                              const struct file_operations *fops,
+                                              void *priv, int flags)
+{
+    (void)name;
+    (void)priv;
+    (void)flags;
+    __bpf_iter_core_file.f_op = fops;
+    return &__bpf_iter_core_file;
+}
+#define FD_PREPARE(name, flags, file_expr) \
+    struct fd_prepare name = { .err = 0, .fd = 3, .file = (file_expr) }
+static inline struct file *fd_prepare_file(struct fd_prepare fdf)
+{
+    return fdf.file;
+}
+static inline int fd_publish(struct fd_prepare fdf)
+{
+    return fdf.fd;
+}
+static inline struct bpf_iter_priv_data *
+__seq_open_private(struct file *file, const struct seq_operations *ops,
+                   u32 size)
+{
+    struct seq_file *seq = (struct seq_file *)__bpf_iter_core_alloc_storage;
+    (void)size;
+    seq->op = ops;
+    seq->file = file;
+    seq->buf = 0;
+    seq->size = 0;
+    seq->count = 0;
+    seq->from = 0;
+    seq->index = 0;
+    file->private_data = seq;
+    return (struct bpf_iter_priv_data *)(seq + 1);
+}
+static inline int seq_release_private(struct inode *inode, struct file *file)
+{
+    (void)inode;
+    file->private_data = 0;
+    return 0;
+}
+static inline void bpf_prog_put(struct bpf_prog *prog)
+{
+    (void)prog;
+    __bpf_iter_core_prog_puts++;
+}
+static inline void bpf_prog_inc(struct bpf_prog *prog)
+{
+    (void)prog;
+    __bpf_iter_core_prog_incs++;
+}
+static inline void bpf_link_init(struct bpf_link *link, int type,
+                                 const struct bpf_link_ops *ops,
+                                 struct bpf_prog *prog, u32 attach_type)
+{
+    link->type = type;
+    link->ops = ops;
+    link->prog = prog;
+    link->attach_type = attach_type;
+}
+static inline int bpf_link_prime(struct bpf_link *link,
+                                 struct bpf_link_primer *primer)
+{
+    primer->link = link;
+    return 0;
+}
+static inline void bpf_link_cleanup(struct bpf_link_primer *primer)
+{
+    primer->link = 0;
+}
+static inline int bpf_link_settle(struct bpf_link_primer *primer)
+{
+    (void)primer;
+    __bpf_iter_core_link_sets++;
+    return 5;
+}
+static inline bpfptr_t make_bpfptr(u64 value, bool is_kernel)
+{
+    bpfptr_t ptr = { .ptr = (void *)(long)value, .is_kernel = is_kernel };
+    return ptr;
+}
+static inline bool bpfptr_is_null(bpfptr_t ptr)
+{
+    return !ptr.ptr;
+}
+static inline int bpf_check_uarg_tail_zero(bpfptr_t ptr, u32 size, u32 len)
+{
+    (void)ptr;
+    (void)size;
+    (void)len;
+    return 0;
+}
+static inline int copy_from_bpfptr(void *dst, bpfptr_t src, u32 len)
+{
+    char *d = dst;
+    u32 i;
+
+    (void)src;
+    (void)len;
+    for (i = 0; i < sizeof(union bpf_iter_link_info); i++)
+        d[i] = 0;
+    return 0;
+}
+static inline int bpf_prog_ctx_arg_info_init(struct bpf_prog *prog,
+                                             struct bpf_ctx_arg_aux *info,
+                                             u32 nr)
+{
+    (void)prog;
+    (void)info;
+    return (int)nr;
+}
+static inline struct bpf_run_ctx *bpf_set_run_ctx(struct bpf_run_ctx *run_ctx)
+{
+    return run_ctx;
+}
+static inline void bpf_reset_run_ctx(struct bpf_run_ctx *run_ctx)
+{
+    (void)run_ctx;
+}
+static inline int bpf_prog_run(struct bpf_prog *prog, void *ctx)
+{
+    (void)prog;
+    (void)ctx;
+    return 0;
+}
+static inline void rcu_read_lock_trace(void) {}
+static inline void rcu_read_unlock_trace(void) {}
+static inline void rcu_read_lock_dont_migrate(void) {}
+static inline void rcu_read_unlock_migrate(void) {}
+static inline void migrate_disable(void) {}
+static inline void migrate_enable(void) {}
+static inline void might_fault(void) {}
+static inline int strlen(const char *s)
+{
+    int n = 0;
+    while (s[n])
+        n++;
+    return n;
+}
+static inline int strcmp(const char *a, const char *b)
+{
+    int i = 0;
+    while (a[i] && a[i] == b[i])
+        i++;
+    return (unsigned char)a[i] - (unsigned char)b[i];
+}
+static inline int strncmp(const char *a, const char *b, size_t n)
+{
+    size_t i = 0;
+    while (i < n && a[i] && a[i] == b[i])
+        i++;
+    if (i == n)
+        return 0;
+    return (unsigned char)a[i] - (unsigned char)b[i];
+}
+static inline void *__bpf_iter_core_memset(void *dst, int c, size_t n)
+{
+    char *d = dst;
+    while (n--)
+        *d++ = (char)c;
+    return dst;
+}
+#define memset(dst, c, n) __bpf_iter_core_memset((dst), (c), (n))
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+"""
+
+BTF_ITER_PRE_INCLUDE = """\
+#include <linux/errno.h>
+#define _LINUX_BPF_H 1
+#define _LINUX_BTF_H
+#define offsetof(type, member) __builtin_offsetof(type, member)
+#define BTF_KIND_UNKN 0
+#define BTF_KIND_INT 1
+#define BTF_KIND_PTR 2
+#define BTF_KIND_ARRAY 3
+#define BTF_KIND_STRUCT 4
+#define BTF_KIND_UNION 5
+#define BTF_KIND_ENUM 6
+#define BTF_KIND_FWD 7
+#define BTF_KIND_TYPEDEF 8
+#define BTF_KIND_VOLATILE 9
+#define BTF_KIND_CONST 10
+#define BTF_KIND_RESTRICT 11
+#define BTF_KIND_FUNC 12
+#define BTF_KIND_FUNC_PROTO 13
+#define BTF_KIND_VAR 14
+#define BTF_KIND_DATASEC 15
+#define BTF_KIND_FLOAT 16
+#define BTF_KIND_DECL_TAG 17
+#define BTF_KIND_TYPE_TAG 18
+#define BTF_KIND_ENUM64 19
+
+enum btf_field_iter_kind {
+    BTF_FIELD_ITER_IDS,
+    BTF_FIELD_ITER_STRS,
+};
+struct btf_type {
+    u32 name_off;
+    u32 info;
+    union {
+        u32 size;
+        u32 type;
+    };
+};
+struct btf_array {
+    u32 type;
+    u32 index_type;
+    u32 nelems;
+};
+struct btf_member {
+    u32 name_off;
+    u32 type;
+    u32 offset;
+};
+struct btf_param {
+    u32 name_off;
+    u32 type;
+};
+struct btf_var_secinfo {
+    u32 type;
+    u32 offset;
+    u32 size;
+};
+struct btf_enum {
+    u32 name_off;
+    s32 val;
+};
+struct btf_enum64 {
+    u32 name_off;
+    u32 val_lo32;
+    u32 val_hi32;
+};
+struct btf_field_desc {
+    u32 t_off_cnt;
+    u32 t_offs[2];
+    u32 m_sz;
+    u32 m_off_cnt;
+    u32 m_offs[2];
+};
+struct btf_field_iter {
+    void *p;
+    int m_idx;
+    int off_idx;
+    int vlen;
+    struct btf_field_desc desc;
+};
+static inline u32 btf_kind(const struct btf_type *t)
+{
+    return (t->info >> 24) & 0x1f;
+}
+static inline u32 btf_vlen(const struct btf_type *t)
+{
+    return t->info & 0xffff;
+}
+#define btf_type_var_secinfo(t) ((void *)((struct btf_type *)(t) + 1))
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+"""
+
 # Extra C code injected into the harness BEFORE the source file include,
 # keyed by src_name. Used for per-file stubs and workarounds.
 #
@@ -3054,6 +4586,11 @@ EXTRA_PRE_INCLUDE = {
     "link_iter": BPF_ITER_PRE_INCLUDE,
     "map_iter": BPF_ITER_PRE_INCLUDE,
     "dmabuf_iter": BPF_ITER_PRE_INCLUDE,
+    "cgroup_iter": CGROUP_ITER_PRE_INCLUDE,
+    "kmem_cache_iter": KMEM_CACHE_ITER_PRE_INCLUDE,
+    "task_iter": TASK_ITER_PRE_INCLUDE,
+    "bpf_iter": BPF_ITER_CORE_PRE_INCLUDE,
+    "btf_iter": BTF_ITER_PRE_INCLUDE,
     # dim.c uses DIV_ROUND_UP(npkts * USEC_PER_MSEC, delta_us) where npkts is
     # u32 and USEC_PER_MSEC is 1000L (signed). The result is signed, causing
     # the BPF backend to generate sdiv which it cannot select.
@@ -6087,6 +7624,21 @@ static inline void bpf_map_put(struct bpf_map *map)
     "dmabuf_iter": """\
 #pragma clang attribute pop
 """,
+    "cgroup_iter": """\
+#pragma clang attribute pop
+""",
+    "kmem_cache_iter": """\
+#pragma clang attribute pop
+""",
+    "task_iter": """\
+#pragma clang attribute pop
+""",
+    "bpf_iter": """\
+#pragma clang attribute pop
+""",
+    "btf_iter": """\
+#pragma clang attribute pop
+""",
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
  * The shim defines all tnum functions as static __always_inline, so they are
@@ -6554,6 +8106,11 @@ def main():
         "link_iter":             KSRC / "kernel/bpf/link_iter.c",
         "map_iter":              KSRC / "kernel/bpf/map_iter.c",
         "dmabuf_iter":           KSRC / "kernel/bpf/dmabuf_iter.c",
+        "cgroup_iter":           KSRC / "kernel/bpf/cgroup_iter.c",
+        "kmem_cache_iter":       KSRC / "kernel/bpf/kmem_cache_iter.c",
+        "task_iter":             KSRC / "kernel/bpf/task_iter.c",
+        "bpf_iter":              KSRC / "kernel/bpf/bpf_iter.c",
+        "btf_iter":              KSRC / "kernel/bpf/btf_iter.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",
