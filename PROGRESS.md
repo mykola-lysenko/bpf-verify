@@ -1,10 +1,11 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 130 compiled, 130 verified, 0 skipped.
+**Current status:** 135 compiled, 135 verified, 0 skipped.
 
 ## Recent baseline
 
-- Full local pipeline after adding the remaining iterator targets (`cgroup_iter.c`, `kmem_cache_iter.c`, `task_iter.c`, `bpf_iter.c`, and `btf_iter.c`): 130 compiled, 130 verified, 0 skipped.
+- Full local pipeline after adding the small `kernel/bpf/` support batch (`bpf_lsm_proto.c`, `sysfs_btf.c`, `bpf_cgrp_storage.c`, `bpf_task_storage.c`, and `bpf_inode_storage.c`): 135 compiled, 135 verified, 0 skipped.
+- Previous full local pipeline after adding the remaining iterator targets (`cgroup_iter.c`, `kmem_cache_iter.c`, `task_iter.c`, `bpf_iter.c`, and `btf_iter.c`): 130 compiled, 130 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/bpf/prog_iter.c`, `kernel/bpf/link_iter.c`, `kernel/bpf/map_iter.c`, and `kernel/bpf/dmabuf_iter.c`: 125 compiled, 125 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/bpf/reuseport_array.c`: 121 compiled, 121 verified, 0 skipped.
 - CI guardrails now fail on compile failures, verifier failures, skipped objects, and object-open failures.
@@ -75,3 +76,10 @@
 - The second iterator batch covers cgroup attach validation and seq traversal, slab cache kfunc/list traversal, task/task_file sequence paths, the core numeric iterator, and BTF field iteration.
 - `bpf_iter.c` intentionally verifies the built-in numeric iterator path only; the file/link read path remains compiled but is not invoked because it is driven by indirect seq_file callbacks that are not valid verifier input.
 - `task_iter.c` intentionally skips VMA sequence traversal in the harness; task attach, task/task_file seq paths, registration, and open-coded task iterator kfuncs are covered.
+
+## Notes for small `kernel/bpf/` support files
+
+- Added real-source targets for `bpf_lsm_proto.c`, `sysfs_btf.c`, `bpf_cgrp_storage.c`, `bpf_task_storage.c`, and `bpf_inode_storage.c`.
+- `bpf_lsm_proto.c` covers the nullable `mmap_file` BPF LSM hook definition.
+- `sysfs_btf.c` covers BTF sysfs mmap accept/reject paths; `btf_vmlinux_init()` remains compiled but is not invoked because the real init path depends on linker-provided BTF section symbols.
+- The storage harnesses cover fd/pidfd/cgroup lookup, update, delete, helper get/delete, map allocation/free wrapper paths, and object free teardown using focused local-storage stubs rather than the full `bpf_local_storage.c` implementation.
