@@ -1,8 +1,10 @@
 /* BPF shim: asm/atomic.h
  *
  * x86 atomic.h uses xadd/cmpxchg inline asm that cannot be emitted for BPF.
- * Provide only the primitive arch_atomic hooks here; linux/atomic's generated
- * fallback layer derives inc/dec/test/unless helpers from these primitives.
+ * Model the primitive arch_atomic hooks with plain C operations; BPF
+ * verification is single-threaded, so atomic ordering is not relevant here.
+ * linux/atomic's generated fallback layer derives inc/dec/test/unless helpers
+ * from these primitives.
  */
 #ifndef _ASM_ATOMIC_H
 #define _ASM_ATOMIC_H
@@ -35,21 +37,23 @@ static __always_inline void arch_atomic_set_release(atomic_t *v, int i)
 }
 #define arch_atomic_set_release arch_atomic_set_release
 
-#define __BPF_ATOMIC_FETCH_OP(op, builtin)				\
+#define __BPF_ATOMIC_FETCH_OP(op, c_op)					\
 static __always_inline int arch_atomic_fetch_##op(int i, atomic_t *v)	\
 {									\
-	return builtin(&v->counter, i);					\
+	int old = READ_ONCE(v->counter);				\
+	WRITE_ONCE(v->counter, old c_op i);				\
+	return old;							\
 }
 
-__BPF_ATOMIC_FETCH_OP(add, __sync_fetch_and_add)
+__BPF_ATOMIC_FETCH_OP(add, +)
 #define arch_atomic_fetch_add arch_atomic_fetch_add
-__BPF_ATOMIC_FETCH_OP(sub, __sync_fetch_and_sub)
+__BPF_ATOMIC_FETCH_OP(sub, -)
 #define arch_atomic_fetch_sub arch_atomic_fetch_sub
-__BPF_ATOMIC_FETCH_OP(and, __sync_fetch_and_and)
+__BPF_ATOMIC_FETCH_OP(and, &)
 #define arch_atomic_fetch_and arch_atomic_fetch_and
-__BPF_ATOMIC_FETCH_OP(or, __sync_fetch_and_or)
+__BPF_ATOMIC_FETCH_OP(or, |)
 #define arch_atomic_fetch_or arch_atomic_fetch_or
-__BPF_ATOMIC_FETCH_OP(xor, __sync_fetch_and_xor)
+__BPF_ATOMIC_FETCH_OP(xor, ^)
 #define arch_atomic_fetch_xor arch_atomic_fetch_xor
 
 #define __BPF_ATOMIC_RETURN_OP(op, c_op)				\
@@ -125,21 +129,23 @@ static __always_inline void arch_atomic64_set_release(atomic64_t *v, s64 i)
 }
 #define arch_atomic64_set_release arch_atomic64_set_release
 
-#define __BPF_ATOMIC64_FETCH_OP(op, builtin)				\
+#define __BPF_ATOMIC64_FETCH_OP(op, c_op)				\
 static __always_inline s64 arch_atomic64_fetch_##op(s64 i, atomic64_t *v)\
 {									\
-	return builtin(&v->counter, i);					\
+	s64 old = READ_ONCE(v->counter);				\
+	WRITE_ONCE(v->counter, old c_op i);				\
+	return old;							\
 }
 
-__BPF_ATOMIC64_FETCH_OP(add, __sync_fetch_and_add)
+__BPF_ATOMIC64_FETCH_OP(add, +)
 #define arch_atomic64_fetch_add arch_atomic64_fetch_add
-__BPF_ATOMIC64_FETCH_OP(sub, __sync_fetch_and_sub)
+__BPF_ATOMIC64_FETCH_OP(sub, -)
 #define arch_atomic64_fetch_sub arch_atomic64_fetch_sub
-__BPF_ATOMIC64_FETCH_OP(and, __sync_fetch_and_and)
+__BPF_ATOMIC64_FETCH_OP(and, &)
 #define arch_atomic64_fetch_and arch_atomic64_fetch_and
-__BPF_ATOMIC64_FETCH_OP(or, __sync_fetch_and_or)
+__BPF_ATOMIC64_FETCH_OP(or, |)
 #define arch_atomic64_fetch_or arch_atomic64_fetch_or
-__BPF_ATOMIC64_FETCH_OP(xor, __sync_fetch_and_xor)
+__BPF_ATOMIC64_FETCH_OP(xor, ^)
 #define arch_atomic64_fetch_xor arch_atomic64_fetch_xor
 
 #define __BPF_ATOMIC64_RETURN_OP(op, c_op)				  \
