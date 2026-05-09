@@ -54,9 +54,9 @@ BPF_CFLAGS = [
     # config_to_autoconf.py and installed as include/generated/autoconf.h in
     # the source tree. kconfig.h (force-included above) does
     # '#include <generated/autoconf.h>' which picks it up automatically.
-    # This replaces all manual -DCONFIG_* flags and ensures we use the exact
-    # configuration the running kernel was built with (e.g. CONFIG_HZ=250,
-    # all ARCH_HAS_* symbols correct for x86_64).
+    # This replaces all manual -DCONFIG_* flags with the minimal configuration
+    # needed by this standalone build. Values that generated headers validate
+    # directly, such as CONFIG_HZ, must match the checked-out kernel tree.
     # Override a few CONFIG symbols that conflict with BPF compilation:
     # CONFIG_UPROBES pulls in arch_uprobe_task which is not in our shim.
     "-UCONFIG_UPROBES",

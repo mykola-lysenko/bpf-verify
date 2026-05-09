@@ -29,8 +29,7 @@
 #define CONFIG_ARCH_DMA_MINALIGN 1
 
 /* ── Timer ──────────────────────────────────────────────────────────── */
-#define CONFIG_HZ 250
-#define CONFIG_HZ_250 1
+#define CONFIG_HZ 100
 
 /* ── Memory model ───────────────────────────────────────────────────── */
 #define CONFIG_SPARSEMEM 1
