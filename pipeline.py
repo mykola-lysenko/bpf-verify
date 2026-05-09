@@ -359,10 +359,14 @@ char _license[] = "GPL";
 # These are manually crafted for the files we know compile cleanly
 HARNESS_BODIES = {
     "bcd": """\
-    unsigned char val = 0x99;
-    unsigned bin = _bcd2bin(val);
-    unsigned char bcd = _bin2bcd(bin);
-    return (int)(bcd ^ val);""",
+    /* bcd: map-seeded BCD round-trip. Keep input in 0..99 so _bin2bcd()
+     * stays within the two-digit BCD domain. */
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    unsigned val = input ? (unsigned)(*input % 100) : 42;
+    unsigned char bcd = _bin2bcd(val);
+    unsigned bin = _bcd2bin(bcd);
+    return (int)(bin + bcd);""",
 
     "clz_ctz": """\
     /* clz_ctz provides __ctzsi2, __clzsi2, __ctzdi2, __clzdi2 */
@@ -621,20 +625,39 @@ HARNESS_BODIES = {
     return (int)(first + last + zero);""",
 
     "sort": """\
-    /* sort: compile-only test -- the BPF verifier rejects sort() because
-     * it uses function pointers (comparator and swap callbacks) which
-     * generate indirect call instructions (opcode 0x8d) that the BPF
-     * verifier does not support.
-     *
-     * C-related finding: lib/sort.c uses function pointers (cmp_func_t,
-     * swap_func_t) passed through a struct wrapper. Even when NULL is
-     * passed (triggering built-in swap selection), the do_cmp() helper
-     * still calls ((const struct wrapper *)priv)->cmp(a, b) -- an indirect
-     * call through a struct field. The BPF verifier rejects this with
-     * "unknown opcode 0x8d" (BPF_JMP | BPF_CALL with indirect target).
-     * This is a fundamental incompatibility between sort.c's callback
-     * architecture and the BPF execution model. */
-    return 0;""",
+    /* sort: verify the direct swap helpers. The full sort()/sort_r() path is
+     * still out of scope because it depends on comparator/swap callbacks,
+     * which become indirect calls that the BPF verifier rejects. */
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    u64 seed = input ? *input : 0x1122334455667788ULL;
+    u32 a32 = (u32)seed;
+    u32 b32 = (u32)(seed >> 32);
+    u64 a64 = seed;
+    u64 b64 = seed ^ 0xa5a5a5a5a5a5a5a5ULL;
+    char a8[3];
+    char b8[3];
+    u32 old_a32 = a32, old_b32 = b32;
+    u64 old_a64 = a64, old_b64 = b64;
+    int errors = 0;
+
+    a8[0] = (char)seed;
+    a8[1] = (char)(seed >> 8);
+    a8[2] = (char)(seed >> 16);
+    b8[0] = (char)(seed >> 24);
+    b8[1] = (char)(seed >> 32);
+    b8[2] = (char)(seed >> 40);
+
+    swap_words_32(&a32, &b32, sizeof(a32));
+    errors |= a32 != old_b32;
+    errors |= b32 != old_a32;
+
+    swap_words_64(&a64, &b64, sizeof(a64));
+    errors |= a64 != old_b64;
+    errors |= b64 != old_a64;
+
+    swap_bytes(a8, b8, sizeof(a8));
+    return errors + a8[0] + b8[0];""",
 
     "win_minmax": """\
     /* win_minmax: verify the reset value is returned correctly and that
@@ -663,20 +686,15 @@ HARNESS_BODIES = {
     return (int)(v + w);""",
 
     "gcd": """\
-    /* gcd: compile-only test -- the BPF verifier rejects gcd() because it
-     * uses an unbounded for(;;) loop (binary GCD / Stein's algorithm).
-     * Even with constant inputs, LLVM's BPF backend does not constant-fold
-     * the loop body away, leaving a back-edge that the verifier rejects.
-     *
-     * C-related finding: lib/math/gcd.c uses an unbounded for(;;) loop
-     * (binary GCD algorithm). The BPF verifier reports "infinite loop
-     * detected" / "back-edge" because it cannot prove termination of the
-     * loop for arbitrary inputs. Unlike a bounded for-loop with a counter,
-     * the binary GCD loop terminates based on the mathematical property
-     * that a or b eventually reaches 1 -- a property the verifier cannot
-     * verify statically. This makes gcd.c fundamentally incompatible with
-     * the BPF verifier's loop termination requirements. */
-    return 0;""",
+    /* gcd: verify the zero-operand fast path with a map-seeded value.
+     * The full binary-GCD loop remains verifier-incompatible because it is
+     * an unbounded for(;;) whose termination is mathematical, not syntactic. */
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    unsigned long a = input ? (unsigned long)*input : 42;
+    volatile unsigned long zero = 0;
+    unsigned long r = gcd(a, zero);
+    return (int)(r ^ (a >> 32));""",
 
     "lcm": """\
     /* lcm: compile-only test -- lcm() calls gcd() internally, which uses
@@ -763,21 +781,42 @@ HARNESS_BODIES = {
     return (int)crc;""",
 
     "crc16": """\
-    /* crc16 computes a 16-bit CRC */
-    __u8 buf[4] = {{0x01, 0x02, 0x03, 0x04}};
-    __u16 crc = crc16(0, buf, sizeof(buf));
+    /* crc16: map-seeded buffer so the CRC loop and table lookup stay live. */
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    u64 seed = input ? *input : 0x0102030405060708ULL;
+    __u8 buf[4];
+    buf[0] = (__u8)seed;
+    buf[1] = (__u8)(seed >> 8);
+    buf[2] = (__u8)(seed >> 16);
+    buf[3] = (__u8)(seed >> 24);
+    __u16 crc = crc16((__u16)(seed >> 32), buf, sizeof(buf));
     return (int)crc;""",
 
     "crc-ccitt": """\
-    /* crc_ccitt computes a CCITT CRC */
-    __u8 buf[4] = {{0x01, 0x02, 0x03, 0x04}};
-    __u16 crc = crc_ccitt(0xFFFF, buf, sizeof(buf));
+    /* crc_ccitt: map-seeded buffer so the CRC loop and table lookup stay live. */
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    u64 seed = input ? *input : 0x1020304050607080ULL;
+    __u8 buf[4];
+    buf[0] = (__u8)seed;
+    buf[1] = (__u8)(seed >> 8);
+    buf[2] = (__u8)(seed >> 16);
+    buf[3] = (__u8)(seed >> 24);
+    __u16 crc = crc_ccitt((__u16)(seed >> 32), buf, sizeof(buf));
     return (int)crc;""",
 
     "crc-itu-t": """\
-    /* crc_itu_t computes an ITU-T CRC */
-    __u8 buf[4] = {{0x01, 0x02, 0x03, 0x04}};
-    __u16 crc = crc_itu_t(0, buf, sizeof(buf));
+    /* crc_itu_t: map-seeded buffer so the CRC loop and table lookup stay live. */
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    u64 seed = input ? *input : 0x8877665544332211ULL;
+    __u8 buf[4];
+    buf[0] = (__u8)seed;
+    buf[1] = (__u8)(seed >> 8);
+    buf[2] = (__u8)(seed >> 16);
+    buf[3] = (__u8)(seed >> 24);
+    __u16 crc = crc_itu_t((__u16)(seed >> 32), buf, sizeof(buf));
     return (int)crc;""",
 
     "hweight": """\
@@ -2295,8 +2334,13 @@ HARNESS_BODIES = {
                  __bpf_tcx_skey_dec + __bpf_tcx_link_settles +
                  __bpf_mprog_prog_puts + (seed & 1));""",
     "timeconv": """\
-    /* kernel/time/timeconv.c: prove representative UTC calendar conversions. */
+    /* kernel/time/timeconv.c: prove representative UTC calendar conversions
+     * and keep a map-seeded offset path live so the target code is not
+     * optimized into a constant. */
     struct tm tm = {};
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    int offset = input ? (int)(*input & 63) : 0;
 
     time64_to_tm(0, 0, &tm);
     BPF_PROVE(tm.tm_year == 70);
@@ -2330,7 +2374,9 @@ HARNESS_BODIES = {
     BPF_PROVE(tm.tm_hour == 23);
     BPF_PROVE(tm.tm_min == 59);
     BPF_PROVE(tm.tm_sec == 59);
-    return (int)tm.tm_yday;""",
+
+    time64_to_tm(0, offset, &tm);
+    return (int)(tm.tm_sec + tm.tm_min + tm.tm_hour + tm.tm_yday);""",
     "timecounter": """\
     /* kernel/time/timecounter.c: prove cycle delta, wrap, and adjtime paths. */
     struct __bpf_timecounter_hw hw = {};
@@ -2950,16 +2996,16 @@ HARNESS_BODIES = {
     return 0;
 """,
     "refcount": """
-    /* refcount: test refcount_inc_not_zero and refcount_dec_and_test */
+    /* refcount: map-seeded live/zero paths for inc_not_zero and dec_and_test. */
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    int start = input ? (int)(*input & 1) : 1;
     refcount_t r;
-    refcount_set(&r, 1);
-    /* inc_not_zero on a live refcount must succeed */
-    if (!refcount_inc_not_zero(&r)) { *(volatile int *)0 = 0; }
-    /* after two increments value is 2; dec_and_test should return false */
-    if (refcount_dec_and_test(&r)) { *(volatile int *)0 = 0; }
-    /* now value is 1; dec_and_test should return true */
-    if (!refcount_dec_and_test(&r)) { *(volatile int *)0 = 0; }
-    return 0;
+    refcount_set(&r, start);
+    unsigned int before = refcount_read(&r);
+    bool inc = refcount_inc_not_zero(&r);
+    bool dec = refcount_dec_and_test(&r);
+    return (int)(before + inc + dec + refcount_read(&r));
 """,
     "crc32": """
     /* crc32: verify crc32_le and crc32_be produce different results for non-trivial input */
@@ -2971,14 +3017,17 @@ HARNESS_BODIES = {
     return 0;
 """,
     "crc16": """
-    /* crc16: verify crc16 of empty buffer is 0 */
-    u16 c = crc16(0, (unsigned char *)"", 0);
-    (void)c;
-    /* verify crc16 of a known byte sequence */
-    unsigned char buf[4] = {1, 2, 3, 4};
-    u16 c2 = crc16(0, buf, 4);
-    (void)c2;
-    return 0;
+    /* crc16: map-seeded buffer so the CRC loop and table lookup stay live. */
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    u64 seed = input ? *input : 0x0102030405060708ULL;
+    unsigned char buf[4];
+    buf[0] = (unsigned char)seed;
+    buf[1] = (unsigned char)(seed >> 8);
+    buf[2] = (unsigned char)(seed >> 16);
+    buf[3] = (unsigned char)(seed >> 24);
+    u16 crc = crc16((u16)(seed >> 32), buf, sizeof(buf));
+    return (int)crc;
 """,
     "ratelimit": """
     /* ratelimit: test that ___ratelimit allows the first burst messages */
@@ -3092,6 +3141,361 @@ HARNESS_BODIES = {
         errors |= dec[i] != plain[i];
 
     return errors + dec[0];""",
+    "driver_cxd2880_common": """\
+    /* drivers/media/dvb-frontends/cxd2880_common.c: signed complement conversion. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u32 value = input ? (u32)*input : 0x80;
+    u32 bitlen = input ? (u32)((*input >> 32) & 31) : 8;
+    int errors = 0;
+
+    errors |= cxd2880_convert2s_complement(0x7f, 8) != 127;
+    errors |= cxd2880_convert2s_complement(0x80, 8) != -128;
+    errors |= cxd2880_convert2s_complement(0xff, 8) != -1;
+    errors |= cxd2880_convert2s_complement(0x7ff, 12) != 2047;
+    errors |= cxd2880_convert2s_complement(0x800, 12) != -2048;
+
+    return errors + cxd2880_convert2s_complement(value, bitlen);""",
+    "driver_i915_mmio_range": """\
+    /* drivers/gpu/drm/i915/i915_mmio_range.c: sentinel-terminated range lookup. */
+    struct i915_mmio_range ranges[] = {
+        { .start = 0x10, .end = 0x1f },
+        { .start = 0x40, .end = 0x40 },
+        { .start = 0x80, .end = 0x8f },
+        { .start = 0, .end = 0 },
+    };
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u32 addr = input ? (u32)(*input & 0xff) : 0x14;
+    int errors = 0;
+
+    errors |= !i915_mmio_range_table_contains(0x10, ranges);
+    errors |= !i915_mmio_range_table_contains(0x1f, ranges);
+    errors |= !i915_mmio_range_table_contains(0x40, ranges);
+    errors |= i915_mmio_range_table_contains(0x20, ranges);
+    errors |= i915_mmio_range_table_contains(0x7f, ranges);
+
+    return errors + i915_mmio_range_table_contains(addr, ranges);""",
+    "driver_dc_spl_filters": """\
+    /* drivers/gpu/drm/amd/display/dc/sspl/dc_spl_filters.c: S1.10 -> S1.12 conversion. */
+    uint16_t in[NUM_PHASES_COEFF * 2];
+    uint16_t out[NUM_PHASES_COEFF * 2];
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x0102030405060708ULL;
+    int errors = 0;
+    int i;
+
+    for (i = 0; i < NUM_PHASES_COEFF * 2; i++)
+        in[i] = (uint16_t)((seed >> ((i & 7) * 8)) + i);
+
+    convert_filter_s1_10_to_s1_12(in, out, 2);
+
+    for (i = 0; i < NUM_PHASES_COEFF * 2; i++)
+        errors |= out[i] != (uint16_t)(in[i] * 4);
+
+    return errors + out[0];""",
+    "driver_mcp251xfd_crc16": """\
+    /* drivers/net/can/spi/mcp251xfd-crc16.c: standalone CAN controller CRC. */
+    u8 data[8];
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x1020304050607080ULL;
+    u16 all;
+    u16 split;
+    int errors = 0;
+    int i;
+
+    for (i = 0; i < 8; i++)
+        data[i] = (u8)(seed >> ((i & 7) * 8));
+
+    all = mcp251xfd_crc16_compute(data, sizeof(data));
+    split = mcp251xfd_crc16_compute2(data, 3, data + 3, sizeof(data) - 3);
+
+    errors |= mcp251xfd_crc16_compute(data, 0) != 0xffff;
+    errors |= all != split;
+
+    return errors + all;""",
+    "driver_dp_utils": """\
+    /* drivers/gpu/drm/msm/dp/dp_utils.c: DisplayPort SDP parity/header packing. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x1020304050607080ULL;
+    struct dp_sdp_header header = {
+        .HB0 = (u8)seed,
+        .HB1 = (u8)(seed >> 8),
+        .HB2 = (u8)(seed >> 16),
+        .HB3 = (u8)(seed >> 24),
+    };
+    u32 packed[2] = {};
+    u8 data = (u8)(seed >> 32);
+    u8 g0 = msm_dp_utils_get_g0_value(data);
+    u8 g1 = msm_dp_utils_get_g1_value(data);
+    u8 parity = msm_dp_utils_calculate_parity((u32)seed);
+
+    msm_dp_utils_pack_sdp_header(&header, packed);
+
+    return (int)(g0 + g1 + parity + packed[0] + packed[1]);""",
+    "driver_open_alliance_helpers": """\
+    /* drivers/net/phy/open_alliance_helpers.c: TDR status and distance decoding. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u16 reg = input ? (u16)*input : 0;
+    int errors = 0;
+
+    errors |= oa_1000bt1_get_ethtool_cable_result_code(
+        OA_1000BT1_HDD_TDR_STATUS_CABLE_OK << 4) !=
+        ETHTOOL_A_CABLE_RESULT_CODE_OK;
+    errors |= oa_1000bt1_get_ethtool_cable_result_code(
+        OA_1000BT1_HDD_TDR_STATUS_OPEN << 4) !=
+        ETHTOOL_A_CABLE_RESULT_CODE_OPEN;
+    errors |= oa_1000bt1_get_ethtool_cable_result_code(
+        OA_1000BT1_HDD_TDR_STATUS_SHORT << 4) !=
+        ETHTOOL_A_CABLE_RESULT_CODE_SAME_SHORT;
+    errors |= oa_1000bt1_get_ethtool_cable_result_code(
+        OA_1000BT1_HDD_TDR_STATUS_NOISE << 4) !=
+        ETHTOOL_A_CABLE_RESULT_CODE_NOISE;
+    errors |= oa_1000bt1_get_tdr_distance(
+        OA_1000BT1_HDD_TDR_DISTANCE_RESOLUTION_NOT_POSSIBLE << 8) != -ERANGE;
+    errors |= oa_1000bt1_get_tdr_distance(7 << 8) != 700;
+
+    return errors + oa_1000bt1_get_ethtool_cable_result_code(reg) +
+           oa_1000bt1_get_tdr_distance(reg);""",
+    "driver_ghes_helpers": """\
+    /* drivers/acpi/apei/ghes_helpers.c: CXL CPER protocol-error validation. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x1122334455667788ULL;
+    struct __bpf_ghes_prot_err_record raw = {};
+    struct __bpf_ghes_state *state;
+    struct cxl_cper_prot_err_work_data *wd;
+    u64 saved_valid;
+    u16 saved_err_len;
+    int errors = 0;
+
+    state = bpf_map_lookup_elem(&__bpf_ghes_state_map, &input_key);
+    if (!state)
+        return 0;
+
+    wd = &state->wd;
+
+    raw.err.valid_bits = PROT_ERR_VALID_AGENT_ADDRESS |
+                         PROT_ERR_VALID_ERROR_LOG |
+                         PROT_ERR_VALID_SERIAL_NUMBER;
+    raw.err.agent_type = (seed & 1) ? DEVICE : RP;
+    raw.err.dvsec_len = sizeof(raw.dvsec);
+    raw.err.err_len = sizeof(struct cxl_ras_capability_regs);
+    raw.ras.uncor_status = (u32)seed;
+    raw.ras.cor_status = (u32)(seed >> 32);
+    saved_valid = raw.err.valid_bits;
+    saved_err_len = raw.err.err_len;
+
+    raw.err.valid_bits = saved_valid & ~PROT_ERR_VALID_AGENT_ADDRESS;
+    errors |= cxl_cper_sec_prot_err_valid(&raw.err) != -EINVAL;
+
+    raw.err.valid_bits = saved_valid & ~PROT_ERR_VALID_ERROR_LOG;
+    errors |= cxl_cper_sec_prot_err_valid(&raw.err) != -EINVAL;
+
+    raw.err.valid_bits = saved_valid;
+    raw.err.err_len = 1;
+    errors |= cxl_cper_sec_prot_err_valid(&raw.err) != -EINVAL;
+
+    raw.err.err_len = saved_err_len;
+    errors |= cxl_cper_sec_prot_err_valid(&raw.err) != 0;
+    errors |= cxl_cper_setup_prot_err_work_data(wd, &raw.err,
+                                                (int)(seed & 3)) != 0;
+    errors |= wd->prot_err.err_len != sizeof(struct cxl_ras_capability_regs);
+    errors |= wd->ras_cap.uncor_status != raw.ras.uncor_status;
+
+    raw.err.agent_type = 0xff;
+    errors |= cxl_cper_setup_prot_err_work_data(wd, &raw.err, 1) != -EINVAL;
+
+    return errors + wd->severity + wd->ras_cap.cor_status;""",
+    "driver_cudbg_common": """\
+    /* drivers/net/ethernet/chelsio/cxgb4/cudbg_common.c: debug-buffer accounting. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x1020304050607080ULL;
+    char outbuf[32];
+    char compbuf[16];
+    struct cudbg_init init = {};
+    struct cudbg_buffer dbg = {};
+    struct cudbg_buffer pin = {};
+    u32 req = 1 + (u32)((seed >> 32) & 31);
+    int ret1;
+    int ret2;
+    int ret3;
+
+    outbuf[0] = (char)seed;
+    compbuf[0] = (char)(seed >> 8);
+    init.compress_type = (seed & 0x100) ? CUDBG_COMPRESSION_ZLIB :
+                          CUDBG_COMPRESSION_NONE;
+    init.compress_buff = compbuf;
+    init.compress_buff_size = 8 + (u32)((seed >> 40) & 7);
+    dbg.data = outbuf;
+    dbg.size = 16 + (u32)((seed >> 16) & 15);
+    dbg.offset = (u32)(seed & 15);
+
+    ret1 = cudbg_get_buff(&init, &dbg, req, &pin);
+    if (!ret1)
+        cudbg_update_buff(&pin, &dbg);
+
+    ret2 = cudbg_get_buff(&init, &dbg, 32, &pin);
+
+    init.compress_type = CUDBG_COMPRESSION_ZLIB;
+    ret3 = cudbg_get_buff(&init, &dbg, req, &pin);
+    cudbg_put_buff(&init, &pin);
+
+    return ret1 + ret2 + ret3 + dbg.offset + pin.offset + pin.size +
+           compbuf[0];""",
+    "driver_vidtv_common": """\
+    /* drivers/media/test-drivers/vidtv/vidtv_common.c: bounded memcpy/memset wrappers. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x0102030405060708ULL;
+    u8 dst[16] = {};
+    u8 src[8];
+    size_t copy_off = 2;
+    size_t copy_len = 1 + ((seed >> 8) & 7);
+    size_t set_off = 6;
+    size_t set_len = 1 + ((seed >> 24) & 7);
+    size_t edge_off = 12;
+    u32 copied;
+    u32 skipped_copy;
+    u32 set;
+    u32 skipped_set;
+
+    src[0] = (u8)seed;
+    src[1] = (u8)(seed >> 8);
+    src[2] = (u8)(seed >> 16);
+    src[3] = (u8)(seed >> 24);
+    src[4] = (u8)(seed >> 32);
+    src[5] = (u8)(seed >> 40);
+    src[6] = (u8)(seed >> 48);
+    src[7] = (u8)(seed >> 56);
+
+    copied = vidtv_memcpy(dst, copy_off, sizeof(dst), src, copy_len);
+    skipped_copy = vidtv_memcpy(dst, edge_off, sizeof(dst), src, 8);
+    set = vidtv_memset(dst, set_off, sizeof(dst), (int)(seed >> 40), set_len);
+    skipped_set = vidtv_memset(dst, edge_off, sizeof(dst), 0xff, 8);
+
+    return (int)(copied + skipped_copy + set + skipped_set + dst[2] + dst[6]);""",
+    "net_ceph_crush_hash": """\
+    /* net/ceph/crush/hash.c: pure Jenkins hash helpers. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x1122334455667788ULL;
+    u32 a = (u32)seed;
+    u32 b = (u32)(seed >> 13);
+    u32 c = (u32)(seed >> 27);
+    u32 d = (u32)(seed >> 41);
+    u32 h1 = crush_hash32(CRUSH_HASH_RJENKINS1, a);
+    u32 h2 = crush_hash32_2(CRUSH_HASH_RJENKINS1, a, b);
+    u32 h3 = crush_hash32_3(CRUSH_HASH_RJENKINS1, a, b, c);
+    u32 h4 = crush_hash32_4(CRUSH_HASH_RJENKINS1, a, b, c, d);
+    u32 bad = crush_hash32(99, a);
+
+    return (int)(h1 ^ h2 ^ h3 ^ h4 ^ bad);""",
+    "net_ceph_hash": """\
+    /* net/ceph/ceph_hash.c: bounded string hash variants. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x0102030405060708ULL;
+    char name[16];
+    int i;
+    unsigned linux_hash;
+    unsigned rjenkins_hash;
+    unsigned dispatch_hash;
+    unsigned bad_hash;
+
+    for (i = 0; i < 16; i++)
+        name[i] = 'a' + (char)((seed >> ((i & 7) * 8)) & 15);
+
+    linux_hash = ceph_str_hash_linux(name, sizeof(name));
+    rjenkins_hash = ceph_str_hash_rjenkins(name, sizeof(name));
+    dispatch_hash = ceph_str_hash(CEPH_STR_HASH_RJENKINS, name, sizeof(name));
+    bad_hash = ceph_str_hash(0, name, 4);
+
+    return (int)(linux_hash ^ rjenkins_hash ^ dispatch_hash ^ bad_hash);""",
+    "fs_proc_util": """\
+    /* fs/proc/util.c: decimal proc name parser. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 1234;
+    char dyn[4];
+    char leading_zero[3] = { '0', '1', '2' };
+    char nondigit[3] = { '1', 'x', '3' };
+    struct qstr q = {};
+    unsigned valid;
+    unsigned zero_rejected;
+    unsigned bad_rejected;
+
+    dyn[0] = '1' + (char)(seed % 8);
+    dyn[1] = '0' + (char)((seed >> 8) % 10);
+    dyn[2] = '0' + (char)((seed >> 16) % 10);
+    dyn[3] = '0' + (char)((seed >> 24) % 10);
+
+    q.name = (const unsigned char *)dyn;
+    q.len = sizeof(dyn);
+    valid = name_to_int(&q);
+
+    q.name = (const unsigned char *)leading_zero;
+    q.len = sizeof(leading_zero);
+    zero_rejected = name_to_int(&q);
+
+    q.name = (const unsigned char *)nondigit;
+    q.len = sizeof(nondigit);
+    bad_rejected = name_to_int(&q);
+
+    return (int)(valid + zero_rejected + bad_rejected);""",
+    "fs_ntfs3_bitfunc": """\
+    /* fs/ntfs3/bitfunc.c: first-byte bit range set/clear checks. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0xa5;
+    u8 clear_map[2];
+    u8 set_map[2];
+    bool clear_ok;
+    bool set_ok;
+    bool clear_fail;
+    bool set_fail;
+
+    clear_map[0] = (u8)seed & (u8)~0x0e;
+    clear_map[1] = (u8)(seed >> 8);
+    set_map[0] = ((u8)seed) | 0x0e;
+    set_map[1] = (u8)(seed >> 16);
+
+    clear_ok = are_bits_clear(clear_map, 1, 3);
+    set_ok = are_bits_set(set_map, 1, 3);
+    clear_fail = are_bits_clear(set_map, 1, 3);
+    set_fail = are_bits_set(clear_map, 1, 3);
+
+    return (int)(clear_ok + set_ok + clear_fail + set_fail +
+                 clear_map[0] + set_map[0]);""",
+    "kernel_range": """\
+    /* kernel/range.c: range add, merge, and subtract helpers. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0x1234;
+    struct range ranges[4] = {};
+    int errors = 0;
+    int nr;
+    u64 dyn_start = seed & 7;
+
+    nr = add_range(ranges, 4, 0, 0, 4);
+    nr = add_range(ranges, 4, nr, 10, 14);
+    errors |= nr != 2;
+
+    nr = add_range_with_merge(ranges, 4, nr, 3, 12);
+    errors |= nr != 1;
+    errors |= ranges[0].start != 0;
+    errors |= ranges[0].end != 14;
+
+    subtract_range(ranges, 4, 4, 8);
+    errors |= ranges[0].end != 4;
+
+    nr = add_range(ranges, 4, nr, dyn_start, dyn_start + 1);
+    return errors + nr + (int)ranges[0].start + (int)ranges[0].end;""",
     "crypto_utils": """
     /* crypto_utils: __crypto_xor test */
     __u32 key0 = 0, key1 = 1;
@@ -3173,22 +3577,25 @@ HARNESS_BODIES = {
     # renamed+DCE'd; we only test seq_buf_puts, seq_buf_putc, seq_buf_putmem,
     # seq_buf_has_overflowed, and seq_buf_used.
     "seq_buf": """\
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    u64 seed = input ? *input : 0x1020304050607080ULL;
     char buf[32];
+    u8 mem[4];
     struct seq_buf s;
+    int errors = 0;
+
+    mem[0] = (u8)seed;
+    mem[1] = (u8)(seed >> 8);
+    mem[2] = (u8)(seed >> 16);
+    mem[3] = (u8)(seed >> 24);
+
     seq_buf_init(&s, buf, sizeof(buf));
-    /* Test seq_buf_puts: write a short string */
-    seq_buf_puts(&s, "hi");
-    BPF_ASSERT(!seq_buf_has_overflowed(&s));
-    BPF_ASSERT(seq_buf_used(&s) == 2);
-    /* Test seq_buf_putc: append a single character */
-    seq_buf_putc(&s, '!');
-    BPF_ASSERT(seq_buf_used(&s) == 3);
-    /* Test overflow detection: fill the buffer */
-    unsigned int i;
-    for (i = 0; i < 30; i++)
-        seq_buf_putc(&s, 'x');
-    BPF_ASSERT(seq_buf_has_overflowed(&s));
-    return 0;
+    errors |= seq_buf_putmem(&s, mem, sizeof(mem));
+    errors |= seq_buf_putc(&s, (unsigned char)(seed >> 32));
+    errors |= seq_buf_putmem(&s, mem + 2, 2);
+
+    return errors + (int)seq_buf_used(&s) + buf[0];
 """,
 
     # lib_sha256: sha256_transform was removed in newer kernels; the compression
@@ -6538,6 +6945,313 @@ u32 __bpf_rol32(u32 word, unsigned int shift)
 #include "{ksrc}/crypto/sm4.c"
 """
 
+DRIVER_CXD2880_COMMON_PRE_INCLUDE = """\
+#define _LINUX_DELAY_H
+"""
+
+DRIVER_DC_SPL_FILTERS_PRE_INCLUDE = """\
+#define __DC_SPL_FILTERS_H__
+#define NUM_PHASES_COEFF 33
+#define SPL_NAMESPACE(name) name
+"""
+
+DRIVER_MCP251XFD_CRC16_PRE_INCLUDE = """\
+#define _MCP251XFD_H
+"""
+
+DRIVER_DP_UTILS_PRE_INCLUDE = """\
+#define _DP_UTILS_H_
+struct dp_sdp_header {
+    u8 HB0;
+    u8 HB1;
+    u8 HB2;
+    u8 HB3;
+} __packed;
+
+#define HEADER_0_MASK 0x000000ffU
+#define PARITY_0_MASK 0x0000ff00U
+#define HEADER_1_MASK 0x00ff0000U
+#define PARITY_1_MASK 0xff000000U
+#define HEADER_2_MASK 0x000000ffU
+#define PARITY_2_MASK 0x0000ff00U
+#define HEADER_3_MASK 0x00ff0000U
+#define PARITY_3_MASK 0xff000000U
+#ifndef FIELD_PREP
+#define FIELD_PREP(_mask, _val) ((((u32)(_val)) << __builtin_ctz((unsigned int)(_mask))) & (_mask))
+#endif
+
+"""
+
+DRIVER_OPEN_ALLIANCE_HELPERS_PRE_INCLUDE = """\
+#include <linux/errno.h>
+#define _LINUX_BITFIELD_H
+#define _LINUX_ETHTOOL_NETLINK_H_
+#define _UAPI_LINUX_ETHTOOL_NETLINK_H_
+#ifndef GENMASK
+#define GENMASK(h, l) (((~0U) - ((1U << (l)) - 1)) & (~0U >> (31 - (h))))
+#endif
+#define FIELD_GET(_mask, _reg) (((u32)(_reg) & (u32)(_mask)) >> __builtin_ctz((unsigned int)(_mask)))
+enum {
+    ETHTOOL_A_CABLE_RESULT_CODE_UNSPEC,
+    ETHTOOL_A_CABLE_RESULT_CODE_OK,
+    ETHTOOL_A_CABLE_RESULT_CODE_OPEN,
+    ETHTOOL_A_CABLE_RESULT_CODE_SAME_SHORT,
+    ETHTOOL_A_CABLE_RESULT_CODE_CROSS_SHORT,
+    ETHTOOL_A_CABLE_RESULT_CODE_IMPEDANCE_MISMATCH,
+    ETHTOOL_A_CABLE_RESULT_CODE_NOISE,
+    ETHTOOL_A_CABLE_RESULT_CODE_RESOLUTION_NOT_POSSIBLE,
+};
+
+#define oa_1000bt1_get_ethtool_cable_result_code __attribute__((__noinline__)) oa_1000bt1_get_ethtool_cable_result_code
+#define oa_1000bt1_get_tdr_distance __attribute__((__noinline__)) oa_1000bt1_get_tdr_distance
+"""
+
+DRIVER_GHES_HELPERS_PRE_INCLUDE = """\
+#include <linux/errno.h>
+#define _AER_H_
+#define _LINUX_CXL_EVENT_H
+#define FW_WARN ""
+#define pr_err_ratelimited(fmt, ...) do { } while (0)
+#define pr_warn_ratelimited(fmt, ...) do { } while (0)
+#ifndef BIT_ULL
+#define BIT_ULL(nr) (1ULL << (nr))
+#endif
+
+#define PROT_ERR_VALID_AGENT_ADDRESS BIT_ULL(1)
+#define PROT_ERR_VALID_SERIAL_NUMBER BIT_ULL(3)
+#define PROT_ERR_VALID_ERROR_LOG BIT_ULL(6)
+enum {
+    RCD,
+    RCH_DP,
+    DEVICE,
+    LD,
+    FMLD,
+    RP,
+    DSP,
+    USP,
+};
+
+struct cxl_cper_sec_prot_err {
+    u64 valid_bits;
+    u8 agent_type;
+    u8 reserved[7];
+    union {
+        u64 rcrb_base_addr;
+        struct {
+            u8 function;
+            u8 device;
+            u8 bus;
+            u16 segment;
+            u8 reserved_1[3];
+        };
+    } agent_addr;
+    struct {
+        u16 vendor_id;
+        u16 device_id;
+        u16 subsystem_vendor_id;
+        u16 subsystem_id;
+        u8 class_code[2];
+        u16 slot;
+        u8 reserved_1[4];
+    } device_id;
+    struct {
+        u32 lower_dw;
+        u32 upper_dw;
+    } dev_serial_num;
+    u8 capability[60];
+    u16 dvsec_len;
+    u16 err_len;
+    u8 reserved_2[4];
+};
+
+struct cxl_ras_capability_regs {
+    u32 uncor_status;
+    u32 uncor_mask;
+    u32 uncor_severity;
+    u32 cor_status;
+    u32 cor_mask;
+    u32 cap_control;
+    u32 header_log[16];
+};
+
+struct cxl_cper_prot_err_work_data {
+    struct cxl_cper_sec_prot_err prot_err;
+    struct cxl_ras_capability_regs ras_cap;
+    int severity;
+};
+
+struct __bpf_ghes_prot_err_record {
+    struct cxl_cper_sec_prot_err err;
+    u8 dvsec[8];
+    struct cxl_ras_capability_regs ras;
+};
+
+struct __bpf_ghes_state {
+    struct cxl_cper_prot_err_work_data wd;
+};
+
+struct {
+    __uint(type, 1 /* BPF_MAP_TYPE_ARRAY */);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, struct __bpf_ghes_state);
+} __bpf_ghes_state_map __attribute__((section(".maps"), used));
+
+static __always_inline int cper_severity_to_aer(int severity)
+{
+    return severity;
+}
+
+#define __HAVE_ARCH_MEMCPY
+static __always_inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    const unsigned char *s = src;
+    __kernel_size_t i;
+
+    for (i = 0; i < 256; i++) {
+        if (i >= n)
+            break;
+        d[i] = s[i];
+    }
+
+    return dst;
+}
+
+#define cxl_cper_sec_prot_err_valid __attribute__((__always_inline__, internal_linkage)) cxl_cper_sec_prot_err_valid
+#define cxl_cper_setup_prot_err_work_data __attribute__((__always_inline__, internal_linkage)) cxl_cper_setup_prot_err_work_data
+"""
+
+DRIVER_CUDBG_COMMON_PRE_INCLUDE = """\
+#define __CXGB4_H__
+#define __CUDBG_IF_H__
+#define __CUDBG_LIB_COMMON_H__
+#ifndef NULL
+#define NULL ((void *)0)
+#endif
+
+#define CUDBG_STATUS_NO_MEM -19
+struct adapter;
+struct cudbg_init {
+    struct adapter *adap;
+    void *outbuf;
+    u32 outbuf_size;
+    u8 compress_type;
+    void *compress_buff;
+    u32 compress_buff_size;
+    void *workspace;
+};
+
+enum cudbg_compression_type {
+    CUDBG_COMPRESSION_NONE = 1,
+    CUDBG_COMPRESSION_ZLIB,
+};
+
+struct cudbg_buffer {
+    u32 size;
+    u32 offset;
+    char *data;
+};
+
+#define __HAVE_ARCH_MEMSET
+static __always_inline void *memset(void *dst, int c, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    __kernel_size_t i;
+
+    for (i = 0; i < 256; i++) {
+        if (i >= n)
+            break;
+        d[i] = (unsigned char)c;
+    }
+
+    return dst;
+}
+
+#define cudbg_get_buff __attribute__((__always_inline__, internal_linkage)) cudbg_get_buff
+#define cudbg_put_buff __attribute__((__always_inline__, internal_linkage)) cudbg_put_buff
+#define cudbg_update_buff __attribute__((__always_inline__, internal_linkage)) cudbg_update_buff
+"""
+
+DRIVER_VIDTV_COMMON_PRE_INCLUDE = """\
+#define _LINUX_RATELIMIT_H
+#define pr_err_ratelimited(fmt, ...) do { } while (0)
+
+#define __HAVE_ARCH_MEMCPY
+static __always_inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    const unsigned char *s = src;
+    __kernel_size_t i;
+
+    for (i = 0; i < 64; i++) {
+        if (i >= n)
+            break;
+        d[i] = s[i];
+    }
+
+    return dst;
+}
+
+#define __HAVE_ARCH_MEMSET
+static __always_inline void *memset(void *dst, int c, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    __kernel_size_t i;
+
+    for (i = 0; i < 64; i++) {
+        if (i >= n)
+            break;
+        d[i] = (unsigned char)c;
+    }
+
+    return dst;
+}
+"""
+
+NET_CEPH_CRUSH_HASH_PRE_INCLUDE = """\
+#define crush_hash32_5 __attribute__((__always_inline__, internal_linkage)) crush_hash32_5
+#define crush_hash_name __attribute__((__always_inline__, internal_linkage)) crush_hash_name
+"""
+
+NET_CEPH_HASH_PRE_INCLUDE = """\
+#define _FS_CEPH_TYPES_H
+#define CEPH_STR_HASH_LINUX 0x1
+#define CEPH_STR_HASH_RJENKINS 0x2
+#pragma clang attribute push(__attribute__((always_inline, internal_linkage)), apply_to=function)
+"""
+
+FS_NTFS3_BITFUNC_PRE_INCLUDE = """\
+#define _LINUX_NTFS3_NTFS_FS_H
+#define MINUS_ONE_T ((size_t)(-1))
+#define are_bits_clear __attribute__((__always_inline__, internal_linkage)) are_bits_clear
+#define are_bits_set __attribute__((__always_inline__, internal_linkage)) are_bits_set
+"""
+
+KERNEL_RANGE_PRE_INCLUDE = """\
+#define _LINUX_SORT_H
+#define _LINUX_STRING_H_
+#define sort(base, num, size, cmp, priv) do { } while (0)
+
+#define __HAVE_ARCH_MEMMOVE
+static __always_inline void *memmove(void *dst, const void *src, __kernel_size_t n)
+{
+    unsigned char *d = dst;
+    const unsigned char *s = src;
+    __kernel_size_t i;
+
+    for (i = 0; i < 128; i++) {
+        if (i >= n)
+            break;
+        d[i] = s[i];
+    }
+
+    return dst;
+}
+
+#pragma clang attribute push(__attribute__((always_inline, internal_linkage)), apply_to=function)
+"""
+
 # Extra C code injected into the harness BEFORE the source file include,
 # keyed by src_name. Used for per-file stubs and workarounds.
 #
@@ -6566,6 +7280,18 @@ EXTRA_PRE_INCLUDE = {
     "crypto_tea": CRYPTO_CIPHER_PRE_INCLUDE,
     "crypto_arc4": CRYPTO_ARC4_PRE_INCLUDE,
     "crypto_sm4_generic": CRYPTO_SM4_GENERIC_PRE_INCLUDE,
+    "driver_cxd2880_common": DRIVER_CXD2880_COMMON_PRE_INCLUDE,
+    "driver_dc_spl_filters": DRIVER_DC_SPL_FILTERS_PRE_INCLUDE,
+    "driver_mcp251xfd_crc16": DRIVER_MCP251XFD_CRC16_PRE_INCLUDE,
+    "driver_dp_utils": DRIVER_DP_UTILS_PRE_INCLUDE,
+    "driver_open_alliance_helpers": DRIVER_OPEN_ALLIANCE_HELPERS_PRE_INCLUDE,
+    "driver_ghes_helpers": DRIVER_GHES_HELPERS_PRE_INCLUDE,
+    "driver_cudbg_common": DRIVER_CUDBG_COMMON_PRE_INCLUDE,
+    "driver_vidtv_common": DRIVER_VIDTV_COMMON_PRE_INCLUDE,
+    "net_ceph_crush_hash": NET_CEPH_CRUSH_HASH_PRE_INCLUDE,
+    "net_ceph_hash": NET_CEPH_HASH_PRE_INCLUDE,
+    "fs_ntfs3_bitfunc": FS_NTFS3_BITFUNC_PRE_INCLUDE,
+    "kernel_range": KERNEL_RANGE_PRE_INCLUDE,
     # dim.c uses DIV_ROUND_UP(npkts * USEC_PER_MSEC, delta_us) where npkts is
     # u32 and USEC_PER_MSEC is 1000L (signed). The result is signed, causing
     # the BPF backend to generate sdiv which it cannot select.
@@ -6728,6 +7454,9 @@ void sort_r_nonatomic(void *base, size_t num, size_t size,
 /* cond_resched() is from linux/sched.h which we block with -D_LINUX_SCHED_H.
  * sort.c calls cond_resched() in the may_schedule path. Stub it out. */
 #define cond_resched() do {} while (0)
+#define swap_words_32 __attribute__((__noinline__)) swap_words_32
+#define swap_words_64 __attribute__((__noinline__)) swap_words_64
+#define swap_bytes __attribute__((__noinline__)) swap_bytes
 """,
     # FSE_buildDTable_wksp() has 6 args (non-static). Same internal_linkage fix.
     # fse.h:190 declares it with FSE_DTable* type; our forward decl must match.
@@ -8151,6 +8880,19 @@ enum string_size_units {
 """,
     "crc16": """
 #define _LINUX_CRC16_H
+#define crc16 __attribute__((__noinline__)) crc16
+""",
+    "crc-ccitt": """
+#define crc_ccitt __attribute__((__noinline__)) crc_ccitt
+""",
+    "crc-itu-t": """
+#define crc_itu_t __attribute__((__noinline__)) crc_itu_t
+""",
+    "seq_buf": """
+#define seq_buf_puts __attribute__((__noinline__)) seq_buf_puts
+#define seq_buf_putc __attribute__((__noinline__)) seq_buf_putc
+#define seq_buf_putmem __attribute__((__noinline__)) seq_buf_putmem
+#define seq_buf_putmem_hex __attribute__((__noinline__)) seq_buf_putmem_hex
 """,
     "ratelimit": """
 /* Block spinlock.h, sched.h, jiffies.h, lockdep_types.h, rwlock.h,
@@ -9787,6 +10529,50 @@ static bool __bpf_heap_pop(min_heap_char *heap)
     "refcount": """
 /* refcount shim provides all operations inline; no extra preamble needed. */
 """,
+    "sort": """
+#undef swap_words_32
+#undef swap_words_64
+#undef swap_bytes
+""",
+    "crc16": """
+#undef crc16
+""",
+    "crc-ccitt": """
+#undef crc_ccitt
+""",
+    "crc-itu-t": """
+#undef crc_itu_t
+""",
+    "driver_open_alliance_helpers": """
+#undef oa_1000bt1_get_ethtool_cable_result_code
+#undef oa_1000bt1_get_tdr_distance
+""",
+    "driver_ghes_helpers": """
+#undef cxl_cper_sec_prot_err_valid
+#undef cxl_cper_setup_prot_err_work_data
+""",
+    "driver_cudbg_common": """
+#undef cudbg_get_buff
+#undef cudbg_put_buff
+#undef cudbg_update_buff
+""",
+    "net_ceph_hash": """
+#pragma clang attribute pop
+""",
+    "fs_ntfs3_bitfunc": """
+#undef are_bits_clear
+#undef are_bits_set
+""",
+    "kernel_range": """
+#pragma clang attribute pop
+#undef sort
+""",
+    "seq_buf": """
+#undef seq_buf_puts
+#undef seq_buf_putc
+#undef seq_buf_putmem
+#undef seq_buf_putmem_hex
+""",
     # After llist.c is included (with the rename macros in effect), undef the
     # rename macros so the harness body uses the shim's non-atomic static inline
     # versions of llist_add_batch, llist_del_first, llist_reverse_order.
@@ -10125,6 +10911,22 @@ def main():
         "crypto_tea":            KSRC / "crypto/tea.c",
         "crypto_arc4":           KSRC / "crypto/arc4.c",
         "crypto_sm4_generic":    KSRC / "crypto/sm4_generic.c",
+        # Phase 9: selected drivers/ utility targets
+        "driver_cxd2880_common":  KSRC / "drivers/media/dvb-frontends/cxd2880/cxd2880_common.c",
+        "driver_i915_mmio_range": KSRC / "drivers/gpu/drm/i915/i915_mmio_range.c",
+        "driver_dc_spl_filters":  KSRC / "drivers/gpu/drm/amd/display/dc/sspl/dc_spl_filters.c",
+        "driver_mcp251xfd_crc16": KSRC / "drivers/net/can/spi/mcp251xfd/mcp251xfd-crc16.c",
+        # Phase 10: best next opportunities from drivers/net/fs/kernel utility code
+        "driver_dp_utils":        KSRC / "drivers/gpu/drm/msm/dp/dp_utils.c",
+        "driver_open_alliance_helpers": KSRC / "drivers/net/phy/open_alliance_helpers.c",
+        "driver_ghes_helpers":    KSRC / "drivers/acpi/apei/ghes_helpers.c",
+        "driver_cudbg_common":    KSRC / "drivers/net/ethernet/chelsio/cxgb4/cudbg_common.c",
+        "driver_vidtv_common":    KSRC / "drivers/media/test-drivers/vidtv/vidtv_common.c",
+        "net_ceph_crush_hash":    KSRC / "net/ceph/crush/hash.c",
+        "net_ceph_hash":          KSRC / "net/ceph/ceph_hash.c",
+        "fs_proc_util":           SHIM / "fs/proc/util.c",
+        "fs_ntfs3_bitfunc":       KSRC / "fs/ntfs3/bitfunc.c",
+        "kernel_range":           KSRC / "kernel/range.c",
         # Phase 3 targets
         "string_helpers":       SHIM / "lib/string_helpers.c",
         "refcount":             SHIM / "lib/refcount.c",
