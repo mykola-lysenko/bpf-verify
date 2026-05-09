@@ -90,10 +90,8 @@
 #define BPF_XCHG        (0xe0 | BPF_FETCH)
 #define BPF_CMPXCHG     (0xf0 | BPF_FETCH)
 
-/* Special insn->off values for address-space cast and per-CPU address resolution
- * (from uapi/linux/bpf.h enum bpf_addr_space_cast, used in disasm.c) */
+/* Special insn->off value from uapi/linux/bpf.h enum bpf_addr_space_cast. */
 #define BPF_ADDR_SPACE_CAST 1
-#define BPF_ADDR_PERCPU     2
 
 /* Atomic operation modifiers for load-acquire and store-release
  * (from uapi/linux/bpf.h, used in disasm.c:271) */
@@ -340,6 +338,8 @@ struct bpf_insn {
 	FN(tcp_raw_check_syncookie_ipv6),	\
 	FN(ktime_get_tai_ns),		\
 	FN(user_ringbuf_drain),		\
+	FN(cgrp_storage_get),		\
+	FN(cgrp_storage_delete),	\
 	/* */
 
 #define __BPF_ENUM_FN(x) BPF_FUNC_ ## x
