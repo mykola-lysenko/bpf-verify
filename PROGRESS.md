@@ -1,9 +1,12 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 142 compiled, 142 verified, 0 skipped.
+**Current status:** 156 compiled, 156 verified, 0 skipped.
 
 ## Recent baseline
 
+- Full local pipeline after adding the best-next utility batch (`dp_utils.c`, `open_alliance_helpers.c`, `ghes_helpers.c`, `cudbg_common.c`, `vidtv_common.c`, `net/ceph` hash helpers, `fs/proc/util.c`, `fs/ntfs3/bitfunc.c`, and `kernel/range.c`): 156 compiled, 156 verified, 0 skipped.
+- Previous full local pipeline after tightening legacy constant-folded harnesses (`bcd`, `gcd`, CRC16 variants, `sort`, `seq_buf`, `timeconv`, and `refcount`): 146 compiled, 146 verified, 0 skipped.
+- Full local pipeline after adding selected `drivers/` utility targets (`cxd2880_common.c`, `i915_mmio_range.c`, `dc_spl_filters.c`, and `mcp251xfd-crc16.c`): 146 compiled, 146 verified, 0 skipped.
 - Full local pipeline after adding top-level `crypto/tea.c`, `crypto/arc4.c`, and `crypto/sm4_generic.c`: 142 compiled, 142 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/time/timeconv.c` and `kernel/time/timecounter.c`: 139 compiled, 139 verified, 0 skipped.
 - Previous full local pipeline after adding `kernel/bpf/mprog.c` and `kernel/bpf/tcx.c`: 137 compiled, 137 verified, 0 skipped.
@@ -16,13 +19,22 @@
 ## Target plan
 
 1. Park additional `kernel/bpf/` files for now; return later.
-2. Continue with top-level `crypto/` wrapper files where the algorithm state is small or can be modeled without full Crypto API registration.
-3. Treat `drivers/` as a later, narrow-scope pass only; broad driver coverage is too dependent on MMIO, IRQ, DMA, firmware, and bus scaffolding.
+2. Continue the narrow `drivers/` pass only for pure helpers, parsers, CRC/table logic, and range/descriptor utilities.
+3. Save additional `lib/` files as a second step; broad driver coverage is too dependent on MMIO, IRQ, DMA, firmware, and bus scaffolding.
 
 ## Notes for `cmdline.c`
 
 - `cmdline.c` needs local bounded replacements for `simple_strtoull`, `simple_strtol`, `strlen`, `strncmp`, and `skip_spaces` to avoid pulling in large dependencies such as `lib/vsprintf.c` and `lib/string_helpers.c`.
 - The cmdline helpers should be forced inline for BPF verification because `get_option()`/`get_options()` update `char **` cursors, and the verifier rejects pointer writes into caller stack frames across subprogram calls.
+
+## Notes for legacy harness coverage cleanup
+
+- Reworked legacy harnesses for `bcd`, `gcd`, `crc16`, `crc-ccitt`, `crc-itu-t`, `sort`, `seq_buf`, `timeconv`, and `refcount` so they no longer collapse to constant-only two-instruction verifier programs.
+- The BCD, CRC, `seq_buf`, `timeconv`, and `refcount` harnesses now use map-seeded inputs so target logic remains live in the BPF program.
+- The CRC variants, `sort`, and `seq_buf` use focused `noinline` source shims where clang would otherwise inline and constant-fold the target code back into the harness.
+- `gcd` intentionally covers the zero-operand fast path only; the full binary-GCD loop remains verifier-incompatible because its termination is mathematical rather than syntactically bounded.
+- `sort` intentionally covers the direct swap helpers only; the full `sort()`/`sort_r()` callback path still depends on indirect comparator/swap calls, which are not valid BPF verifier input.
+- `seq_buf_putmem_hex()` remains out of this cleanup pass because the verifier loses stack bounds through its internal formatting loop when it is kept as a separate subprogram; `seq_buf_putmem()` and `seq_buf_putc()` are covered.
 
 ## Notes for `lib/crypto/`
 
@@ -108,3 +120,18 @@
 - `crypto/tea.c` covers TEA, XTEA, and XETA setkey/encrypt/decrypt round-trips with map-seeded input.
 - `crypto/sm4_generic.c` covers SM4 setkey/encrypt/decrypt through the top-level Crypto API wrapper, with `crypto/sm4.c` included in the same translation unit and a local `rol32` shim.
 - `crypto/arc4.c` covers lskcipher init/setkey and the continuation wrapper's zero-length crypt path. The non-zero ARC4 data path remains verifier-limited because `arc4_ctx` is too large for stack placement, and when placed in global data the verifier reloads `ctx->x`/`ctx->y` as unbounded scalars before indexing `S[]`.
+
+## Notes for selected `drivers/` utility files
+
+- Added real-source targets for `drivers/media/dvb-frontends/cxd2880/cxd2880_common.c`, `drivers/gpu/drm/i915/i915_mmio_range.c`, `drivers/gpu/drm/amd/display/dc/sspl/dc_spl_filters.c`, and `drivers/net/can/spi/mcp251xfd/mcp251xfd-crc16.c`.
+- `cxd2880_common.c` covers two's-complement sign-extension edge cases plus a map-seeded dynamic value/bit-length path; `linux/delay.h` is blocked because it is unused by this helper and pulls scheduler internals.
+- `i915_mmio_range.c` covers sentinel-terminated range table hits, misses, single-register ranges, and a dynamic lookup.
+- `dc_spl_filters.c` covers bounded S1.10 to S1.12 coefficient conversion; the AMD display type header is shimmed because the function only needs `NUM_PHASES_COEFF`, `SPL_NAMESPACE`, and `uint16_t`.
+- `mcp251xfd-crc16.c` covers empty CRC seed behavior and split-buffer vs single-buffer CRC equivalence; the private driver header is blocked to avoid full CAN/SPI/regmap dependencies.
+
+## Notes for best-next utility batch
+
+- Added real-source targets for `drivers/gpu/drm/msm/dp/dp_utils.c`, `drivers/net/phy/open_alliance_helpers.c`, `drivers/acpi/apei/ghes_helpers.c`, `drivers/net/ethernet/chelsio/cxgb4/cudbg_common.c`, `drivers/media/test-drivers/vidtv/vidtv_common.c`, `net/ceph/crush/hash.c`, `net/ceph/ceph_hash.c`, `fs/ntfs3/bitfunc.c`, and `kernel/range.c`.
+- Added a focused shim for `fs/proc/util.c` because the real file's local `internal.h` has no include guard and pulls broad procfs/MM/scheduler state; the shim keeps the real `name_to_int()` logic.
+- The new harnesses cover DisplayPort parity/header packing, OPEN Alliance TDR decoding, CXL CPER validation/setup, Chelsio debug-buffer accounting, vidtv bounded memory wrappers, Ceph hash helpers, proc decimal-name parsing, NTFS3 first-byte bit-range checks, and range add/merge/subtract.
+- `ghes_helpers.c` keeps the CPER record on stack so the verifier can track `dvsec_len`, while large work-data output lives in a BPF array map to stay under the stack limit.
