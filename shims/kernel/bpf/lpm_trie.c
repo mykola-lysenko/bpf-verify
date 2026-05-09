@@ -7,11 +7,11 @@
  *
  *   1. Defines all necessary types (u8, u32, u64, bool, size_t) from scratch.
  *   2. Provides inline fls/fls64 implementations.
- *   3. Defines the lpm_trie_node, lpm_trie, and bpf_lpm_trie_key structs
- *      exactly as in the kernel source.
- *   4. Provides no-op spinlock and RCU macros.
+ *   3. Defines the lpm_trie_node, lpm_trie, and bpf_lpm_trie_key_u8 structs
+ *      used by the current kernel source.
+ *   4. Provides no-op lock, RCU, and allocator stubs.
  *   5. Provides a static node pool (16 nodes) to replace kmalloc/kfree.
- *   6. Copies the core algorithm functions verbatim from lpm_trie.c:
+ *   6. Keeps the verifier-covered lookup/update helpers close to lpm_trie.c:
  *        - extract_bit()
  *        - longest_prefix_match()
  *        - trie_lookup_elem()
@@ -19,8 +19,6 @@
  *
  * The goal is to verify the core LPM lookup and prefix-match algorithms
  * using the BPF verifier, without needing the full kernel infrastructure.
- *
- * Function bodies are copied verbatim from Linux 6.1.102 kernel/bpf/lpm_trie.c.
  */
 
 /* -----------------------------------------------------------------------
@@ -131,9 +129,9 @@ static inline void *__lpm_memcpy(void *d, const void *s, size_t n)
 #define memcpy(d, s, n)  __lpm_memcpy(d, s, n)
 
 /* -----------------------------------------------------------------------
- * Spinlock stubs (no-op: BPF is single-threaded)
+ * Lock stubs (no-op: BPF is single-threaded)
  * ----------------------------------------------------------------------- */
-typedef struct { int dummy; } spinlock_t;
+typedef struct { int dummy; } rqspinlock_t;
 typedef unsigned long irqflags_t;
 #define spin_lock_init(l)                   do {} while (0)
 #define spin_lock_irqsave(l, f)             do { (void)(f); } while (0)
@@ -166,10 +164,17 @@ static inline bool IS_ERR(const void *ptr)
 { return (unsigned long)ptr >= (unsigned long)-4095; }
 
 /* -----------------------------------------------------------------------
- * bpf_lpm_trie_key (from uapi/linux/bpf.h)
+ * bpf_lpm_trie_key_u8 (from uapi/linux/bpf.h)
  * ----------------------------------------------------------------------- */
-struct bpf_lpm_trie_key {
+struct bpf_lpm_trie_key_hdr {
     __u32 prefixlen;
+};
+
+struct bpf_lpm_trie_key_u8 {
+    union {
+        struct bpf_lpm_trie_key_hdr hdr;
+        __u32 prefixlen;
+    };
     __u8  data[0];
 };
 
@@ -184,15 +189,18 @@ struct bpf_map {
     int   numa_node;
 };
 
+struct bpf_mem_alloc {
+    int dummy;
+};
+
 /* -----------------------------------------------------------------------
- * lpm_trie_node and lpm_trie (verbatim from lpm_trie.c)
+ * lpm_trie_node and lpm_trie
  * ----------------------------------------------------------------------- */
 #define LPM_TREE_NODE_FLAG_IM BIT(0)
 
 struct lpm_trie_node;
 
 struct lpm_trie_node {
-    struct rcu_head              rcu;
     struct lpm_trie_node __rcu  *child[2];
     u32                          prefixlen;
     u32                          flags;
@@ -202,10 +210,11 @@ struct lpm_trie_node {
 struct lpm_trie {
     struct bpf_map               map;
     struct lpm_trie_node __rcu  *root;
+    struct bpf_mem_alloc         ma;
     size_t                       n_entries;
     size_t                       max_prefixlen;
     size_t                       data_size;
-    spinlock_t                   lock;
+    rqspinlock_t                 lock;
 };
 
 /* -----------------------------------------------------------------------
@@ -251,7 +260,7 @@ static void *kmalloc_array(size_t n, size_t size, int flags)
 { (void)n; (void)size; (void)flags; return NULL; }
 
 /* -----------------------------------------------------------------------
- * Core algorithm functions -- copied verbatim from lpm_trie.c (Linux 6.1)
+ * Core algorithm functions adapted for BPF verifier execution.
  * ----------------------------------------------------------------------- */
 
 static inline int extract_bit(const u8 *data, size_t index)
@@ -261,13 +270,13 @@ static inline int extract_bit(const u8 *data, size_t index)
 
 static size_t longest_prefix_match(const struct lpm_trie *trie,
                                    const struct lpm_trie_node *node,
-                                   const struct bpf_lpm_trie_key *key)
+                                   const struct bpf_lpm_trie_key_u8 *key)
 {
     u32 limit = min(node->prefixlen, key->prefixlen);
     u32 prefixlen = 0, i = 0;
 
     BUILD_BUG_ON(offsetof(struct lpm_trie_node, data) % sizeof(u32));
-    BUILD_BUG_ON(offsetof(struct bpf_lpm_trie_key, data) % sizeof(u32));
+    BUILD_BUG_ON(offsetof(struct bpf_lpm_trie_key_u8, data) % sizeof(u32));
 
     while (trie->data_size >= i + 4) {
         u32 diff = be32_to_cpu(*(__be32 *)&node->data[i] ^
@@ -308,7 +317,7 @@ static void *trie_lookup_elem(struct bpf_map *map, void *_key)
 {
     struct lpm_trie *trie = container_of(map, struct lpm_trie, map);
     struct lpm_trie_node *node, *found = NULL;
-    struct bpf_lpm_trie_key *key = _key;
+    struct bpf_lpm_trie_key_u8 *key = _key;
 
     if (key->prefixlen > trie->max_prefixlen)
         return NULL;
@@ -348,7 +357,7 @@ static int trie_update_elem(struct bpf_map *map,
     struct lpm_trie *trie = container_of(map, struct lpm_trie, map);
     struct lpm_trie_node *node, *im_node = NULL, *new_node = NULL;
     struct lpm_trie_node __rcu **slot;
-    struct bpf_lpm_trie_key *key = _key;
+    struct bpf_lpm_trie_key_u8 *key = _key;
     unsigned long irq_flags;
     unsigned int next_bit;
     size_t matchlen = 0;
@@ -472,7 +481,7 @@ static void lpm_trie_init(struct lpm_trie *trie, u32 max_entries)
     /* Zero out the pool */
     for (i = 0; i < LPM_POOL_SIZE; i++) __lpm_pool_used[i] = 0;
 
-    trie->map.key_size    = sizeof(struct bpf_lpm_trie_key) + 4; /* IPv4 */
+    trie->map.key_size    = sizeof(struct bpf_lpm_trie_key_u8) + 4; /* IPv4 */
     trie->map.value_size  = 8;
     trie->map.max_entries = max_entries;
     trie->map.map_flags   = 0;
@@ -488,7 +497,7 @@ static void lpm_trie_init(struct lpm_trie *trie, u32 max_entries)
  * Helper: build a lookup key for an IPv4 address + prefix length
  * ----------------------------------------------------------------------- */
 struct lpm_key_ipv4 {
-    struct bpf_lpm_trie_key hdr;
+    struct bpf_lpm_trie_key_u8 hdr;
     u8 addr[4];
 };
 
