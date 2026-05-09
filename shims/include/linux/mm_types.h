@@ -13,51 +13,27 @@
 #include <linux/atomic.h>
 #include <asm/pgtable_types.h>
 
-/* Opaque struct page - used as pointer only in most BPF-relevant code */
+/*
+ * Minimal page/folio shapes used by current shimmed header paths. These are
+ * not intended to mirror the full kernel layout.
+ */
 struct page {
-unsigned long flags;
-union {
-struct list_head lru;
-struct {
-void *s_mem;
-unsigned int active;
-int units;
-};
-};
-atomic_t _refcount;
+	unsigned long flags;
+	union {
+		struct list_head lru;
+		struct {
+			void *s_mem;
+			unsigned int active;
+			int units;
+		};
+	};
+	atomic_t _refcount;
 };
 
-/* Opaque struct folio */
 struct folio {
-union {
-struct page page;
-};
-};
-
-/* Minimal struct mm_struct - only fields accessed by BPF-relevant code */
-struct mm_struct {
-struct {
-struct vm_area_struct __rcu *mmap;
-unsigned long mmap_base;
-unsigned long task_size;
-pgd_t *pgd;
-atomic_t mm_users;
-atomic_t mm_count;
-unsigned long hiwater_rss;
-unsigned long hiwater_vm;
-unsigned long total_vm;
-unsigned long locked_vm;
-unsigned long pinned_vm;
-unsigned long data_vm;
-unsigned long exec_vm;
-unsigned long stack_vm;
-unsigned long def_flags;
-unsigned long start_code, end_code, start_data, end_data;
-unsigned long start_brk, brk, start_stack;
-unsigned long arg_start, arg_end, env_start, env_end;
-};
-spinlock_t page_table_lock;
-unsigned long flags;
+	union {
+		struct page page;
+	};
 };
 
 /* Forward declarations */
@@ -65,6 +41,32 @@ struct vm_area_struct;
 struct anon_vma;
 struct address_space;
 struct mmu_notifier_mm;
+
+/* Minimal mm_struct fields accessed by BPF-relevant header chains. */
+struct mm_struct {
+	struct {
+		struct vm_area_struct __rcu *mmap;
+		unsigned long mmap_base;
+		unsigned long task_size;
+		pgd_t *pgd;
+		atomic_t mm_users;
+		atomic_t mm_count;
+		unsigned long hiwater_rss;
+		unsigned long hiwater_vm;
+		unsigned long total_vm;
+		unsigned long locked_vm;
+		unsigned long pinned_vm;
+		unsigned long data_vm;
+		unsigned long exec_vm;
+		unsigned long stack_vm;
+		unsigned long def_flags;
+		unsigned long start_code, end_code, start_data, end_data;
+		unsigned long start_brk, brk, start_stack;
+		unsigned long arg_start, arg_end, env_start, env_end;
+	};
+	spinlock_t page_table_lock;
+	unsigned long flags;
+};
 
 /* pgtable_t is defined in asm/pgtable_types.h as struct page * */
 
