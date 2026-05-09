@@ -12,8 +12,6 @@
 #endif
 
 #include <linux/compiler.h>
-#include <asm/alternative.h>
-#include <asm/rmwcc.h>
 #include <asm/barrier.h>
 
 #if BITS_PER_LONG == 32
@@ -26,7 +24,9 @@
 
 #define BIT_64(n)	(U64_C(1) << (n))
 
-/* Atomic bit operations - use asm-generic versions */
+/* Atomic bit operations - use asm-generic versions. The x86-only
+ * alternative/rmwcc helpers are intentionally not included because this shim
+ * does not use the real inline-asm implementations. */
 #include <asm-generic/bitops/atomic.h>
 #include <asm-generic/bitops/non-atomic.h>
 #include <asm-generic/bitops/lock.h>

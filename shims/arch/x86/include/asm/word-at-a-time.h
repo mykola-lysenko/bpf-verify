@@ -20,6 +20,11 @@
 /* Step 1: Rename the asm function so it compiles to an unused symbol. */
 #define load_unaligned_zeropad __bpf_load_unaligned_zeropad_asm_unused
 
+/* The real header's load_unaligned_zeropad() asm references exception-table
+ * macros. Include their direct provider instead of relying on bitops.h pulling
+ * in broader x86 alternative/rmwcc helpers as a side effect. */
+#include <asm/asm.h>
+
 /* Step 2: Include the real header — provides struct word_at_a_time,
  * WORD_AT_A_TIME_CONSTANTS, has_zero, find_zero, etc. The real header's
  * own include guard (_ASM_WORD_AT_A_TIME_H) prevents double-inclusion. */
