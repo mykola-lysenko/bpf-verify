@@ -15,6 +15,7 @@
 
 #include <linux/types.h>
 #include <linux/compiler.h>
+#include <linux/ucopysize.h>
 
 /* __user annotation — already defined in compiler_types.h, but ensure it's here */
 #ifndef __user
