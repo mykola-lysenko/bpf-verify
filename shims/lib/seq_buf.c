@@ -35,6 +35,27 @@ static inline void *memcpy(void *d, const void *s, __kernel_size_t n)
 { unsigned char *dd = d; const unsigned char *ss = s;
   __kernel_size_t i; for (i = 0; i < n; i++) dd[i] = ss[i]; return d; }
 
+#ifndef WARN_ON
+#define WARN_ON(cond) ((void)(cond))
+#endif
+#ifndef WARN_ON_ONCE
+#define WARN_ON_ONCE(cond) (cond)
+#endif
+#ifndef BUILD_BUG_ON
+#define BUILD_BUG_ON(cond) ((void)(cond))
+#endif
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+static const char __seq_hex_asc[] = "0123456789abcdef";
+#ifndef hex_asc_lo
+#define hex_asc_lo(x) __seq_hex_asc[((x) & 0x0f)]
+#endif
+#ifndef hex_asc_hi
+#define hex_asc_hi(x) __seq_hex_asc[((x) & 0xf0) >> 4]
+#endif
+
 /* vsnprintf stub: seq_buf_vprintf calls vsnprintf to format into the buffer.
  * For BPF verification purposes we stub it as a no-op that returns 0. */
 static inline int vsnprintf(char *buf, __kernel_size_t size, const char *fmt, __builtin_va_list args)
@@ -53,8 +74,7 @@ static inline bool seq_buf_can_fit(struct seq_buf *s, size_t len)
 int seq_buf_vprintf(struct seq_buf *s, const char *fmt, __builtin_va_list args)
 {
     int len;
-    if (s->size == 0)
-        return -1;
+    WARN_ON(s->size == 0);
     if (s->len < s->size) {
         len = vsnprintf(s->buffer + s->len, s->size - s->len, fmt, args);
         if (s->len + (size_t)len < s->size) {
@@ -69,8 +89,7 @@ int seq_buf_vprintf(struct seq_buf *s, const char *fmt, __builtin_va_list args)
 int seq_buf_puts(struct seq_buf *s, const char *str)
 {
     size_t len = strlen(str);
-    if (s->size == 0)
-        return -1;
+    WARN_ON(s->size == 0);
     len += 1;
     if (seq_buf_can_fit(s, len)) {
         memcpy(s->buffer + s->len, str, len);
@@ -83,8 +102,7 @@ int seq_buf_puts(struct seq_buf *s, const char *str)
 
 int seq_buf_putc(struct seq_buf *s, unsigned char c)
 {
-    if (s->size == 0)
-        return -1;
+    WARN_ON(s->size == 0);
     if (seq_buf_can_fit(s, 1)) {
         s->buffer[s->len++] = c;
         return 0;
@@ -95,8 +113,7 @@ int seq_buf_putc(struct seq_buf *s, unsigned char c)
 
 int seq_buf_putmem(struct seq_buf *s, const void *mem, unsigned int len)
 {
-    if (s->size == 0)
-        return -1;
+    WARN_ON(s->size == 0);
     if (seq_buf_can_fit(s, len)) {
         memcpy(s->buffer + s->len, mem, len);
         s->len += len;
@@ -115,15 +132,21 @@ int seq_buf_putmem_hex(struct seq_buf *s, const void *mem, unsigned int len)
     const unsigned char *data = mem;
     unsigned int start_len;
     int i, j;
-    if (s->size == 0)
-        return -1;
+
+    WARN_ON(s->size == 0);
+    BUILD_BUG_ON(MAX_MEMHEX_BYTES * 2 >= HEX_CHARS);
+
     while (len) {
-        start_len = len < MAX_MEMHEX_BYTES ? len : MAX_MEMHEX_BYTES;
+        start_len = min(len, MAX_MEMHEX_BYTES);
+#ifdef __BIG_ENDIAN
+        for (i = 0, j = 0; i < start_len; i++) {
+#else
         for (i = (int)start_len - 1, j = 0; i >= 0; i--) {
-            hex[j++] = "0123456789abcdef"[(data[i] >> 4) & 0xf];
-            hex[j++] = "0123456789abcdef"[data[i] & 0xf];
+#endif
+            hex[j++] = hex_asc_hi(data[i]);
+            hex[j++] = hex_asc_lo(data[i]);
         }
-        if (j == 0 || (unsigned)j/2 > len)
+        if (WARN_ON_ONCE(j == 0 || j/2 > len))
             break;
         hex[j++] = ' ';
         seq_buf_putmem(s, hex, j);
