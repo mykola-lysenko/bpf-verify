@@ -136,6 +136,25 @@ int seq_buf_putmem_hex(struct seq_buf *s, const void *mem, unsigned int len)
     WARN_ON(s->size == 0);
     BUILD_BUG_ON(MAX_MEMHEX_BYTES * 2 >= HEX_CHARS);
 
+    if (len <= MAX_MEMHEX_BYTES) {
+        start_len = len;
+        if (!start_len)
+            return 0;
+#ifdef __BIG_ENDIAN
+        for (i = 0, j = 0; i < start_len; i++) {
+#else
+        for (i = (int)start_len - 1, j = 0; i >= 0; i--) {
+#endif
+            hex[j++] = hex_asc_hi(data[i]);
+            hex[j++] = hex_asc_lo(data[i]);
+        }
+        if (WARN_ON_ONCE(j == 0 || j/2 > len))
+            return -1;
+        hex[j++] = ' ';
+        seq_buf_putmem(s, hex, j);
+        return seq_buf_has_overflowed(s) ? -1 : 0;
+    }
+
     while (len) {
         start_len = min(len, MAX_MEMHEX_BYTES);
 #ifdef __BIG_ENDIAN
