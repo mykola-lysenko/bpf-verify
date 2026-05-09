@@ -2766,6 +2766,25 @@ HARNESS_BODIES = {
     BPF_ASSERT((A & ~B & MASK) == 0);
     BPF_ASSERT((B & ~C & MASK) == 0);
     BPF_ASSERT((A & ~C & MASK) == 0);
+
+    unsigned long ba[1], bb[1], bc[1], bd[1];
+    ba[0] = a;
+    bb[0] = b;
+    bc[0] = (a | b) & MASK;
+    bd[0] = 0;
+
+    BPF_ASSERT(__bitmap_or_equal(ba, bb, bc, NBITS));
+    BPF_ASSERT(!__bitmap_or_equal(ba, bb, ba, NBITS) || ((a | b) & MASK) == a);
+
+    __bitmap_and(bd, ba, bb, NBITS);
+    BPF_ASSERT(__bitmap_weight_and(ba, bb, NBITS) == __bitmap_weight(bd, NBITS));
+    BPF_ASSERT(__bitmap_weight_andnot(ba, bb, NBITS) ==
+               __builtin_popcountl(a & ~b & MASK));
+    BPF_ASSERT(__bitmap_weighted_or(bd, ba, bb, NBITS) == __bitmap_weight(bc, NBITS));
+    BPF_ASSERT((bd[0] & MASK) == bc[0]);
+    BPF_ASSERT(__bitmap_weighted_xor(bd, ba, bb, NBITS) ==
+               __builtin_popcountl((a ^ b) & MASK));
+    BPF_ASSERT((bd[0] & MASK) == ((a ^ b) & MASK));
     return (int)a;""",
 
     "base64": """    /* base64_encode / base64_decode: round-trip identity.

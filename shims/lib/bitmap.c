@@ -27,6 +27,25 @@ bool __bitmap_equal(const unsigned long *bitmap1,
 	return true;
 }
 
+bool __bitmap_or_equal(const unsigned long *bitmap1,
+		       const unsigned long *bitmap2,
+		       const unsigned long *bitmap3,
+		       unsigned int bits)
+{
+	unsigned int k, lim = bits / BITS_PER_LONG;
+	unsigned long tmp;
+
+	for (k = 0; k < lim; ++k)
+		if ((bitmap1[k] | bitmap2[k]) != bitmap3[k])
+			return false;
+
+	if (!(bits % BITS_PER_LONG))
+		return true;
+
+	tmp = (bitmap1[k] | bitmap2[k]) ^ bitmap3[k];
+	return (tmp & BITMAP_LAST_WORD_MASK(bits)) == 0;
+}
+
 void __bitmap_complement(unsigned long *dst, const unsigned long *src, unsigned int bits)
 {
 	unsigned int k, lim = BITS_TO_LONGS(bits);
@@ -123,6 +142,74 @@ unsigned int __bitmap_weight(const unsigned long *bitmap, unsigned int bits)
 
 	if (bits % BITS_PER_LONG)
 		w += hweight_long(bitmap[k] & BITMAP_LAST_WORD_MASK(bits));
+
+	return w;
+}
+
+unsigned int __bitmap_weight_and(const unsigned long *bitmap1,
+				 const unsigned long *bitmap2, unsigned int bits)
+{
+	unsigned int k, lim = bits/BITS_PER_LONG, w = 0;
+
+	for (k = 0; k < lim; k++)
+		w += hweight_long(bitmap1[k] & bitmap2[k]);
+
+	if (bits % BITS_PER_LONG)
+		w += hweight_long((bitmap1[k] & bitmap2[k]) &
+				  BITMAP_LAST_WORD_MASK(bits));
+
+	return w;
+}
+
+unsigned int __bitmap_weight_andnot(const unsigned long *bitmap1,
+				    const unsigned long *bitmap2, unsigned int bits)
+{
+	unsigned int k, lim = bits/BITS_PER_LONG, w = 0;
+
+	for (k = 0; k < lim; k++)
+		w += hweight_long(bitmap1[k] & ~bitmap2[k]);
+
+	if (bits % BITS_PER_LONG)
+		w += hweight_long((bitmap1[k] & ~bitmap2[k]) &
+				  BITMAP_LAST_WORD_MASK(bits));
+
+	return w;
+}
+
+unsigned int __bitmap_weighted_or(unsigned long *dst,
+				  const unsigned long *bitmap1,
+				  const unsigned long *bitmap2, unsigned int bits)
+{
+	unsigned int k, lim = bits/BITS_PER_LONG, w = 0;
+
+	for (k = 0; k < lim; k++) {
+		dst[k] = bitmap1[k] | bitmap2[k];
+		w += hweight_long(dst[k]);
+	}
+
+	if (bits % BITS_PER_LONG) {
+		dst[k] = bitmap1[k] | bitmap2[k];
+		w += hweight_long(dst[k] & BITMAP_LAST_WORD_MASK(bits));
+	}
+
+	return w;
+}
+
+unsigned int __bitmap_weighted_xor(unsigned long *dst,
+				   const unsigned long *bitmap1,
+				   const unsigned long *bitmap2, unsigned int bits)
+{
+	unsigned int k, lim = bits/BITS_PER_LONG, w = 0;
+
+	for (k = 0; k < lim; k++) {
+		dst[k] = bitmap1[k] ^ bitmap2[k];
+		w += hweight_long(dst[k]);
+	}
+
+	if (bits % BITS_PER_LONG) {
+		dst[k] = bitmap1[k] ^ bitmap2[k];
+		w += hweight_long(dst[k] & BITMAP_LAST_WORD_MASK(bits));
+	}
 
 	return w;
 }
