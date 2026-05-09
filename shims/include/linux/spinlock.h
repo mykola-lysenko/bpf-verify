@@ -9,79 +9,78 @@
 #include <linux/spinlock_types.h>
 #include <linux/cleanup.h>
 
-#define __bpf_lock_noop(lock)		do { (void)(lock); } while (0)
-#define __bpf_lock_noop2(lock, arg)	do { (void)(lock); (void)(arg); } while (0)
+#define __bpf_lock_noop(...)		do { (void)(__VA_ARGS__); } while (0)
 #define __bpf_lock_irqsave(lock, flags)	do { (void)(lock); (flags) = 0; } while (0)
-#define __bpf_lock_try(lock)		({ (void)(lock); 1; })
+#define __bpf_lock_try(...)		({ (void)(__VA_ARGS__); 1; })
 #define __bpf_lock_try_irqsave(lock, flags)	\
 	({ (void)(lock); (flags) = 0; 1; })
+#define __bpf_lock_false(...)		({ (void)(__VA_ARGS__); 0; })
 
-#define raw_spin_lock_init(lock)		__bpf_lock_noop(lock)
-#define raw_spin_lock(lock)			__bpf_lock_noop(lock)
-#define raw_spin_lock_nested(lock, subclass)	__bpf_lock_noop2(lock, subclass)
-#define raw_spin_lock_nest_lock(lock, nest_lock) __bpf_lock_noop2(lock, nest_lock)
-#define raw_spin_lock_bh(lock)			__bpf_lock_noop(lock)
-#define raw_spin_lock_irq(lock)			__bpf_lock_noop(lock)
+#define raw_spin_lock_init(...)		__bpf_lock_noop(__VA_ARGS__)
+#define raw_spin_lock			raw_spin_lock_init
+#define raw_spin_lock_nested		raw_spin_lock_init
+#define raw_spin_lock_nest_lock		raw_spin_lock_init
+#define raw_spin_lock_bh		raw_spin_lock_init
+#define raw_spin_lock_irq		raw_spin_lock_init
 #define raw_spin_lock_irqsave(lock, flags)	__bpf_lock_irqsave(lock, flags)
 #define raw_spin_lock_irqsave_nested(lock, flags, subclass)	\
 	do { (void)(subclass); __bpf_lock_irqsave(lock, flags); } while (0)
-#define raw_spin_unlock(lock)			__bpf_lock_noop(lock)
-#define raw_spin_unlock_bh(lock)		__bpf_lock_noop(lock)
-#define raw_spin_unlock_irq(lock)		__bpf_lock_noop(lock)
-#define raw_spin_unlock_irqrestore(lock, flags)	__bpf_lock_noop2(lock, flags)
-#define raw_spin_trylock(lock)			__bpf_lock_try(lock)
-#define raw_spin_trylock_bh(lock)		__bpf_lock_try(lock)
-#define raw_spin_trylock_irq(lock)		__bpf_lock_try(lock)
+#define raw_spin_unlock		raw_spin_lock_init
+#define raw_spin_unlock_bh		raw_spin_lock_init
+#define raw_spin_unlock_irq		raw_spin_lock_init
+#define raw_spin_unlock_irqrestore	raw_spin_lock_init
+#define raw_spin_trylock(...)		__bpf_lock_try(__VA_ARGS__)
+#define raw_spin_trylock_bh		raw_spin_trylock
+#define raw_spin_trylock_irq		raw_spin_trylock
 #define raw_spin_trylock_irqsave(lock, flags)	__bpf_lock_try_irqsave(lock, flags)
-#define raw_spin_is_locked(lock)		({ (void)(lock); 0; })
-#define raw_spin_is_contended(lock)		({ (void)(lock); 0; })
-#define assert_raw_spin_locked(lock)		__bpf_lock_noop(lock)
+#define raw_spin_is_locked(...)		__bpf_lock_false(__VA_ARGS__)
+#define raw_spin_is_contended		raw_spin_is_locked
+#define assert_raw_spin_locked		raw_spin_lock_init
 
-#define spin_lock_init(lock)			__bpf_lock_noop(lock)
-#define spin_lock(lock)				__bpf_lock_noop(lock)
-#define spin_lock_nested(lock, subclass)	__bpf_lock_noop2(lock, subclass)
-#define spin_lock_nest_lock(lock, nest_lock)	__bpf_lock_noop2(lock, nest_lock)
-#define spin_lock_bh(lock)			__bpf_lock_noop(lock)
-#define spin_lock_irq(lock)			__bpf_lock_noop(lock)
-#define spin_lock_irqsave(lock, flags)		__bpf_lock_irqsave(lock, flags)
-#define spin_lock_irqsave_nested(lock, flags, subclass)	\
-	do { (void)(subclass); __bpf_lock_irqsave(lock, flags); } while (0)
-#define spin_unlock(lock)			__bpf_lock_noop(lock)
-#define spin_unlock_bh(lock)			__bpf_lock_noop(lock)
-#define spin_unlock_irq(lock)			__bpf_lock_noop(lock)
-#define spin_unlock_irqrestore(lock, flags)	__bpf_lock_noop2(lock, flags)
-#define spin_trylock(lock)			__bpf_lock_try(lock)
-#define spin_trylock_bh(lock)			__bpf_lock_try(lock)
-#define spin_trylock_irq(lock)			__bpf_lock_try(lock)
-#define spin_trylock_irqsave(lock, flags)	__bpf_lock_try_irqsave(lock, flags)
-#define spin_is_locked(lock)			({ (void)(lock); 0; })
-#define spin_is_contended(lock)			({ (void)(lock); 0; })
-#define spin_needbreak(lock)			({ (void)(lock); 0; })
-#define assert_spin_locked(lock)		__bpf_lock_noop(lock)
+#define spin_lock_init			raw_spin_lock_init
+#define spin_lock			raw_spin_lock_init
+#define spin_lock_nested		raw_spin_lock_init
+#define spin_lock_nest_lock		raw_spin_lock_init
+#define spin_lock_bh			raw_spin_lock_init
+#define spin_lock_irq			raw_spin_lock_init
+#define spin_lock_irqsave		raw_spin_lock_irqsave
+#define spin_lock_irqsave_nested	raw_spin_lock_irqsave_nested
+#define spin_unlock			raw_spin_lock_init
+#define spin_unlock_bh			raw_spin_lock_init
+#define spin_unlock_irq			raw_spin_lock_init
+#define spin_unlock_irqrestore		raw_spin_lock_init
+#define spin_trylock			raw_spin_trylock
+#define spin_trylock_bh			raw_spin_trylock
+#define spin_trylock_irq		raw_spin_trylock
+#define spin_trylock_irqsave		raw_spin_trylock_irqsave
+#define spin_is_locked			raw_spin_is_locked
+#define spin_is_contended		raw_spin_is_locked
+#define spin_needbreak			raw_spin_is_locked
+#define assert_spin_locked		raw_spin_lock_init
 #define smp_mb__after_spinlock()		do { } while (0)
 
-#define rwlock_init(lock)			__bpf_lock_noop(lock)
-#define read_lock(lock)				__bpf_lock_noop(lock)
-#define read_lock_bh(lock)			__bpf_lock_noop(lock)
-#define read_lock_irq(lock)			__bpf_lock_noop(lock)
-#define read_lock_irqsave(lock, flags)		__bpf_lock_irqsave(lock, flags)
-#define read_unlock(lock)			__bpf_lock_noop(lock)
-#define read_unlock_bh(lock)			__bpf_lock_noop(lock)
-#define read_unlock_irq(lock)			__bpf_lock_noop(lock)
-#define read_unlock_irqrestore(lock, flags)	__bpf_lock_noop2(lock, flags)
-#define read_trylock(lock)			__bpf_lock_try(lock)
-#define write_lock(lock)			__bpf_lock_noop(lock)
-#define write_lock_nested(lock, subclass)	__bpf_lock_noop2(lock, subclass)
-#define write_lock_bh(lock)			__bpf_lock_noop(lock)
-#define write_lock_irq(lock)			__bpf_lock_noop(lock)
-#define write_lock_irqsave(lock, flags)		__bpf_lock_irqsave(lock, flags)
-#define write_unlock(lock)			__bpf_lock_noop(lock)
-#define write_unlock_bh(lock)			__bpf_lock_noop(lock)
-#define write_unlock_irq(lock)			__bpf_lock_noop(lock)
-#define write_unlock_irqrestore(lock, flags)	__bpf_lock_noop2(lock, flags)
-#define write_trylock(lock)			__bpf_lock_try(lock)
-#define write_trylock_irqsave(lock, flags)	__bpf_lock_try_irqsave(lock, flags)
-#define rwlock_is_contended(lock)		({ (void)(lock); 0; })
-#define rwlock_needbreak(lock)			({ (void)(lock); 0; })
+#define rwlock_init			raw_spin_lock_init
+#define read_lock			raw_spin_lock_init
+#define read_lock_bh			raw_spin_lock_init
+#define read_lock_irq			raw_spin_lock_init
+#define read_lock_irqsave		raw_spin_lock_irqsave
+#define read_unlock			raw_spin_lock_init
+#define read_unlock_bh			raw_spin_lock_init
+#define read_unlock_irq			raw_spin_lock_init
+#define read_unlock_irqrestore		raw_spin_lock_init
+#define read_trylock			raw_spin_trylock
+#define write_lock			raw_spin_lock_init
+#define write_lock_nested		raw_spin_lock_init
+#define write_lock_bh			raw_spin_lock_init
+#define write_lock_irq			raw_spin_lock_init
+#define write_lock_irqsave		raw_spin_lock_irqsave
+#define write_unlock			raw_spin_lock_init
+#define write_unlock_bh			raw_spin_lock_init
+#define write_unlock_irq		raw_spin_lock_init
+#define write_unlock_irqrestore		raw_spin_lock_init
+#define write_trylock			raw_spin_trylock
+#define write_trylock_irqsave		raw_spin_trylock_irqsave
+#define rwlock_is_contended		raw_spin_is_locked
+#define rwlock_needbreak		raw_spin_is_locked
 
 #endif /* __LINUX_SPINLOCK_H */
