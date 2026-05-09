@@ -7,6 +7,9 @@
 
 /* Block asm-generic/bug.h from redefining these */
 #define _ASM_GENERIC_BUG_H
+#define HAVE_ARCH_BUG
+#define HAVE_ARCH_BUG_ON
+#define HAVE_ARCH_WARN_ON
 
 /* TAINT values needed by asm-generic/bug.h */
 #define TAINT_WARN		9
@@ -16,8 +19,11 @@
 #define BUGFLAG_ONCE		(1 << 1)
 #define BUGFLAG_DONE		(1 << 2)
 #define BUGFLAG_NO_CUT_HERE	(1 << 3)
+#define BUGFLAG_ARGS		(1 << 4)
 #define BUGFLAG_TAINT(taint)	((taint) << 8)
 #define BUG_GET_TAINT(bug)	((bug)->flags >> 8)
+
+#define CUT_HERE		"------------[ cut here ]------------\n"
 
 /* Minimal bug_entry struct for linux/bug.h */
 struct bug_entry {
@@ -29,17 +35,47 @@ struct bug_entry {
 	unsigned short	flags;
 };
 
-/* BPF-safe BUG/WARN implementations */
-#define BUG()			do { } while (0)
-#define BUG_ON(cond)		do { if (cond) { } } while (0)
-#define WARN_ON(cond)		(!!(cond))
-#define WARN_ON_ONCE(cond)	(!!(cond))
-#define WARN(cond, fmt...)	(!!(cond))
-#define WARN_ONCE(cond, fmt...)	(!!(cond))
-#define WARN_TAINT(cond, taint, fmt...)	(!!(cond))
-#define WARN_TAINT_ONCE(cond, taint, fmt...)	(!!(cond))
+/* Generated harnesses may predefine these; make the shim authoritative. */
+#undef BUG
+#undef BUG_ON
+#undef WARN_ON
+#undef WARN_ON_ONCE
+#undef WARN_ON_SMP
+#undef WARN
+#undef WARN_ONCE
+#undef WARN_TAINT
+#undef WARN_TAINT_ONCE
+#undef __WARN
+#undef __WARN_FLAGS
+#undef __WARN_printf
+#undef WARN_CONDITION_STR
 
-/* __WARN_FLAGS needed by asm-generic/bug.h */
-#define __WARN_FLAGS(flags)	do { } while (0)
+#define __bpf_bug_noop(...)	do { } while (0)
+
+#define __bpf_warn_on(cond)						\
+({									\
+	int __ret_warn_on = !!(cond);					\
+	__ret_warn_on;							\
+})
+
+/* BPF-safe BUG/WARN implementations */
+#define BUG()			__bpf_bug_noop()
+#define BUG_ON(cond)		do { if (cond) __bpf_bug_noop(); } while (0)
+#define WARN_ON(cond)		__bpf_warn_on(cond)
+#define WARN_ON_ONCE(cond)	__bpf_warn_on(cond)
+#ifdef CONFIG_SMP
+#define WARN_ON_SMP(cond)	__bpf_warn_on(cond)
+#else
+#define WARN_ON_SMP(cond)	({ 0; })
+#endif
+#define WARN(cond, fmt...)	__bpf_warn_on(cond)
+#define WARN_ONCE(cond, fmt...)	__bpf_warn_on(cond)
+#define WARN_TAINT(cond, taint, fmt...)	__bpf_warn_on(cond)
+#define WARN_TAINT_ONCE(cond, taint, fmt...)	__bpf_warn_on(cond)
+
+#define __WARN()		__bpf_bug_noop()
+#define __WARN_FLAGS(flags)	__bpf_bug_noop(flags)
+#define __WARN_printf(taint, arg...)	__bpf_bug_noop(taint, ##arg)
+#define WARN_CONDITION_STR(cond_str)	(cond_str)
 
 #endif /* _ASM_X86_BUG_H */
