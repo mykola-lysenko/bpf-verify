@@ -2430,13 +2430,12 @@ HARNESS_BODIES = {
     "lpm_trie": """\
     /* lpm_trie: BPF Longest-Prefix-Match trie core algorithm.
      *
-     * The BPF verifier cannot track pointers stored in and retrieved from
-     * memory structures (pointer aliasing through memory). This means we
-     * cannot call trie_update_elem() + trie_lookup_elem() end-to-end, because
-     * after trie->root = new_node (a memory store), the verifier loses track
-     * of the pointer and rejects the subsequent dereference as 'scalar'.
+     * The BPF verifier has limited precision for pointers persisted through
+     * trie memory, so the harness does not do full update+lookup end-to-end.
+     * It directly tests the pure matching helpers and selected update
+     * return-code paths that stay verifier-trackable.
      *
-     * Instead we test the two core pure algorithmic functions directly:
+     * Pure helpers:
      *   1. extract_bit(data, index): extracts bit 'index' from a byte array.
      *   2. longest_prefix_match(trie, node, key): finds the longest common
      *      prefix between a trie node and a lookup key.
@@ -2449,6 +2448,8 @@ HARNESS_BODIES = {
      *   B. longest_prefix_match: 192.168.1.x node vs 192.168.1.5 key -> 24 bits match.
      *   C. longest_prefix_match: 10.0.0.0/8 node vs 192.168.1.5 key -> 0 bits match.
      *   D. longest_prefix_match: exact match 192.168.1.0/24 -> returns min(24,32)=24.
+     *   E. trie_update_elem: BPF_EXIST on an empty trie reports ENOENT even at capacity.
+     *   F. trie_update_elem: replacement of an existing node is allowed at capacity.
      */
 
     /* --- Property A: extract_bit --- */
@@ -2508,6 +2509,25 @@ HARNESS_BODIES = {
     lpm_key_set(&key24, 24, 192, 168, 1, 0);
     size_t match_d = longest_prefix_match(&trie, &node24.hdr, &key24.hdr);
     BPF_ASSERT(match_d == 24);
+
+    /* E: BPF_EXIST should fail as not-found, not as capacity exhaustion. */
+    u64 value = 0x1122334455667788ULL;
+    int ret;
+    lpm_trie_init(&trie, 1);
+    trie.n_entries = trie.map.max_entries;
+    ret = trie_update_elem(&trie.map, &key24.hdr, &value, BPF_EXIST);
+    BPF_ASSERT(ret == -ENOENT);
+
+    /* F: replacing an existing node does not consume a new map entry. */
+    lpm_trie_init(&trie, 1);
+    trie.root = &node24.hdr;
+    trie.n_entries = trie.map.max_entries;
+    ret = trie_update_elem(&trie.map, &key24.hdr, &value, BPF_NOEXIST);
+    BPF_ASSERT(ret == -EEXIST);
+    BPF_ASSERT(trie.n_entries == trie.map.max_entries);
+    ret = trie_update_elem(&trie.map, &key24.hdr, &value, BPF_ANY);
+    BPF_ASSERT(ret == 0);
+    BPF_ASSERT(trie.n_entries == trie.map.max_entries);
 
     return (int)(match_b + match_c + match_d);""",
     # ---------------------------------------------------------------

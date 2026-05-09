@@ -225,6 +225,8 @@ struct lpm_trie {
  * We use 64-byte slots to be safe.
  * ----------------------------------------------------------------------- */
 #define LPM_POOL_SIZE  16
+#define LPM_BPF_DATA_SIZE   4
+#define LPM_BPF_VALUE_SIZE  8
 
 static char __lpm_node_pool[LPM_POOL_SIZE][64];
 static int  __lpm_pool_used[LPM_POOL_SIZE];
@@ -258,6 +260,23 @@ static void kfree(const void *ptr)
 
 static void *kmalloc_array(size_t n, size_t size, int flags)
 { (void)n; (void)size; (void)flags; return NULL; }
+
+static void lpm_copy_data(u8 *dst, const u8 *src)
+{
+    int i;
+
+    for (i = 0; i < LPM_BPF_DATA_SIZE; i++)
+        dst[i] = src[i];
+}
+
+static void lpm_copy_value(u8 *dst, const void *value)
+{
+    const u8 *src = value;
+    int i;
+
+    for (i = 0; i < LPM_BPF_VALUE_SIZE; i++)
+        dst[i] = src[i];
+}
 
 /* -----------------------------------------------------------------------
  * Core algorithm functions adapted for BPF verifier execution.
@@ -350,12 +369,43 @@ static void *trie_lookup_elem(struct bpf_map *map, void *_key)
     return found->data + trie->data_size;
 }
 
+static struct lpm_trie_node *lpm_trie_node_alloc(struct lpm_trie *trie,
+                                                 const void *value)
+{
+    struct lpm_trie_node *node;
+
+    node = bpf_map_kmalloc_node(&trie->map,
+                                sizeof(struct lpm_trie_node) +
+                                trie->data_size + trie->map.value_size,
+                                GFP_NOWAIT | __GFP_NOWARN,
+                                trie->map.numa_node);
+    if (!node)
+        return NULL;
+
+    node->flags = 0;
+    if (value)
+        lpm_copy_value(node->data + LPM_BPF_DATA_SIZE, value);
+
+    return node;
+}
+
+static int trie_check_add_elem(struct lpm_trie *trie, u64 flags)
+{
+    if (flags == BPF_EXIST)
+        return -ENOENT;
+    if (trie->n_entries == trie->map.max_entries)
+        return -ENOSPC;
+    trie->n_entries++;
+    return 0;
+}
+
 /* Called from syscall or from eBPF program */
 static int trie_update_elem(struct bpf_map *map,
                             void *_key, void *value, u64 flags)
 {
     struct lpm_trie *trie = container_of(map, struct lpm_trie, map);
-    struct lpm_trie_node *node, *im_node = NULL, *new_node = NULL;
+    struct lpm_trie_node *node, *im_node, *new_node;
+    struct lpm_trie_node *free_node = NULL;
     struct lpm_trie_node __rcu **slot;
     struct bpf_lpm_trie_key_u8 *key = _key;
     unsigned long irq_flags;
@@ -369,33 +419,25 @@ static int trie_update_elem(struct bpf_map *map,
     if (key->prefixlen > trie->max_prefixlen)
         return -EINVAL;
 
-    if (trie->n_entries == trie->map.max_entries)
-        return -ENOSPC;
-
-    new_node = bpf_map_kmalloc_node(&trie->map,
-                                    sizeof(struct lpm_trie_node) +
-                                    trie->data_size + trie->map.value_size,
-                                    GFP_NOWAIT | __GFP_NOWARN,
-                                    trie->map.numa_node);
+    new_node = lpm_trie_node_alloc(trie, value);
     if (!new_node)
         return -ENOMEM;
 
+    im_node = NULL;
     new_node->prefixlen = key->prefixlen;
     RCU_INIT_POINTER(new_node->child[0], NULL);
     RCU_INIT_POINTER(new_node->child[1], NULL);
-    memcpy(new_node->data, key->data, trie->data_size);
-    memcpy(new_node->data + trie->data_size, value, trie->map.value_size);
+    lpm_copy_data(new_node->data, key->data);
 
     spin_lock_irqsave(&trie->lock, irq_flags);
 
     slot = &trie->root;
 
-    while ((node = rcu_dereference_protected(*slot, 1))) {
+    while ((node = rcu_dereference(*slot))) {
         matchlen = longest_prefix_match(trie, node, key);
 
         if (node->prefixlen != matchlen ||
-            node->prefixlen == key->prefixlen ||
-            node->prefixlen == trie->max_prefixlen)
+            node->prefixlen == key->prefixlen)
             break;
 
         next_bit = extract_bit(key->data, node->prefixlen);
@@ -403,53 +445,57 @@ static int trie_update_elem(struct bpf_map *map,
     }
 
     if (!node) {
+        ret = trie_check_add_elem(trie, flags);
+        if (ret)
+            goto out;
+
         rcu_assign_pointer(*slot, new_node);
         goto out;
     }
 
     if (node->prefixlen == matchlen) {
-        new_node->child[0] = node->child[0];
-        new_node->child[1] = node->child[1];
-
         if (!(node->flags & LPM_TREE_NODE_FLAG_IM)) {
             if (flags == BPF_NOEXIST) {
                 ret = -EEXIST;
-                goto out_unlock;
+                goto out;
             }
         } else {
-            if (flags == BPF_EXIST) {
-                ret = -ENOENT;
-                goto out_unlock;
-            }
-            /* Upgrade the intermediate node to a real node */
+            ret = trie_check_add_elem(trie, flags);
+            if (ret)
+                goto out;
         }
 
+        new_node->child[0] = node->child[0];
+        new_node->child[1] = node->child[1];
+
         rcu_assign_pointer(*slot, new_node);
-        kfree_rcu(node, rcu);
+        free_node = node;
         goto out;
     }
 
-    if (flags == BPF_EXIST) {
-        ret = -ENOENT;
-        goto out_unlock;
+    ret = trie_check_add_elem(trie, flags);
+    if (ret)
+        goto out;
+
+    if (matchlen == key->prefixlen) {
+        next_bit = extract_bit(node->data, matchlen);
+        rcu_assign_pointer(new_node->child[next_bit], node);
+        rcu_assign_pointer(*slot, new_node);
+        goto out;
     }
 
-    im_node = bpf_map_kmalloc_node(&trie->map,
-                                   sizeof(struct lpm_trie_node) +
-                                   trie->data_size,
-                                   GFP_NOWAIT | __GFP_NOWARN,
-                                   trie->map.numa_node);
+    im_node = lpm_trie_node_alloc(trie, NULL);
     if (!im_node) {
+        trie->n_entries--;
         ret = -ENOMEM;
-        goto out_unlock;
+        goto out;
     }
 
     im_node->prefixlen = matchlen;
     im_node->flags |= LPM_TREE_NODE_FLAG_IM;
-    memcpy(im_node->data, node->data, trie->data_size);
+    lpm_copy_data(im_node->data, node->data);
 
-    next_bit = extract_bit(key->data, matchlen);
-    if (next_bit) {
+    if (extract_bit(key->data, matchlen)) {
         rcu_assign_pointer(im_node->child[0], node);
         rcu_assign_pointer(im_node->child[1], new_node);
     } else {
@@ -459,16 +505,11 @@ static int trie_update_elem(struct bpf_map *map,
     rcu_assign_pointer(*slot, im_node);
 
 out:
-    if (ret == 0)
-        trie->n_entries++;
-
     spin_unlock_irqrestore(&trie->lock, irq_flags);
-    return ret;
 
-out_unlock:
-    kfree(new_node);
-    kfree(im_node);
-    spin_unlock_irqrestore(&trie->lock, irq_flags);
+    if (ret)
+        kfree(new_node);
+    kfree(free_node);
     return ret;
 }
 
@@ -482,13 +523,13 @@ static void lpm_trie_init(struct lpm_trie *trie, u32 max_entries)
     for (i = 0; i < LPM_POOL_SIZE; i++) __lpm_pool_used[i] = 0;
 
     trie->map.key_size    = sizeof(struct bpf_lpm_trie_key_u8) + 4; /* IPv4 */
-    trie->map.value_size  = 8;
+    trie->map.value_size  = LPM_BPF_VALUE_SIZE;
     trie->map.max_entries = max_entries;
     trie->map.map_flags   = 0;
     trie->map.numa_node   = NUMA_NO_NODE;
     trie->root            = NULL;
     trie->n_entries       = 0;
-    trie->data_size       = 4;  /* IPv4: 4 bytes */
+    trie->data_size       = LPM_BPF_DATA_SIZE;  /* IPv4: 4 bytes */
     trie->max_prefixlen   = 32;
     spin_lock_init(&trie->lock);
 }
