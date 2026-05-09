@@ -11,6 +11,14 @@
 #include_next <linux/cache.h>
 
 #define __bpf_cacheline_aligned __attribute__((__aligned__(SMP_CACHE_BYTES)))
+#ifdef CONFIG_SMP
+#define __bpf_cacheline_aligned_in_smp __bpf_cacheline_aligned
+#define __bpf_cacheline_internodealigned_in_smp \
+	__attribute__((__aligned__(INTERNODE_CACHE_BYTES)))
+#else
+#define __bpf_cacheline_aligned_in_smp
+#define __bpf_cacheline_internodealigned_in_smp
+#endif
 
 #undef __read_mostly
 #define __read_mostly
@@ -22,28 +30,16 @@
 #define ____cacheline_aligned __bpf_cacheline_aligned
 
 #undef ____cacheline_aligned_in_smp
-#ifdef CONFIG_SMP
-#define ____cacheline_aligned_in_smp __bpf_cacheline_aligned
-#else
-#define ____cacheline_aligned_in_smp
-#endif
+#define ____cacheline_aligned_in_smp __bpf_cacheline_aligned_in_smp
 
 #undef __cacheline_aligned
 #define __cacheline_aligned __bpf_cacheline_aligned
 
 #undef __cacheline_aligned_in_smp
-#ifdef CONFIG_SMP
-#define __cacheline_aligned_in_smp __bpf_cacheline_aligned
-#else
-#define __cacheline_aligned_in_smp
-#endif
+#define __cacheline_aligned_in_smp __bpf_cacheline_aligned_in_smp
 
 #undef ____cacheline_internodealigned_in_smp
-#ifdef CONFIG_SMP
 #define ____cacheline_internodealigned_in_smp \
-	__attribute__((__aligned__(INTERNODE_CACHE_BYTES)))
-#else
-#define ____cacheline_internodealigned_in_smp
-#endif
+	__bpf_cacheline_internodealigned_in_smp
 
 #endif /* _BPF_SHIM_LINUX_CACHE_H */
