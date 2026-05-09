@@ -1,28 +1,49 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /* BPF shim: asm/page_64.h
- * x86 page_64.h uses clear_page/copy_page inline asm not valid in BPF.
- * Provide stubs for the page operations.
+ *
+ * The real x86 header defines page helpers with alternative/rep inline asm,
+ * which cannot be compiled for the BPF target.  Keep the page geometry from
+ * the real type headers and provide C equivalents for the helpers that the
+ * harnesses may include.
  */
 #ifndef _ASM_X86_PAGE_64_H
 #define _ASM_X86_PAGE_64_H
+
+#include <vdso/page.h>
 #include <asm/page_64_types.h>
-#ifndef __ASSEMBLY__
+
+#if !defined(__ASSEMBLY__) && !defined(__ASSEMBLER__)
 #include <linux/types.h>
-/* page_offset_base is declared in the real page_64.h and used by __PAGE_OFFSET */
+
+/* Used by __PAGE_OFFSET and related constants from asm/page_64_types.h. */
 extern unsigned long page_offset_base;
 extern unsigned long vmalloc_base;
 extern unsigned long vmemmap_base;
-/* Page clearing/copying stubs - not used in lib/ targets */
+
+static inline void clear_pages(void *addr, unsigned int npages)
+{
+	unsigned int i;
+	char *page = addr;
+
+	for (i = 0; i < npages; i++)
+		__builtin_memset(page + i * PAGE_SIZE, 0, PAGE_SIZE);
+}
+#define clear_pages clear_pages
+
 static inline void clear_page(void *page)
 {
-__builtin_memset(page, 0, 4096);
+	__builtin_memset(page, 0, PAGE_SIZE);
 }
+
 static inline void copy_page(void *to, void *from)
 {
-__builtin_memcpy(to, from, 4096);
+	__builtin_memcpy(to, from, PAGE_SIZE);
 }
-/* virt_to_page stub */
-struct page;
-#define virt_to_page(x)((struct page *)0)
-#define page_to_virt(x)((void *)0)
-#endif /* !__ASSEMBLY__ */
+
+static __always_inline unsigned long task_size_max(void)
+{
+	return (1UL << 47) - PAGE_SIZE;
+}
+
+#endif /* !__ASSEMBLY__ && !__ASSEMBLER__ */
 #endif /* _ASM_X86_PAGE_64_H */
