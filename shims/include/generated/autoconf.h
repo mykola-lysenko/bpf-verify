@@ -32,8 +32,7 @@
 #define CONFIG_HZ 100
 
 /* ── Memory model ───────────────────────────────────────────────────── */
-#define CONFIG_SPARSEMEM 1
-#define CONFIG_SPARSEMEM_VMEMMAP 1
+/* Match the checked-out kernel config: keep a single memory model enabled. */
 #define CONFIG_FLATMEM 1
 #define CONFIG_PHYS_ADDR_T_64BIT 1
 #define CONFIG_ARCH_PHYS_ADDR_T_64BIT 1
