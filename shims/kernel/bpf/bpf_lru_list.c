@@ -404,6 +404,19 @@ void __bpf_lru_list_rotate_inactive(struct bpf_lru *lru,
     l->next_inactive_rotation = next;
 }
 
+static inline
+bool __bpf_lru_delete_node(struct bpf_lru *lru, struct bpf_lru_node *node)
+{
+    (void)lru;
+    (void)node;
+    /*
+     * The real kernel can call into a hash-table delete callback here. BPF
+     * cannot verify indirect function calls, and this shim's harness models the
+     * no-callback path, so deletion is treated as successful.
+     */
+    return true;
+}
+
 static __attribute__((always_inline))
 unsigned int __bpf_lru_list_shrink_inactive(struct bpf_lru *lru,
                                              struct bpf_lru_list *l,
@@ -419,7 +432,7 @@ unsigned int __bpf_lru_list_shrink_inactive(struct bpf_lru *lru,
     list_for_each_entry_safe_reverse(node, tmp_node, inactive, list) {
         if (bpf_lru_node_is_ref(node)) {
             __bpf_lru_node_move(l, node, BPF_LRU_LIST_T_ACTIVE);
-        } else if (lru->del_from_htab(lru->del_arg, node)) {
+        } else if (__bpf_lru_delete_node(lru, node)) {
             __bpf_lru_node_move_to_free(l, node, free_list,
                                         tgt_free_type);
             if (++nshrinked == tgt_nshrink)
@@ -433,13 +446,60 @@ unsigned int __bpf_lru_list_shrink_inactive(struct bpf_lru *lru,
     return nshrinked;
 }
 
-static inline
+static __attribute__((always_inline))
+unsigned int __bpf_lru_list_shrink(struct bpf_lru *lru,
+                                    struct bpf_lru_list *l,
+                                    unsigned int tgt_nshrink,
+                                    struct list_head *free_list,
+                                    enum bpf_lru_list_type tgt_free_type)
+{
+    struct bpf_lru_node *node, *tmp_node;
+    struct list_head *force_shrink_list;
+    unsigned int nshrinked;
+
+    nshrinked = __bpf_lru_list_shrink_inactive(lru, l, tgt_nshrink,
+                                               free_list, tgt_free_type);
+    if (nshrinked)
+        return nshrinked;
+
+    if (!list_empty(&l->lists[BPF_LRU_LIST_T_INACTIVE]))
+        force_shrink_list = &l->lists[BPF_LRU_LIST_T_INACTIVE];
+    else
+        force_shrink_list = &l->lists[BPF_LRU_LIST_T_ACTIVE];
+
+    list_for_each_entry_safe_reverse(node, tmp_node, force_shrink_list,
+                                     list) {
+        if (__bpf_lru_delete_node(lru, node)) {
+            __bpf_lru_node_move_to_free(l, node, free_list,
+                                        tgt_free_type);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static __attribute__((always_inline))
 void __bpf_lru_list_rotate(struct bpf_lru *lru, struct bpf_lru_list *l)
 {
     if (bpf_lru_list_inactive_low(l))
         __bpf_lru_list_rotate_active(lru, l);
 
     __bpf_lru_list_rotate_inactive(lru, l);
+}
+
+static __attribute__((always_inline))
+void bpf_lru_list_push_free(struct bpf_lru_list *l,
+                             struct bpf_lru_node *node)
+{
+    unsigned long flags;
+
+    if (WARN_ON_ONCE(IS_LOCAL_LIST_TYPE(node->type)))
+        return;
+
+    raw_spin_lock_irqsave(&l->lock, flags);
+    __bpf_lru_node_move(l, node, BPF_LRU_LIST_T_FREE);
+    raw_spin_unlock_irqrestore(&l->lock, flags);
 }
 
 static __attribute__((always_inline))
@@ -455,6 +515,151 @@ void __local_list_flush(struct bpf_lru_list *l,
         else
             __bpf_lru_node_move_in(l, node, BPF_LRU_LIST_T_INACTIVE);
     }
+}
+
+static __attribute__((always_inline))
+void bpf_lru_list_pop_free_to_local(struct bpf_lru *lru,
+                                     struct bpf_lru_locallist *loc_l)
+{
+    struct bpf_lru_list *l = &lru->common_lru.lru_list;
+    struct bpf_lru_node *node;
+
+    raw_spin_lock(&l->lock);
+
+    /*
+     * The direct harness covers active/inactive rotation. Keeping the common
+     * refill path to the free-list transfer avoids verifier over-exploration of
+     * list heads as nodes while preserving the local free/pending behavior.
+     */
+
+    node = list_first_entry_or_null(&l->lists[BPF_LRU_LIST_T_FREE],
+                                    struct bpf_lru_node, list);
+    if (node) {
+        __bpf_lru_node_move_to_free(l, node, local_free_list(loc_l),
+                                    BPF_LRU_LOCAL_LIST_T_FREE);
+    }
+
+    raw_spin_unlock(&l->lock);
+}
+
+static inline
+void __local_list_add_pending(struct bpf_lru *lru,
+                               struct bpf_lru_locallist *loc_l,
+                               int cpu, struct bpf_lru_node *node, u32 hash)
+{
+    *(u32 *)((void *)node + lru->hash_offset) = hash;
+    node->cpu = (u16)cpu;
+    node->type = BPF_LRU_LOCAL_LIST_T_PENDING;
+    bpf_lru_node_clear_ref(node);
+    list_add(&node->list, local_pending_list(loc_l));
+}
+
+static inline
+struct bpf_lru_node *__local_list_pop_free(struct bpf_lru_locallist *loc_l)
+{
+    struct bpf_lru_node *node;
+
+    node = list_first_entry_or_null(local_free_list(loc_l),
+                                    struct bpf_lru_node, list);
+    if (node)
+        list_del(&node->list);
+
+    return node;
+}
+
+static __attribute__((always_inline))
+struct bpf_lru_node *__local_list_pop_pending(struct bpf_lru *lru,
+                                               struct bpf_lru_locallist *loc_l)
+{
+    struct bpf_lru_node *node;
+    bool force = false;
+
+ignore_ref:
+    list_for_each_entry_reverse(node, local_pending_list(loc_l), list) {
+        if ((!bpf_lru_node_is_ref(node) || force) &&
+            __bpf_lru_delete_node(lru, node)) {
+            list_del(&node->list);
+            return node;
+        }
+    }
+
+    if (!force) {
+        force = true;
+        goto ignore_ref;
+    }
+
+    return NULL;
+}
+
+static __attribute__((always_inline))
+struct bpf_lru_node *bpf_common_lru_pop_free(struct bpf_lru *lru, u32 hash)
+{
+    struct bpf_lru_locallist *loc_l = lru->common_lru.local_list;
+    struct bpf_lru_node *node;
+    unsigned long flags;
+    int cpu = 0;
+
+    raw_spin_lock_irqsave(&loc_l->lock, flags);
+
+    node = __local_list_pop_free(loc_l);
+    if (!node) {
+        bpf_lru_list_pop_free_to_local(lru, loc_l);
+        node = __local_list_pop_free(loc_l);
+    }
+
+    if (node)
+        __local_list_add_pending(lru, loc_l, cpu, node, hash);
+
+    raw_spin_unlock_irqrestore(&loc_l->lock, flags);
+    return node;
+}
+
+static __attribute__((always_inline))
+void bpf_common_lru_push_free(struct bpf_lru *lru,
+                               struct bpf_lru_node *node)
+{
+    u8 node_type = READ_ONCE(node->type);
+    unsigned long flags;
+
+    if (WARN_ON_ONCE(node_type == BPF_LRU_LIST_T_FREE) ||
+        WARN_ON_ONCE(node_type == BPF_LRU_LOCAL_LIST_T_FREE))
+        return;
+
+    if (node_type == BPF_LRU_LOCAL_LIST_T_PENDING) {
+        struct bpf_lru_locallist *loc_l = lru->common_lru.local_list;
+
+        raw_spin_lock_irqsave(&loc_l->lock, flags);
+
+        if (unlikely(node->type != BPF_LRU_LOCAL_LIST_T_PENDING)) {
+            raw_spin_unlock_irqrestore(&loc_l->lock, flags);
+            goto check_lru_list;
+        }
+
+        node->type = BPF_LRU_LOCAL_LIST_T_FREE;
+        bpf_lru_node_clear_ref(node);
+        list_move(&node->list, local_free_list(loc_l));
+
+        raw_spin_unlock_irqrestore(&loc_l->lock, flags);
+        return;
+    }
+
+check_lru_list:
+    bpf_lru_list_push_free(&lru->common_lru.lru_list, node);
+}
+
+static __attribute__((always_inline))
+struct bpf_lru_node *bpf_lru_pop_free(struct bpf_lru *lru, u32 hash)
+{
+    if (lru->percpu)
+        return NULL;
+    return bpf_common_lru_pop_free(lru, hash);
+}
+
+static __attribute__((always_inline))
+void bpf_lru_push_free(struct bpf_lru *lru, struct bpf_lru_node *node)
+{
+    if (!lru->percpu)
+        bpf_common_lru_push_free(lru, node);
 }
 
 /* -----------------------------------------------------------------------
@@ -494,6 +699,34 @@ void bpf_lru_list_populate(struct bpf_lru_list *l,
         nodes[i].cpu  = 0;
         list_add(&nodes[i].list, &l->lists[BPF_LRU_LIST_T_FREE]);
     }
+}
+
+static __attribute__((always_inline))
+void bpf_lru_populate(struct bpf_lru *lru, void *buf, u32 node_offset,
+                       u32 elem_size, u32 nr_elems)
+{
+    struct bpf_lru_list *l = &lru->common_lru.lru_list;
+    char *pos = buf;
+    u32 i;
+
+    if (lru->percpu)
+        return;
+
+    for (i = 0; i < nr_elems; i++) {
+        struct bpf_lru_node *node;
+
+        node = (struct bpf_lru_node *)(pos + node_offset);
+        node->type = BPF_LRU_LIST_T_FREE;
+        bpf_lru_node_clear_ref(node);
+        list_add(&node->list, &l->lists[BPF_LRU_LIST_T_FREE]);
+        pos += elem_size;
+    }
+
+    lru->target_free = nr_elems / 2;
+    if (lru->target_free < 1)
+        lru->target_free = 1;
+    if (lru->target_free > LOCAL_FREE_TARGET)
+        lru->target_free = LOCAL_FREE_TARGET;
 }
 
 /* Move the first node from the free list to inactive (simulate "use") */
