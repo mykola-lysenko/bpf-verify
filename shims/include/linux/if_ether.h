@@ -23,10 +23,7 @@ static inline void *skb_mac_header(const struct sk_buff *skb)
 	return skb->data;
 }
 
-static inline void *skb_inner_mac_header(const struct sk_buff *skb)
-{
-	return skb->data;
-}
+#define skb_inner_mac_header skb_mac_header
 #endif
 
 struct net_device;
