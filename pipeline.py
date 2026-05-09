@@ -7428,7 +7428,8 @@ void rational_best_approximation(
     # dim.c uses ktime_us_delta() -> ktime_to_us() -> ktime_divns() which does
     # s64/s64 (signed division = sdiv). The BPF backend rejects sdiv.
     # Fix: The shim linux/ktime.h provides a BPF-safe ktime_divns using unsigned
-    # division. Since the shim is searched before KSRC/include, the shim ktime.h
+    # magnitude division with signed-result restoration. Since the shim is
+    # searched before KSRC/include, the shim ktime.h
     # is used instead of the real one. No per-file EXTRA_PRE_INCLUDE needed.
     # net_dim: same fix via shim. But net_dim also has StructRet functions that
     # need internal_linkage forward declarations, plus ktime_get/system_wq/queue_work_on
@@ -10441,12 +10442,14 @@ void reciprocal_value_to_ptr(__u32 d, struct __bpf_recip_rv *out)
     # In kernel v7.0+, bitmap.h declares __bitmap_weight as 'unsigned int'.
     # dim and net_dim: provide BPF-safe ktime_divns after the source include.
     # The EXTRA_PRE_INCLUDE renamed ktime_divns to __bpf_ktime_divns_sdiv.
-    # Now we provide the real ktime_divns using unsigned division.
+    # Now we provide ktime_divns using unsigned magnitude division with
+    # signed-result restoration.
     # dim: provide BPF-safe ktime_us_delta after the source include.
     # The EXTRA_PRE_INCLUDE renamed ktime_divns/ktime_to_us/ktime_to_ms/
     # ktime_us_delta/ktime_ms_delta to unused symbols. Now provide BPF-safe
-    # unsigned versions as macros. These are defined after the source include
-    # so the renamed (unused) static inline functions have already been compiled.
+    # signed-compatible versions as macros. These are defined after the source
+    # include so the renamed (unused) static inline functions have already been
+    # compiled.
     # dim: ktime_divns/ktime_to_us/ktime_us_delta are handled by shims/include/linux/ktime.h.
     # No EXTRA_PREAMBLE needed for dim.
     # seq_buf: close the #pragma clang attribute push scope opened in EXTRA_PRE_INCLUDE.

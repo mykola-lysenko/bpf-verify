@@ -8,7 +8,7 @@
  * ktime_ms_delta to unused symbols before including the real header. The real
  * header's function bodies compile as renamed (signed) functions that are
  * never called and get optimized away. After the include, provide BPF-safe
- * macro versions using unsigned (u64) division.
+ * replacements that implement signed division via unsigned magnitude division.
  *
  * Code that includes this shim (e.g. dim.c via linux/dim.h) will see the
  * BPF-safe macro versions for all ktime division functions.
@@ -25,15 +25,35 @@
 /* Step 2: Include the real header (functions compiled with renamed identifiers). */
 #include_next <linux/ktime.h>
 
-/* Step 3: Undefine renames and provide BPF-safe unsigned versions. */
+/* Step 3: Undefine renames and provide BPF-safe signed versions. */
 #undef ktime_divns
 #undef ktime_to_us
 #undef ktime_to_ms
 #undef ktime_us_delta
 #undef ktime_ms_delta
 
-#define ktime_divns(kt, div) \
-((s64)((u64)(ktime_t)(kt) / (u64)(s64)(div)))
+static inline u64 __bpf_ktime_abs_s64(s64 val)
+{
+	u64 bits = (u64)val;
+
+	return val < 0 ? (~bits + 1) : bits;
+}
+
+static inline s64 __bpf_ktime_restore_sign(u64 val, bool negative)
+{
+	return negative ? (s64)(~val + 1) : (s64)val;
+}
+
+static inline s64 __bpf_ktime_divns(ktime_t kt, s64 div)
+{
+	u64 dividend = __bpf_ktime_abs_s64((s64)kt);
+	u64 divisor = __bpf_ktime_abs_s64(div);
+	u64 quotient = dividend / divisor;
+
+	return __bpf_ktime_restore_sign(quotient, ((s64)kt < 0) != (div < 0));
+}
+
+#define ktime_divns(kt, div) __bpf_ktime_divns((kt), (div))
 
 #define ktime_to_us(kt) \
 ktime_divns((kt), NSEC_PER_USEC)
