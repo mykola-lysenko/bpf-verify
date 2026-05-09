@@ -4,8 +4,8 @@
  *
  * This shim is fully self-contained: it does NOT include any kernel headers.
  * It defines all necessary types from scratch, provides no-op spinlock and
- * RCU macros, implements a minimal doubly-linked list, and copies the core
- * LRU list manipulation functions verbatim from the Linux 6.1.102 source.
+ * RCU macros, implements a minimal doubly-linked list, and keeps the
+ * harness-covered LRU rotation/counting helpers aligned with bpf-next.
  *
  * Per-CPU infrastructure (alloc_percpu, per_cpu_ptr, raw_smp_processor_id)
  * is stubbed out -- the harness exercises only the non-percpu "common" LRU
@@ -164,7 +164,8 @@ static inline void list_move(struct list_head *list,
          pos = list_entry(pos->member.prev, __typeof__(*pos), member))
 
 /* -----------------------------------------------------------------------
- * bpf_lru_list types (from bpf_lru_list.h, verbatim)
+ * bpf_lru_list types from bpf_lru_list.h, with percpu annotations collapsed
+ * to plain pointers for the single-CPU shim model.
  * ----------------------------------------------------------------------- */
 #define NR_BPF_LRU_LIST_T       (3)
 #define NR_BPF_LRU_LIST_COUNT   (2)
@@ -214,6 +215,7 @@ struct bpf_lru {
     del_from_htab_func del_from_htab;
     void              *del_arg;
     unsigned int       hash_offset;
+    unsigned int       target_free;
     unsigned int       nr_scans;
     bool               percpu;
 };
@@ -239,7 +241,9 @@ static inline void bpf_lru_node_set_ref(
 #define IS_LOCAL_LIST_TYPE(t)   ((t) >= BPF_LOCAL_LIST_T_OFFSET)
 
 /* -----------------------------------------------------------------------
- * Core algorithm functions -- copied verbatim from bpf_lru_list.c (Linux 6.1)
+ * Core algorithm helpers from bpf_lru_list.c. BPF-only always_inline
+ * annotations keep the harness verifier-friendly; the logic is otherwise kept
+ * aligned with the current bpf-next implementation.
  * ----------------------------------------------------------------------- */
 
 static inline
