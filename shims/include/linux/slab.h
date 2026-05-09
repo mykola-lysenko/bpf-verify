@@ -27,53 +27,90 @@ struct kmem_cache {
 };
 struct list_lru;
 
+static inline void *__bpf_slab_alloc(size_t size, gfp_t flags)
+{ return __bpf_slab_null(size, flags); }
+
+static inline void *__bpf_slab_alloc_node(size_t size, gfp_t flags, int node)
+{ return __bpf_slab_null(size, flags, node); }
+
+static inline void *__bpf_slab_alloc_array(size_t n, size_t size, gfp_t flags)
+{ return __bpf_slab_null(n, size, flags); }
+
+static inline void *__bpf_slab_alloc_array_node(size_t n, size_t size,
+						gfp_t flags, int node)
+{ return __bpf_slab_null(n, size, flags, node); }
+
+static inline void *__bpf_slab_realloc(const void *p, size_t size, gfp_t flags)
+{ return __bpf_slab_null(p, size, flags); }
+
+static inline void *__bpf_slab_realloc_array(void *p, size_t n, size_t size,
+					     gfp_t flags)
+{ return __bpf_slab_null(p, n, size, flags); }
+
+static inline void *__bpf_slab_realloc_node(const void *p, size_t size,
+					    gfp_t flags, int node)
+{ return __bpf_slab_null(p, size, flags, node); }
+
+static inline void __bpf_slab_free(const void *p)
+{ __bpf_slab_noop(p); }
+
+static inline void __bpf_slab_free_bulk(size_t size, void **p)
+{ __bpf_slab_noop(size, p); }
+
+static inline void __bpf_slab_free_sensitive(const void *p, size_t len)
+{ __bpf_slab_noop(p, len); }
+
+static inline void *__bpf_kmem_cache_alloc(struct kmem_cache *s, gfp_t flags)
+{ return __bpf_slab_null(s, flags); }
+
+static inline void *__bpf_kmem_cache_alloc_node(struct kmem_cache *s,
+						gfp_t flags, int node)
+{ return __bpf_slab_null(s, flags, node); }
+
+static inline void *__bpf_kmem_cache_alloc_lru(struct kmem_cache *s,
+					       struct list_lru *lru,
+					       gfp_t flags)
+{ return __bpf_slab_null(s, lru, flags); }
+
+static inline void __bpf_kmem_cache_free(struct kmem_cache *s, void *p)
+{ __bpf_slab_noop(s, p); }
+
+static inline void __bpf_kmem_cache_free_bulk(struct kmem_cache *s,
+					      size_t size, void **p)
+{ __bpf_slab_noop(s, size, p); }
+
+static inline void __bpf_kmem_cache_destroy(struct kmem_cache *s)
+{ __bpf_slab_noop(s); }
+
+static inline unsigned int __bpf_kmem_cache_size(struct kmem_cache *s)
+{ return s ? s->object_size : 0; }
+
+static inline size_t __bpf_ksize(const void *p)
+{ __bpf_slab_noop(p); return 0; }
+
+static inline size_t __bpf_kmalloc_size_roundup(size_t size)
+{ return size; }
+
 #ifndef kmalloc
-static inline void *kmalloc(size_t size, gfp_t flags)
-{
-	return __bpf_slab_null(size, flags);
-}
+#define kmalloc		__bpf_slab_alloc
 #endif
-
 #ifndef kzalloc
-static inline void *kzalloc(size_t size, gfp_t flags)
-{
-	return __bpf_slab_null(size, flags);
-}
+#define kzalloc		__bpf_slab_alloc
 #endif
-
 #ifndef kcalloc
-static inline void *kcalloc(size_t n, size_t size, gfp_t flags)
-{
-	return __bpf_slab_null(n, size, flags);
-}
+#define kcalloc		__bpf_slab_alloc_array
 #endif
-
 #ifndef krealloc
-static inline void *krealloc(const void *p, size_t new_size, gfp_t flags)
-{
-	return __bpf_slab_null(p, new_size, flags);
-}
+#define krealloc	__bpf_slab_realloc
 #endif
-
 #ifndef kmalloc_array
-static inline void *kmalloc_array(size_t n, size_t size, gfp_t flags)
-{
-	return __bpf_slab_null(n, size, flags);
-}
+#define kmalloc_array	__bpf_slab_alloc_array
 #endif
-
 #ifndef krealloc_array
-static inline void *krealloc_array(void *p, size_t new_n, size_t new_size, gfp_t flags)
-{
-	return __bpf_slab_null(p, new_n, new_size, flags);
-}
+#define krealloc_array	__bpf_slab_realloc_array
 #endif
-
 #ifndef kmalloc_node
-static inline void *kmalloc_node(size_t size, gfp_t flags, int node)
-{
-	return __bpf_slab_null(size, flags, node);
-}
+#define kmalloc_node	__bpf_slab_alloc_node
 #endif
 
 #ifndef kmalloc_track_caller
@@ -90,11 +127,7 @@ static inline void *kmalloc_node(size_t size, gfp_t flags, int node)
 #endif
 
 #ifndef kmalloc_array_node
-static inline void *kmalloc_array_node(size_t n, size_t size, gfp_t flags,
-				       int node)
-{
-	return __bpf_slab_null(n, size, flags, node);
-}
+#define kmalloc_array_node	__bpf_slab_alloc_array_node
 #endif
 
 #ifndef kcalloc_node
@@ -103,58 +136,36 @@ static inline void *kmalloc_array_node(size_t n, size_t size, gfp_t flags,
 #endif
 
 #ifndef kmalloc_nolock
-static inline void *kmalloc_nolock(size_t size, gfp_t flags, int node)
-{
-	return __bpf_slab_null(size, flags, node);
-}
+#define kmalloc_nolock	__bpf_slab_alloc_node
 #endif
 
 #ifndef kfree
-static inline void kfree(const void *p) { __bpf_slab_noop(p); }
+#define kfree		__bpf_slab_free
 #endif
 #ifndef kfree_sensitive
-static inline void kfree_sensitive(const void *p) { __bpf_slab_noop(p); }
+#define kfree_sensitive	__bpf_slab_free
 #endif
 #ifndef kfree_nolock
-static inline void kfree_nolock(const void *p) { __bpf_slab_noop(p); }
+#define kfree_nolock	__bpf_slab_free
 #endif
 #ifndef kfree_bulk
-static inline void kfree_bulk(size_t size, void **p)
-{
-	__bpf_slab_noop(size, p);
-}
+#define kfree_bulk	__bpf_slab_free_bulk
 #endif
 #ifndef kvfree
-static inline void kvfree(const void *p) { __bpf_slab_noop(p); }
+#define kvfree		__bpf_slab_free
 #endif
 #ifndef kvfree_sensitive
-static inline void kvfree_sensitive(const void *p, size_t len)
-{
-	__bpf_slab_noop(p, len);
-}
+#define kvfree_sensitive	__bpf_slab_free_sensitive
 #endif
 
 #ifndef kmem_cache_alloc
-static inline void *kmem_cache_alloc(struct kmem_cache *s, gfp_t flags)
-{
-	return __bpf_slab_null(s, flags);
-}
+#define kmem_cache_alloc	__bpf_kmem_cache_alloc
 #endif
-
 #ifndef kmem_cache_alloc_node
-static inline void *kmem_cache_alloc_node(struct kmem_cache *s, gfp_t flags,
-					  int node)
-{
-	return __bpf_slab_null(s, flags, node);
-}
+#define kmem_cache_alloc_node	__bpf_kmem_cache_alloc_node
 #endif
-
 #ifndef kmem_cache_alloc_lru
-static inline void *kmem_cache_alloc_lru(struct kmem_cache *s,
-					 struct list_lru *lru, gfp_t flags)
-{
-	return __bpf_slab_null(s, lru, flags);
-}
+#define kmem_cache_alloc_lru	__bpf_kmem_cache_alloc_lru
 #endif
 
 #ifndef kmem_cache_zalloc
@@ -162,17 +173,10 @@ static inline void *kmem_cache_alloc_lru(struct kmem_cache *s,
 #endif
 
 #ifndef kmem_cache_free
-static inline void kmem_cache_free(struct kmem_cache *s, void *p)
-{
-	__bpf_slab_noop(s, p);
-}
+#define kmem_cache_free		__bpf_kmem_cache_free
 #endif
 #ifndef kmem_cache_free_bulk
-static inline void kmem_cache_free_bulk(struct kmem_cache *s, size_t size,
-					void **p)
-{
-	__bpf_slab_noop(s, size, p);
-}
+#define kmem_cache_free_bulk	__bpf_kmem_cache_free_bulk
 #endif
 
 #ifndef kmem_cache_create
@@ -182,40 +186,26 @@ static inline void kmem_cache_free_bulk(struct kmem_cache *s, size_t size,
 #define kmem_cache_create_usercopy(...)	((struct kmem_cache *)0)
 #endif
 #ifndef kmem_cache_destroy
-static inline void kmem_cache_destroy(struct kmem_cache *s)
-{
-	__bpf_slab_noop(s);
-}
+#define kmem_cache_destroy	__bpf_kmem_cache_destroy
 #endif
 
 #ifndef kmem_cache_size
-static inline unsigned int kmem_cache_size(struct kmem_cache *s)
-{
-	return s ? s->object_size : 0;
-}
+#define kmem_cache_size		__bpf_kmem_cache_size
 #endif
 
-static inline size_t ksize(const void *p)
-{
-	__bpf_slab_noop(p);
-	return 0;
-}
+#ifndef ksize
+#define ksize			__bpf_ksize
+#endif
 
 #ifndef kmalloc_size_roundup
-static inline size_t kmalloc_size_roundup(size_t size) { return size; }
+#define kmalloc_size_roundup	__bpf_kmalloc_size_roundup
 #endif
 
 #ifndef kvmalloc
-static inline void *kvmalloc(size_t size, gfp_t flags)
-{
-	return __bpf_slab_null(size, flags);
-}
+#define kvmalloc	__bpf_slab_alloc
 #endif
 #ifndef kvmalloc_node
-static inline void *kvmalloc_node(size_t size, gfp_t flags, int node)
-{
-	return __bpf_slab_null(size, flags, node);
-}
+#define kvmalloc_node	__bpf_slab_alloc_node
 #endif
 #ifndef kvzalloc
 #define kvzalloc(size, flags)		kvmalloc((size), (flags) | __GFP_ZERO)
@@ -225,42 +215,22 @@ static inline void *kvmalloc_node(size_t size, gfp_t flags, int node)
 	kvmalloc_node((size), (flags) | __GFP_ZERO, (node))
 #endif
 #ifndef kvmalloc_array
-static inline void *kvmalloc_array(size_t n, size_t size, gfp_t flags)
-{
-	return __bpf_slab_null(n, size, flags);
-}
+#define kvmalloc_array		__bpf_slab_alloc_array
 #endif
 #ifndef kvmalloc_array_node
-static inline void *kvmalloc_array_node(size_t n, size_t size, gfp_t flags,
-					int node)
-{
-	return __bpf_slab_null(n, size, flags, node);
-}
+#define kvmalloc_array_node	__bpf_slab_alloc_array_node
 #endif
 #ifndef kvcalloc
-static inline void *kvcalloc(size_t n, size_t size, gfp_t flags)
-{
-	return __bpf_slab_null(n, size, flags);
-}
+#define kvcalloc	__bpf_slab_alloc_array
 #endif
 #ifndef kvcalloc_node
-static inline void *kvcalloc_node(size_t n, size_t size, gfp_t flags, int node)
-{
-	return __bpf_slab_null(n, size, flags, node);
-}
+#define kvcalloc_node	__bpf_slab_alloc_array_node
 #endif
 #ifndef kvrealloc
-static inline void *kvrealloc(const void *p, size_t size, gfp_t flags)
-{
-	return __bpf_slab_null(p, size, flags);
-}
+#define kvrealloc	__bpf_slab_realloc
 #endif
 #ifndef kvrealloc_node
-static inline void *kvrealloc_node(const void *p, size_t size, gfp_t flags,
-				   int node)
-{
-	return __bpf_slab_null(p, size, flags, node);
-}
+#define kvrealloc_node	__bpf_slab_realloc_node
 #endif
 
 #ifndef size_mul
