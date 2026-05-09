@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* BPF shim: lib/bitmap.c
- * Keeps pure-computation bitmap functions.
+ * Keeps the pure-computation bitmap functions covered by the harness.
  * Drops allocator functions (bitmap_alloc/free, devm_*),
- * NUMA functions (bitmap_onto/fold/remap), and
- * bitmap_find_next_zero_area_off (6 args). */
+ * remap/NUMA helpers (bitmap_remap/onto/fold), and
+ * bitmap_find_next_zero_area_off (6 args).
+ *
+ * Do not add currently unused helpers here as dead code. Add them with harness
+ * coverage so the verifier actually exercises the implementation.
+ */
 
 #include <linux/bitmap.h>
 #include <linux/bitops.h>
