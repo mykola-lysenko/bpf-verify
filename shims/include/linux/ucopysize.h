@@ -8,12 +8,10 @@
 
 static inline void check_object_size(const void *ptr, unsigned long n,
 				     bool to_user)
-{
-}
+{ }
 
 static inline void copy_overflow(int size, unsigned long count)
-{
-}
+{ }
 
 static inline __must_check bool
 check_copy_size(const void *addr, size_t bytes, bool is_source)
