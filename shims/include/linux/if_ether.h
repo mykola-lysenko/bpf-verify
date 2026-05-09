@@ -1,16 +1,36 @@
-/* BPF shim: linux/if_ether.h
- * Provides MAC_ADDR_STR_LEN and ETH_ALEN without pulling in skbuff.h
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/*
+ * BPF shim: linux/if_ether.h
+ *
+ * Keep the real Ethernet header while blocking linux/skbuff.h's deep network
+ * dependency chain. The real if_ether.h only needs a small sk_buff surface for
+ * its inline header accessors.
  */
-#ifndef _LINUX_IF_ETHER_H
-#define _LINUX_IF_ETHER_H
+#ifndef __BPF_LINUX_IF_ETHER_SHIM_H
+#define __BPF_LINUX_IF_ETHER_SHIM_H
 
-#include <uapi/linux/if_ether.h>
+#ifndef SKB_ALLOC_FCLONE
+#ifndef _LINUX_SKBUFF_H
+#define _LINUX_SKBUFF_H
+#endif
 
-/* XX:XX:XX:XX:XX:XX */
-#define MAC_ADDR_STR_LEN (3 * ETH_ALEN - 1)
+struct sk_buff {
+	unsigned char *data;
+};
 
-/* Stub out skb-dependent functions */
-struct sk_buff;
-static inline void *skb_mac_header(const struct sk_buff *skb) { return NULL; }
+static inline void *skb_mac_header(const struct sk_buff *skb)
+{
+	return skb->data;
+}
 
-#endif /* _LINUX_IF_ETHER_H */
+static inline void *skb_inner_mac_header(const struct sk_buff *skb)
+{
+	return skb->data;
+}
+#endif
+
+struct net_device;
+
+#include_next <linux/if_ether.h>
+
+#endif /* __BPF_LINUX_IF_ETHER_SHIM_H */
