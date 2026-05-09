@@ -2,66 +2,160 @@
 /*
  * BPF shim: linux/uaccess.h
  *
- * The real uaccess.h includes linux/sched.h which pulls in the full task
- * scheduler type system — too deep for BPF compilation of lib/ targets.
- *
- * This shim provides minimal stubs for user-space memory access functions.
- * The lib/ targets that use checksum/string functions don't actually call
- * copy_from_user/copy_to_user at verification time; we just need the types
- * and function declarations to compile.
+ * The real header reaches linux/sched.h and x86 uaccess inline asm.  Model
+ * the generic API surface without performing user memory access: user copies
+ * report that all bytes remain uncopied and get_user/put_user fail.
  */
 #ifndef __LINUX_UACCESS_H__
 #define __LINUX_UACCESS_H__
 
-#include <linux/types.h>
 #include <linux/compiler.h>
+#include <linux/errno.h>
+#include <linux/types.h>
 #include <linux/ucopysize.h>
 
-/* __user annotation — already defined in compiler_types.h, but ensure it's here */
 #ifndef __user
 #define __user
 #endif
 
-/* Minimal access_ok stub */
+#ifndef untagged_addr
+#define untagged_addr(addr) (addr)
+#endif
+
+#ifndef untagged_addr_remote
+#define untagged_addr_remote(mm, addr) untagged_addr(addr)
+#endif
+
 #define access_ok(addr, size) (1)
 
-/* copy_from_user / copy_to_user stubs */
-static inline unsigned long copy_from_user(void *to, const void __user *from, unsigned long n)
-{
-	return n; /* pretend failure — not called in BPF verification */
-}
+#define can_do_masked_user_access() 0
+#define masked_user_access_begin(src) ((void *)0)
+#define masked_user_read_access_begin(src) ((void *)0)
+#define masked_user_write_access_begin(src) ((void *)0)
+#define masked_user_rw_access_begin(src) masked_user_access_begin(src)
+#define mask_user_address(src) (src)
 
-static inline unsigned long copy_to_user(void __user *to, const void *from, unsigned long n)
-{
-	return n; /* pretend failure — not called in BPF verification */
-}
-
-static inline unsigned long __copy_from_user(void *to, const void __user *from, unsigned long n)
+static inline unsigned long __must_check
+raw_copy_from_user(void *to, const void __user *from, unsigned long n)
 {
 	return n;
 }
 
-static inline unsigned long __copy_to_user(void __user *to, const void *from, unsigned long n)
+static inline unsigned long __must_check
+raw_copy_to_user(void __user *to, const void *from, unsigned long n)
 {
 	return n;
 }
 
-/* get_user / put_user stubs */
-#define get_user(x, ptr) ({ (x) = 0; -EFAULT; })
-#define put_user(x, ptr) (-EFAULT)
+static inline unsigned long __must_check
+__copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+	return raw_copy_from_user(to, from, n);
+}
 
-/* pagefault_disable/enable stubs */
-static inline void pagefault_disable(void) {}
-static inline void pagefault_enable(void) {}
-static inline bool pagefault_disabled(void) { return false; }
+static inline unsigned long __must_check
+__copy_to_user(void __user *to, const void *from, unsigned long n)
+{
+	return raw_copy_to_user(to, from, n);
+}
 
-/* uaccess_begin/end stubs */
-static inline void uaccess_begin(void) {}
-static inline void uaccess_end(void) {}
+static inline unsigned long __must_check
+__copy_from_user_inatomic(void *to, const void __user *from, unsigned long n)
+{
+	return raw_copy_from_user(to, from, n);
+}
 
-/* fault_in_readable / fault_in_writeable stubs */
-static inline int fault_in_readable(const char __user *uaddr, size_t size) { return 0; }
-static inline int fault_in_writeable(char __user *uaddr, size_t size) { return 0; }
-static inline int fault_in_safe_writeable(const char __user *uaddr, size_t size) { return 0; }
+static inline unsigned long __must_check
+__copy_to_user_inatomic(void __user *to, const void *from, unsigned long n)
+{
+	return raw_copy_to_user(to, from, n);
+}
+
+static inline unsigned long __must_check
+copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+	if (!check_copy_size(to, n, false))
+		return n;
+	return __copy_from_user(to, from, n);
+}
+
+static inline unsigned long __must_check
+copy_to_user(void __user *to, const void *from, unsigned long n)
+{
+	if (!check_copy_size(from, n, true))
+		return n;
+	return __copy_to_user(to, from, n);
+}
+
+#define get_user(x, ptr) ({ (void)(ptr); (x) = 0; -EFAULT; })
+#define __get_user(x, ptr) get_user(x, ptr)
+#define put_user(x, ptr) ({ (void)(x); (void)(ptr); -EFAULT; })
+#define __put_user(x, ptr) put_user(x, ptr)
+
+#define user_access_begin(ptr, len) access_ok(ptr, len)
+#define user_access_end() do { } while (0)
+#define user_read_access_begin user_access_begin
+#define user_read_access_end user_access_end
+#define user_write_access_begin user_access_begin
+#define user_write_access_end user_access_end
+#define user_rw_access_begin(ptr, len) user_access_begin(ptr, len)
+#define user_rw_access_end user_access_end
+
+#define unsafe_op_wrap(op, label) do { if (op) goto label; } while (0)
+#define unsafe_get_user(x, ptr, label) unsafe_op_wrap(__get_user(x, ptr), label)
+#define unsafe_put_user(x, ptr, label) unsafe_op_wrap(__put_user(x, ptr), label)
+#define unsafe_copy_from_user(dst, src, len, label) \
+	unsafe_op_wrap(__copy_from_user(dst, src, len), label)
+#define unsafe_copy_to_user(dst, src, len, label) \
+	unsafe_op_wrap(__copy_to_user(dst, src, len), label)
+
+static inline unsigned long user_access_save(void)
+{
+	return 0;
+}
+
+static inline void user_access_restore(unsigned long flags)
+{
+}
+
+static inline unsigned long __must_check clear_user(void __user *to,
+						    unsigned long n)
+{
+	return n;
+}
+
+static inline void pagefault_disable(void)
+{
+}
+
+static inline void pagefault_enable(void)
+{
+}
+
+static inline bool pagefault_disabled(void)
+{
+	return false;
+}
+
+static inline size_t fault_in_readable(const char __user *uaddr, size_t size)
+{
+	return 0;
+}
+
+static inline size_t fault_in_writeable(char __user *uaddr, size_t size)
+{
+	return 0;
+}
+
+static inline size_t fault_in_safe_writeable(const char __user *uaddr,
+					     size_t size)
+{
+	return 0;
+}
+
+static inline size_t probe_subpage_writeable(char __user *uaddr, size_t size)
+{
+	return 0;
+}
 
 #endif /* __LINUX_UACCESS_H__ */
