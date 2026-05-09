@@ -11,11 +11,18 @@
 
 #include_next <linux/union_find.h>
 
+/*
+ * The current bpf-verify union_find harness creates a four-node forest. A
+ * valid forest of N nodes has at most N - 1 parent links to the root; N loop
+ * iterations allow the final root check while keeping the verifier bound tight.
+ */
+#define __BPF_UF_FIND_MAX_NODES 4
+
 static inline struct uf_node *__bpf_uf_find(struct uf_node *node)
 {
 	int i;
 
-	for (i = 0; i < 64; i++) {
+	for (i = 0; i < __BPF_UF_FIND_MAX_NODES; i++) {
 		if (node->parent == node)
 			break;
 		node->parent = node->parent->parent;

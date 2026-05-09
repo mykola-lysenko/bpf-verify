@@ -2812,8 +2812,8 @@ HARNESS_BODIES = {
      * We use __bpf_uf_find/__bpf_uf_union (defined in our shim) instead of
      * uf_find/uf_union (from union_find.c) because the source file uses an
      * unbounded while loop that the BPF verifier rejects as a potential
-     * infinite loop. The shim provides bounded for-loop versions (max 64
-     * iterations) that the verifier can prove terminate.
+     * infinite loop. The shim provides bounded for-loop versions tied to this
+     * four-node harness forest that the verifier can prove terminate.
      *
      * Properties tested:
      *   1. After __bpf_uf_union(A, B), __bpf_uf_find(A) and __bpf_uf_find(B)
