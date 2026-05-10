@@ -2450,6 +2450,7 @@ HARNESS_BODIES = {
      *   D. longest_prefix_match: exact match 192.168.1.0/24 -> returns min(24,32)=24.
      *   E. trie_update_elem: BPF_EXIST on an empty trie reports ENOENT even at capacity.
      *   F. trie_update_elem: replacement of an existing node is allowed at capacity.
+     *   G. trie_delete_elem: invalid key, not-found, and root leaf delete paths.
      */
 
     /* --- Property A: extract_bit --- */
@@ -2528,6 +2529,34 @@ HARNESS_BODIES = {
     ret = trie_update_elem(&trie.map, &key24.hdr, &value, BPF_ANY);
     BPF_ASSERT(ret == 0);
     BPF_ASSERT(trie.n_entries == trie.map.max_entries);
+
+    /* G: delete paths that stay within verifier-trackable root state. */
+    struct lpm_key_ipv4 del_key24;
+    struct lpm_key_ipv4 del_key33;
+    lpm_key_set(&del_key24, 24, 192, 168, 1, 0);
+    lpm_key_set(&del_key33, 33, 192, 168, 1, 0);
+    lpm_trie_init(&trie, 1);
+    BPF_ASSERT(trie_delete_elem(&trie.map, &del_key33.hdr) == -EINVAL);
+    BPF_ASSERT(trie_delete_elem(&trie.map, &del_key24.hdr) == -ENOENT);
+
+    struct {
+        struct lpm_trie_node hdr;
+        u8 addr[4];
+        u64 value;
+    } del_leaf24;
+    del_leaf24.hdr.prefixlen = 24;
+    del_leaf24.hdr.flags = 0;
+    del_leaf24.hdr.child[0] = NULL;
+    del_leaf24.hdr.child[1] = NULL;
+    del_leaf24.addr[0] = 192; del_leaf24.addr[1] = 168;
+    del_leaf24.addr[2] = 1;   del_leaf24.addr[3] = 0;
+    del_leaf24.value = 24;
+    lpm_trie_init(&trie, 2);
+    trie.root = &del_leaf24.hdr;
+    trie.n_entries = 1;
+    BPF_ASSERT(trie_delete_elem(&trie.map, &del_key24.hdr) == 0);
+    BPF_ASSERT(trie.n_entries == 0);
+    BPF_ASSERT(trie.root == NULL);
 
     return (int)(match_b + match_c + match_d);""",
     # ---------------------------------------------------------------

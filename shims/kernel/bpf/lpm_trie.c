@@ -16,6 +16,7 @@
  *        - longest_prefix_match()
  *        - trie_lookup_elem()
  *        - trie_update_elem()
+ *        - trie_delete_elem()
  *
  * The goal is to verify the core LPM lookup and prefix-match algorithms
  * using the BPF verifier, without needing the full kernel infrastructure.
@@ -509,6 +510,83 @@ out:
 
     if (ret)
         kfree(new_node);
+    kfree(free_node);
+    return ret;
+}
+
+/* Called from syscall or from eBPF program */
+static __attribute__((always_inline))
+long trie_delete_elem(struct bpf_map *map, void *_key)
+{
+    struct lpm_trie *trie = container_of(map, struct lpm_trie, map);
+    struct lpm_trie_node *free_node = NULL, *free_parent = NULL;
+    struct bpf_lpm_trie_key_u8 *key = _key;
+    struct lpm_trie_node __rcu **trim, **trim2;
+    struct lpm_trie_node *node, *parent;
+    unsigned long irq_flags;
+    unsigned int next_bit;
+    size_t matchlen = 0;
+    int ret = 0;
+
+    if (key->prefixlen > trie->max_prefixlen)
+        return -EINVAL;
+
+    spin_lock_irqsave(&trie->lock, irq_flags);
+
+    trim = &trie->root;
+    trim2 = trim;
+    parent = NULL;
+    while ((node = rcu_dereference(*trim))) {
+        matchlen = longest_prefix_match(trie, node, key);
+
+        if (node->prefixlen != matchlen ||
+            node->prefixlen == key->prefixlen)
+            break;
+
+        parent = node;
+        trim2 = trim;
+        next_bit = extract_bit(key->data, node->prefixlen);
+        trim = &node->child[next_bit];
+    }
+
+    if (!node || node->prefixlen != key->prefixlen ||
+        node->prefixlen != matchlen ||
+        (node->flags & LPM_TREE_NODE_FLAG_IM)) {
+        ret = -ENOENT;
+        goto out;
+    }
+
+    trie->n_entries--;
+
+    if (rcu_access_pointer(node->child[0]) &&
+        rcu_access_pointer(node->child[1])) {
+        node->flags |= LPM_TREE_NODE_FLAG_IM;
+        goto out;
+    }
+
+    if (parent && (parent->flags & LPM_TREE_NODE_FLAG_IM) &&
+        !node->child[0] && !node->child[1]) {
+        if (node == rcu_access_pointer(parent->child[0]))
+            rcu_assign_pointer(*trim2, rcu_access_pointer(parent->child[1]));
+        else
+            rcu_assign_pointer(*trim2, rcu_access_pointer(parent->child[0]));
+        free_parent = parent;
+        free_node = node;
+        goto out;
+    }
+
+    if (node->child[0])
+        rcu_assign_pointer(*trim, rcu_access_pointer(node->child[0]));
+    else if (node->child[1])
+        rcu_assign_pointer(*trim, rcu_access_pointer(node->child[1]));
+    else
+        RCU_INIT_POINTER(*trim, NULL);
+    free_node = node;
+
+out:
+    spin_unlock_irqrestore(&trie->lock, irq_flags);
+
+    kfree(free_parent);
     kfree(free_node);
     return ret;
 }
