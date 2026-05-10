@@ -12,18 +12,18 @@
 #define PREEMPT_ENABLED		(0 + PREEMPT_NEED_RESCHED)
 #define PREEMPT_DISABLED	(1 + PREEMPT_NEED_RESCHED)
 
-static __always_inline int preempt_count(void) { return 0; }
-static __always_inline void preempt_count_set(int pc) {}
-static __always_inline void __preempt_count_add(int val) {}
-static __always_inline void __preempt_count_sub(int val) {}
-static __always_inline bool __preempt_count_dec_and_test(void) { return false; }
-static __always_inline bool should_resched(int preempt_offset) { return false; }
+static inline int preempt_count(void) { return 0; }
+static inline void preempt_count_set(int pc) {}
+static inline void __preempt_count_add(int val) {}
+static inline void __preempt_count_sub(int val) {}
+static inline bool __preempt_count_dec_and_test(void) { return false; }
+static inline bool should_resched(int preempt_offset) { return false; }
 
 #define init_task_preempt_count(p)	do { } while (0)
 #define init_idle_preempt_count(p, cpu)	do { } while (0)
 
-static __always_inline void set_preempt_need_resched(void) {}
-static __always_inline void clear_preempt_need_resched(void) {}
-static __always_inline bool test_preempt_need_resched(void) { return false; }
+static inline void set_preempt_need_resched(void) {}
+static inline void clear_preempt_need_resched(void) {}
+static inline bool test_preempt_need_resched(void) { return false; }
 
 #endif /* __ASM_PREEMPT_H */
