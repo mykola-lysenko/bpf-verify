@@ -5,6 +5,9 @@
  * The real header reaches linux/sched.h and x86 uaccess inline asm.  Model
  * the generic API surface without performing user memory access: user copies
  * report that all bytes remain uncopied and get_user/put_user fail.
+ *
+ * Targets that explicitly define BPF_VERIFY_UACCESS_COPY before including
+ * this header get a bounded stack-backed copy model for harness coverage.
  */
 #ifndef __LINUX_UACCESS_H__
 #define __LINUX_UACCESS_H__
@@ -37,12 +40,66 @@
 #define masked_user_rw_access_begin masked_user_access_begin
 #define mask_user_address(src) (src)
 
+#ifdef BPF_VERIFY_UACCESS_COPY
+#ifndef BPF_VERIFY_UACCESS_COPY_MAX
+#define BPF_VERIFY_UACCESS_COPY_MAX 16UL
+#endif
+
+#ifdef BPF_VERIFY_UACCESS_NOINLINE
+#define __bpf_uaccess_model_fn __attribute__((__noinline__))
+#else
+#define __bpf_uaccess_model_fn inline
+#endif
+
+static __bpf_uaccess_model_fn unsigned long __must_check
+__bpf_uaccess_copy_bytes(void *to, const void *from, unsigned long n)
+{
+	unsigned char *dst = to;
+	const unsigned char *src = from;
+	unsigned long i;
+
+	if (n > BPF_VERIFY_UACCESS_COPY_MAX)
+		return n;
+
+	for (i = 0; i < BPF_VERIFY_UACCESS_COPY_MAX; i++) {
+		if (i >= n)
+			break;
+		dst[i] = src[i];
+	}
+
+	return 0;
+}
+
+static __bpf_uaccess_model_fn unsigned long __must_check
+__bpf_uaccess_clear_bytes(void *to, unsigned long n)
+{
+	unsigned char *dst = to;
+	unsigned long i;
+
+	if (n > BPF_VERIFY_UACCESS_COPY_MAX)
+		return n;
+
+	for (i = 0; i < BPF_VERIFY_UACCESS_COPY_MAX; i++) {
+		if (i >= n)
+			break;
+		dst[i] = 0;
+	}
+
+	return 0;
+}
+#undef __bpf_uaccess_model_fn
+#endif
+
 static inline unsigned long __must_check
 __bpf_uaccess_uncopied(const void *to, const void *from, unsigned long n)
 {
+#ifdef BPF_VERIFY_UACCESS_COPY
+	return __bpf_uaccess_copy_bytes((void *)to, from, n);
+#else
 	(void)to;
 	(void)from;
 	return n;
+#endif
 }
 
 #define __bpf_uaccess_copy_fn(name, to_type, from_type)			\
@@ -75,10 +132,17 @@ copy_to_user(void __user *to, const void *from, unsigned long n)
 	return __copy_to_user(to, from, n);
 }
 
+#ifdef BPF_VERIFY_UACCESS_COPY
+#define get_user(x, ptr) ({ typeof(*(ptr)) *__bpf_ptr = (typeof(*(ptr)) *)(ptr); (x) = *__bpf_ptr; 0; })
+#define __get_user get_user
+#define put_user(x, ptr) ({ typeof(*(ptr)) *__bpf_ptr = (typeof(*(ptr)) *)(ptr); *__bpf_ptr = (x); 0; })
+#define __put_user put_user
+#else
 #define get_user(x, ptr) ({ (void)(ptr); (x) = 0; -EFAULT; })
 #define __get_user get_user
 #define put_user(x, ptr) ({ (void)(x); (void)(ptr); -EFAULT; })
 #define __put_user put_user
+#endif
 
 #define user_access_begin(ptr, len) access_ok(ptr, len)
 #define user_access_end() __bpf_uaccess_noop()
@@ -107,7 +171,11 @@ static inline unsigned long user_access_save(void)
 static inline unsigned long __must_check clear_user(void __user *to,
 						    unsigned long n)
 {
+#ifdef BPF_VERIFY_UACCESS_COPY
+	return __bpf_uaccess_clear_bytes((void *)to, n);
+#else
 	return __bpf_uaccess_uncopied(to, (const void *)0, n);
+#endif
 }
 
 #define pagefault_disable() __bpf_uaccess_noop()

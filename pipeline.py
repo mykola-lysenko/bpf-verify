@@ -3698,6 +3698,45 @@ HARNESS_BODIES = {
     return errors + (int)seq_buf_used(&s) + buf[0];
 """,
 
+    # uaccess: opt-in bounded copy model. The default shim remains fail-closed;
+    # shims/lib/uaccess.c defines BPF_VERIFY_UACCESS_COPY before including the
+    # header so this target covers successful stack-backed user copies.
+    "uaccess": """\
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    u64 seed = input ? *input : 0x0102030405060708ULL;
+    u8 src[8];
+    u8 dst[8];
+    int user_word = (int)(seed >> 32);
+    int got = 0;
+    int i;
+
+    for (i = 0; i < 8; i++) {
+        src[i] = (u8)(seed >> (i * 8));
+        dst[i] = 0xaa;
+    }
+
+    BPF_ASSERT(copy_from_user(dst, (const void __user *)src, 4) == 0);
+    BPF_ASSERT(dst[0] == src[0] && dst[3] == src[3]);
+
+    BPF_ASSERT(copy_to_user((void __user *)(dst + 4), src + 4, 4) == 0);
+    BPF_ASSERT(dst[4] == src[4] && dst[7] == src[7]);
+
+    BPF_ASSERT(raw_copy_from_user(dst, (const void __user *)(src + 2), 2) == 0);
+    BPF_ASSERT(dst[0] == src[2] && dst[1] == src[3]);
+
+    BPF_ASSERT(get_user(got, (int __user *)&user_word) == 0);
+    BPF_ASSERT(got == user_word);
+    BPF_ASSERT(put_user(0x5a, (u8 __user *)&dst[0]) == 0);
+    BPF_ASSERT(dst[0] == 0x5a);
+
+    BPF_ASSERT(clear_user((void __user *)dst, 4) == 0);
+    BPF_ASSERT(dst[0] == 0 && dst[3] == 0);
+    BPF_ASSERT(copy_to_user((void __user *)dst, src, 17) == 17);
+
+    return dst[0] + dst[4] + got;
+""",
+
     # lib_sha256: sha256_transform was removed in newer kernels; the compression
     # function is now internal (sha256_block_generic, static).  Use the public
     # sha256_init + sha256_final API to exercise the full hash path including
@@ -10899,6 +10938,7 @@ def main():
         "oid_registry":          KSRC / "lib/oid_registry.c",
         "rbtree":                KSRC / "lib/rbtree.c",
         "seq_buf":                SHIM / "lib/seq_buf.c",
+        "uaccess":                SHIM / "lib/uaccess.c",
         "siphash":               KSRC / "lib/siphash.c",
         "string":                KSRC / "lib/string.c",
         "timerqueue":            KSRC / "lib/timerqueue.c",
