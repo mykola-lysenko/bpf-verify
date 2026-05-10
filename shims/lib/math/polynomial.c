@@ -6,7 +6,7 @@
 #include <linux/math.h>
 #include <linux/polynomial.h>
 
-static __always_inline long __bpf_sdiv(long a, long b)
+static inline long __bpf_sdiv(long a, long b)
 {
 	int neg = 0;
 	unsigned long ua, ub, r;
