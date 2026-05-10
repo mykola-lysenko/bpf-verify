@@ -8,12 +8,12 @@
 
 #include <linux/types.h>
 
-static __always_inline __u32 __arch_swab32(__u32 val)
+static inline __u32 __arch_swab32(__u32 val)
 {
 	return __builtin_bswap32(val);
 }
 
-static __always_inline __u64 __arch_swab64(__u64 val)
+static inline __u64 __arch_swab64(__u64 val)
 {
 	return __builtin_bswap64(val);
 }

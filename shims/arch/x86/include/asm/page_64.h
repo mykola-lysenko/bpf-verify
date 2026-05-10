@@ -40,7 +40,7 @@ static inline void copy_page(void *to, void *from)
 	__builtin_memcpy(to, from, PAGE_SIZE);
 }
 
-static __always_inline unsigned long task_size_max(void)
+static inline unsigned long task_size_max(void)
 {
 	return (1UL << 47) - PAGE_SIZE;
 }
