@@ -479,7 +479,7 @@ unsigned int __bpf_lru_list_shrink(struct bpf_lru *lru,
     return 0;
 }
 
-static __attribute__((always_inline))
+static inline
 void __bpf_lru_list_rotate(struct bpf_lru *lru, struct bpf_lru_list *l)
 {
     if (bpf_lru_list_inactive_low(l))
