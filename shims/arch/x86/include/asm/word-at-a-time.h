@@ -32,7 +32,7 @@
 
 /* Step 3: Undefine the rename and provide a pure-C replacement. */
 #undef load_unaligned_zeropad
-static __always_inline unsigned long load_unaligned_zeropad(const void *addr)
+static inline unsigned long load_unaligned_zeropad(const void *addr)
 {
 	/* Plain load — safe in BPF context where the verifier ensures
 	 * memory safety before any program is executed. */
