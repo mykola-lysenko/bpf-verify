@@ -89,7 +89,7 @@ static inline bool unescape_special(char **src, char **dst)
 	return true;
 }
 
-static __always_inline
+static inline
 int string_unescape(char *src, char *dst, size_t size, unsigned int flags)
 {
 	char *out = dst;
