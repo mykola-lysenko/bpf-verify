@@ -688,7 +688,7 @@ void bpf_lru_locallist_init(struct bpf_lru_locallist *loc_l, int cpu)
 }
 
 /* Populate the free list with a static array of nodes */
-static __attribute__((always_inline))
+static inline
 void bpf_lru_list_populate(struct bpf_lru_list *l,
                              struct bpf_lru_node *nodes, u32 nr_elems)
 {
