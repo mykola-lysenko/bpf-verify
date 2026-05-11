@@ -84,19 +84,19 @@ __BPF_ATOMIC_OP(or)
 __BPF_ATOMIC_OP(xor)
 #define arch_atomic_xor arch_atomic_xor
 
-static __always_inline int arch_atomic_xchg(atomic_t *v, int new)
+static inline int arch_atomic_xchg(atomic_t *v, int new)
 {
 	return arch_xchg(&v->counter, new);
 }
 #define arch_atomic_xchg arch_atomic_xchg
 
-static __always_inline int arch_atomic_cmpxchg(atomic_t *v, int old, int new)
+static inline int arch_atomic_cmpxchg(atomic_t *v, int old, int new)
 {
 	return arch_cmpxchg(&v->counter, old, new);
 }
 #define arch_atomic_cmpxchg arch_atomic_cmpxchg
 
-static __always_inline bool arch_atomic_try_cmpxchg(atomic_t *v,
+static inline bool arch_atomic_try_cmpxchg(atomic_t *v,
 						    int *old,
 						    int new)
 {
@@ -176,13 +176,13 @@ __BPF_ATOMIC64_OP(or)
 __BPF_ATOMIC64_OP(xor)
 #define arch_atomic64_xor arch_atomic64_xor
 
-static __always_inline s64 arch_atomic64_xchg(atomic64_t *v, s64 new)
+static inline s64 arch_atomic64_xchg(atomic64_t *v, s64 new)
 {
 	return arch_xchg(&v->counter, new);
 }
 #define arch_atomic64_xchg arch_atomic64_xchg
 
-static __always_inline s64 arch_atomic64_cmpxchg(atomic64_t *v,
+static inline s64 arch_atomic64_cmpxchg(atomic64_t *v,
 						 s64 old,
 						 s64 new)
 {
@@ -190,7 +190,7 @@ static __always_inline s64 arch_atomic64_cmpxchg(atomic64_t *v,
 }
 #define arch_atomic64_cmpxchg arch_atomic64_cmpxchg
 
-static __always_inline bool arch_atomic64_try_cmpxchg(atomic64_t *v,
+static inline bool arch_atomic64_try_cmpxchg(atomic64_t *v,
 						      s64 *old,
 						      s64 new)
 {
