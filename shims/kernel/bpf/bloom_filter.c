@@ -89,7 +89,7 @@ void bloom_set_bit(u64 *bitset, u32 bit)
 #define EINVAL  22
 #endif
 
-static __attribute__((always_inline))
+static inline
 u32 bloom_hash(struct bpf_bloom_filter *bloom, void *value,
                u32 value_size, u32 index)
 {
