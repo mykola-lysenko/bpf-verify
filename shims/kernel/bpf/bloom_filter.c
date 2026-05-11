@@ -15,6 +15,7 @@
 
 #include <linux/types.h>
 #include <linux/jhash.h>
+#include "bpf_shim_common.h"
 
 /* Fixed-size bloom filter: 256-bit bitset stored as 4 x u64.
  * We do NOT use linux/bitops.h test_bit/set_bit because those generate
@@ -24,9 +25,6 @@
  */
 #define BLOOM_BITSET_BITS   256U
 #define BLOOM_BITSET_WORDS  4U   /* 256 / 64 = 4 u64 words */
-#ifndef likely
-#define likely(x)           (x)
-#endif
 
 /* Minimal bpf_map stub -- only the fields bloom_filter.c actually uses */
 struct bpf_map {
@@ -78,16 +76,6 @@ void bloom_set_bit(u64 *bitset, u32 bit)
  * Core functions adapted from kernel/bpf/bloom_filter.c. hash() is renamed to
  * bloom_hash() to avoid conflicts with library identifiers.
  * ----------------------------------------------------------------------- */
-
-#ifndef BPF_ANY
-#define BPF_ANY 0ULL
-#endif
-#ifndef ENOENT
-#define ENOENT  2
-#endif
-#ifndef EINVAL
-#define EINVAL  22
-#endif
 
 static inline
 u32 bloom_hash(struct bpf_bloom_filter *bloom, void *value,

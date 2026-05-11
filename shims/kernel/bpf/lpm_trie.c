@@ -22,38 +22,7 @@
  * using the BPF verifier, without needing the full kernel infrastructure.
  */
 
-/* -----------------------------------------------------------------------
- * Primitive types
- * If linux/types.h has already been included (e.g. via the pipeline harness
- * template), these are already defined. Guard against redefinition.
- * ----------------------------------------------------------------------- */
-#ifndef _LINUX_TYPES_H
-typedef unsigned char      u8;
-typedef unsigned short     u16;
-typedef unsigned int       u32;
-typedef unsigned long long u64;
-typedef signed int         s32;
-typedef signed long long   s64;
-typedef u8                 __u8;
-typedef u16                __u16;
-typedef u32                __u32;
-typedef u64                __u64;
-typedef u32                __be32;
-typedef u16                __be16;
-typedef u64                __be64;
-typedef __SIZE_TYPE__      size_t;
-typedef _Bool              bool;
-#define true  1
-#define false 0
-#define NULL  ((void *)0)
-#else
-/* linux/types.h is already included -- just define the aliases we need */
-#ifndef __be32
-#define __be32 __u32
-#define __be16 __u16
-#define __be64 __u64
-#endif
-#endif /* _LINUX_TYPES_H */
+#include "bpf_shim_common.h"
 
 /* -----------------------------------------------------------------------
  * fls / fls64 (find last set bit, 1-indexed, 0 if none)
@@ -95,30 +64,6 @@ static inline u64 be64_to_cpu(u64 x)
            (((u64)be32_to_cpu((u32)(x & 0xffffffffull))) << 32);
 }
 
-/* -----------------------------------------------------------------------
- * Miscellaneous macros
- * ----------------------------------------------------------------------- */
-#define min(a, b)           ((a) < (b) ? (a) : (b))
-#define unlikely(x)         (x)
-#define BUILD_BUG_ON(e)     do { } while (0)
-#define offsetof(t, m)      __builtin_offsetof(t, m)
-#define container_of(ptr, type, member) \
-    ((type *)((char *)(ptr) - offsetof(type, member)))
-#define BIT(n)              (1u << (n))
-#define GFP_NOWAIT          0
-#define GFP_ATOMIC          0
-#define __GFP_NOWARN        0
-#define NUMA_NO_NODE        (-1)
-#define BPF_EXIST           2
-#define BPF_NOEXIST         1
-#define BPF_ANY             0
-#define EINVAL              22
-#define ENOMEM              12
-#define ENOENT               2
-#define EEXIST              17
-#define ENOSPC              28
-#define KMALLOC_MAX_SIZE    (1u << 22)
-
 static inline void *__lpm_memcpy(void *d, const void *s, size_t n)
 {
     u8 *dd = (u8 *)d;
@@ -128,33 +73,6 @@ static inline void *__lpm_memcpy(void *d, const void *s, size_t n)
     return d;
 }
 #define memcpy(d, s, n)  __lpm_memcpy(d, s, n)
-
-/* -----------------------------------------------------------------------
- * Lock stubs (no-op: BPF is single-threaded)
- * ----------------------------------------------------------------------- */
-typedef struct { int dummy; } rqspinlock_t;
-typedef unsigned long irqflags_t;
-#define spin_lock_init(l)                   do {} while (0)
-#define spin_lock_irqsave(l, f)             do { (void)(f); } while (0)
-#define spin_unlock_irqrestore(l, f)        do { (void)(f); } while (0)
-
-/* -----------------------------------------------------------------------
- * RCU stubs (no-op: no preemption in BPF)
- * ----------------------------------------------------------------------- */
-#define __rcu
-#define rcu_dereference(p)                  (p)
-#define rcu_dereference_check(p, c)         (p)
-#define rcu_dereference_protected(p, c)     (p)
-#define rcu_access_pointer(p)               (p)
-#define rcu_assign_pointer(p, v)            do { (p) = (v); } while (0)
-#define RCU_INIT_POINTER(p, v)              do { (p) = (v); } while (0)
-#define rcu_read_lock_bh_held()             1
-/* rcu_head: linux/types.h defines it as #define rcu_head callback_head.
- * Only define the struct if it hasn't been defined yet. */
-#ifndef rcu_head
-struct rcu_head { void *next; void (*func)(struct rcu_head *); };
-#endif
-#define kfree_rcu(ptr, rcu_field)           do { (void)(ptr); } while (0)
 
 /* -----------------------------------------------------------------------
  * ERR_PTR / IS_ERR
