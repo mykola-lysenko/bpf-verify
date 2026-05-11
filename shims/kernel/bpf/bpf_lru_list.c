@@ -701,7 +701,7 @@ void bpf_lru_list_populate(struct bpf_lru_list *l,
     }
 }
 
-static __attribute__((always_inline))
+static inline
 void bpf_lru_populate(struct bpf_lru *lru, void *buf, u32 node_offset,
                        u32 elem_size, u32 nr_elems)
 {
