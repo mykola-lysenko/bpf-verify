@@ -13,25 +13,25 @@
 #include <asm/barrier.h>
 #include <asm/cmpxchg.h>
 
-static __always_inline int arch_atomic_read(const atomic_t *v)
+static inline int arch_atomic_read(const atomic_t *v)
 {
 	return READ_ONCE(v->counter);
 }
 #define arch_atomic_read arch_atomic_read
 
-static __always_inline void arch_atomic_set(atomic_t *v, int i)
+static inline void arch_atomic_set(atomic_t *v, int i)
 {
 	WRITE_ONCE(v->counter, i);
 }
 #define arch_atomic_set arch_atomic_set
 
-static __always_inline int arch_atomic_read_acquire(const atomic_t *v)
+static inline int arch_atomic_read_acquire(const atomic_t *v)
 {
 	return smp_load_acquire(&v->counter);
 }
 #define arch_atomic_read_acquire arch_atomic_read_acquire
 
-static __always_inline void arch_atomic_set_release(atomic_t *v, int i)
+static inline void arch_atomic_set_release(atomic_t *v, int i)
 {
 	smp_store_release(&v->counter, i);
 }
@@ -105,25 +105,25 @@ static __always_inline bool arch_atomic_try_cmpxchg(atomic_t *v,
 #define arch_atomic_try_cmpxchg arch_atomic_try_cmpxchg
 
 #ifdef CONFIG_64BIT
-static __always_inline s64 arch_atomic64_read(const atomic64_t *v)
+static inline s64 arch_atomic64_read(const atomic64_t *v)
 {
 	return READ_ONCE(v->counter);
 }
 #define arch_atomic64_read arch_atomic64_read
 
-static __always_inline void arch_atomic64_set(atomic64_t *v, s64 i)
+static inline void arch_atomic64_set(atomic64_t *v, s64 i)
 {
 	WRITE_ONCE(v->counter, i);
 }
 #define arch_atomic64_set arch_atomic64_set
 
-static __always_inline s64 arch_atomic64_read_acquire(const atomic64_t *v)
+static inline s64 arch_atomic64_read_acquire(const atomic64_t *v)
 {
 	return smp_load_acquire(&v->counter);
 }
 #define arch_atomic64_read_acquire arch_atomic64_read_acquire
 
-static __always_inline void arch_atomic64_set_release(atomic64_t *v, s64 i)
+static inline void arch_atomic64_set_release(atomic64_t *v, s64 i)
 {
 	smp_store_release(&v->counter, i);
 }
