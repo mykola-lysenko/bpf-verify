@@ -51,42 +51,29 @@
 #define __bpf_uaccess_model_fn inline
 #endif
 
-static __bpf_uaccess_model_fn unsigned long __must_check
-__bpf_uaccess_copy_bytes(void *to, const void *from, unsigned long n)
-{
-	unsigned char *dst = to;
-	const unsigned char *src = from;
-	unsigned long i;
-
-	if (n > BPF_VERIFY_UACCESS_COPY_MAX)
-		return n;
-
-	for (i = 0; i < BPF_VERIFY_UACCESS_COPY_MAX; i++) {
-		if (i >= n)
-			break;
-		dst[i] = src[i];
-	}
-
-	return 0;
+#define __bpf_uaccess_model(name, args, init, assign)			\
+static __bpf_uaccess_model_fn unsigned long __must_check name args	\
+{									\
+	unsigned char *dst = to;					\
+	init								\
+	unsigned long i;						\
+	if (n > BPF_VERIFY_UACCESS_COPY_MAX)				\
+		return n;						\
+	for (i = 0; i < BPF_VERIFY_UACCESS_COPY_MAX; i++) {		\
+		if (i >= n)						\
+			break;						\
+		assign;							\
+	}								\
+	return 0;							\
 }
 
-static __bpf_uaccess_model_fn unsigned long __must_check
-__bpf_uaccess_clear_bytes(void *to, unsigned long n)
-{
-	unsigned char *dst = to;
-	unsigned long i;
-
-	if (n > BPF_VERIFY_UACCESS_COPY_MAX)
-		return n;
-
-	for (i = 0; i < BPF_VERIFY_UACCESS_COPY_MAX; i++) {
-		if (i >= n)
-			break;
-		dst[i] = 0;
-	}
-
-	return 0;
-}
+__bpf_uaccess_model(__bpf_uaccess_copy_bytes,
+		    (void *to, const void *from, unsigned long n),
+		    const unsigned char *src = from;,
+		    dst[i] = src[i])
+__bpf_uaccess_model(__bpf_uaccess_clear_bytes, (void *to, unsigned long n),,
+		    dst[i] = 0)
+#undef __bpf_uaccess_model
 #undef __bpf_uaccess_model_fn
 #endif
 
@@ -116,33 +103,27 @@ __bpf_uaccess_copy_fn(__copy_to_user, void __user *, const void *)
 __bpf_uaccess_copy_fn(__copy_from_user_inatomic, void *, const void __user *)
 __bpf_uaccess_copy_fn(__copy_to_user_inatomic, void __user *, const void *)
 
-static inline unsigned long __must_check
-copy_from_user(void *to, const void __user *from, unsigned long n)
-{
-	if (!check_copy_size(to, n, false))
-		return n;
-	return __copy_from_user(to, from, n);
+#define __bpf_uaccess_checked_copy_fn(name, helper, to_type, from_type, checked, write) \
+static inline unsigned long __must_check name(to_type to, from_type from, unsigned long n) \
+{									\
+	if (!check_copy_size(checked, n, write))				\
+		return n;						\
+	return helper(to, from, n);					\
 }
 
-static inline unsigned long __must_check
-copy_to_user(void __user *to, const void *from, unsigned long n)
-{
-	if (!check_copy_size(from, n, true))
-		return n;
-	return __copy_to_user(to, from, n);
-}
+__bpf_uaccess_checked_copy_fn(copy_from_user, __copy_from_user, void *, const void __user *, to, false)
+__bpf_uaccess_checked_copy_fn(copy_to_user, __copy_to_user, void __user *, const void *, from, true)
+#undef __bpf_uaccess_checked_copy_fn
 
 #ifdef BPF_VERIFY_UACCESS_COPY
 #define get_user(x, ptr) ({ typeof(*(ptr)) *__bpf_ptr = (typeof(*(ptr)) *)(ptr); (x) = *__bpf_ptr; 0; })
-#define __get_user get_user
 #define put_user(x, ptr) ({ typeof(*(ptr)) *__bpf_ptr = (typeof(*(ptr)) *)(ptr); *__bpf_ptr = (x); 0; })
-#define __put_user put_user
 #else
 #define get_user(x, ptr) ({ (void)(ptr); (x) = 0; -EFAULT; })
-#define __get_user get_user
 #define put_user(x, ptr) ({ (void)(x); (void)(ptr); -EFAULT; })
-#define __put_user put_user
 #endif
+#define __get_user get_user
+#define __put_user put_user
 
 #define user_access_begin(ptr, len) access_ok(ptr, len)
 #define user_access_end() __bpf_uaccess_noop()
@@ -161,11 +142,7 @@ copy_to_user(void __user *to, const void *from, unsigned long n)
 #define unsafe_copy_to_user(dst, src, len, label) \
 	unsafe_op_wrap(__copy_to_user(dst, src, len), label)
 
-static inline unsigned long user_access_save(void)
-{
-	return 0;
-}
-
+#define user_access_save() 0UL
 #define user_access_restore(flags) ((void)(flags))
 
 static inline unsigned long __must_check clear_user(void __user *to,
@@ -180,11 +157,7 @@ static inline unsigned long __must_check clear_user(void __user *to,
 
 #define pagefault_disable() __bpf_uaccess_noop()
 #define pagefault_enable pagefault_disable
-
-static inline bool pagefault_disabled(void)
-{
-	return false;
-}
+#define pagefault_disabled() false
 
 #define __bpf_uaccess_fault_fn(name, addr_type)				\
 static inline size_t name(addr_type uaddr, size_t size)			\
