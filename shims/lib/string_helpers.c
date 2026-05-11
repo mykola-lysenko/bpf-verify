@@ -13,7 +13,7 @@ static inline int isodigit(char c)
 	return c >= '0' && c <= '7';
 }
 
-static __always_inline bool unescape_space(char **src, char **dst)
+static inline bool unescape_space(char **src, char **dst)
 {
 	char *p = *dst, *q = *src;
 
@@ -30,7 +30,7 @@ static __always_inline bool unescape_space(char **src, char **dst)
 	return true;
 }
 
-static __always_inline bool unescape_octal(char **src, char **dst)
+static inline bool unescape_octal(char **src, char **dst)
 {
 	char *p = *dst, *q = *src;
 	u8 num;
@@ -49,7 +49,7 @@ static __always_inline bool unescape_octal(char **src, char **dst)
 	return true;
 }
 
-static __always_inline bool unescape_hex(char **src, char **dst)
+static inline bool unescape_hex(char **src, char **dst)
 {
 	char *p = *dst, *q = *src;
 	int digit;
@@ -73,7 +73,7 @@ static __always_inline bool unescape_hex(char **src, char **dst)
 	return true;
 }
 
-static __always_inline bool unescape_special(char **src, char **dst)
+static inline bool unescape_special(char **src, char **dst)
 {
 	char *p = *dst, *q = *src;
 
