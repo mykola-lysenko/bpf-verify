@@ -27,69 +27,34 @@ struct kmem_cache {
 };
 struct list_lru;
 
-static inline void *__bpf_slab_alloc(size_t size, gfp_t flags)
-{ return __bpf_slab_null(size, flags); }
+#define __BPF_SLAB_PTR_FN(name, args, used) \
+	static inline void *name args { return __bpf_slab_null used; }
+#define __BPF_SLAB_VOID_FN(name, args, used) \
+	static inline void name args { __bpf_slab_noop used; }
 
-static inline void *__bpf_slab_alloc_node(size_t size, gfp_t flags, int node)
-{ return __bpf_slab_null(size, flags, node); }
+__BPF_SLAB_PTR_FN(__bpf_slab_alloc, (size_t size, gfp_t flags), (size, flags))
+__BPF_SLAB_PTR_FN(__bpf_slab_alloc_node, (size_t size, gfp_t flags, int node), (size, flags, node))
+__BPF_SLAB_PTR_FN(__bpf_slab_alloc_array, (size_t n, size_t size, gfp_t flags), (n, size, flags))
+__BPF_SLAB_PTR_FN(__bpf_slab_alloc_array_node, (size_t n, size_t size, gfp_t flags, int node), (n, size, flags, node))
+__BPF_SLAB_PTR_FN(__bpf_slab_realloc, (const void *p, size_t size, gfp_t flags), (p, size, flags))
+__BPF_SLAB_PTR_FN(__bpf_slab_realloc_array, (void *p, size_t n, size_t size, gfp_t flags), (p, n, size, flags))
+__BPF_SLAB_PTR_FN(__bpf_slab_realloc_node, (const void *p, size_t size, gfp_t flags, int node), (p, size, flags, node))
+__BPF_SLAB_PTR_FN(__bpf_kmem_cache_alloc, (struct kmem_cache *s, gfp_t flags), (s, flags))
+__BPF_SLAB_PTR_FN(__bpf_kmem_cache_alloc_node, (struct kmem_cache *s, gfp_t flags, int node), (s, flags, node))
+__BPF_SLAB_PTR_FN(__bpf_kmem_cache_alloc_lru, (struct kmem_cache *s, struct list_lru *lru, gfp_t flags), (s, lru, flags))
+__BPF_SLAB_VOID_FN(__bpf_slab_free, (const void *p), (p))
+__BPF_SLAB_VOID_FN(__bpf_slab_free_bulk, (size_t size, void **p), (size, p))
+__BPF_SLAB_VOID_FN(__bpf_slab_free_sensitive, (const void *p, size_t len), (p, len))
+__BPF_SLAB_VOID_FN(__bpf_kmem_cache_free, (struct kmem_cache *s, void *p), (s, p))
+__BPF_SLAB_VOID_FN(__bpf_kmem_cache_free_bulk, (struct kmem_cache *s, size_t size, void **p), (s, size, p))
+__BPF_SLAB_VOID_FN(__bpf_kmem_cache_destroy, (struct kmem_cache *s), (s))
 
-static inline void *__bpf_slab_alloc_array(size_t n, size_t size, gfp_t flags)
-{ return __bpf_slab_null(n, size, flags); }
+#undef __BPF_SLAB_VOID_FN
+#undef __BPF_SLAB_PTR_FN
 
-static inline void *__bpf_slab_alloc_array_node(size_t n, size_t size,
-						gfp_t flags, int node)
-{ return __bpf_slab_null(n, size, flags, node); }
-
-static inline void *__bpf_slab_realloc(const void *p, size_t size, gfp_t flags)
-{ return __bpf_slab_null(p, size, flags); }
-
-static inline void *__bpf_slab_realloc_array(void *p, size_t n, size_t size,
-					     gfp_t flags)
-{ return __bpf_slab_null(p, n, size, flags); }
-
-static inline void *__bpf_slab_realloc_node(const void *p, size_t size,
-					    gfp_t flags, int node)
-{ return __bpf_slab_null(p, size, flags, node); }
-
-static inline void __bpf_slab_free(const void *p)
-{ __bpf_slab_noop(p); }
-
-static inline void __bpf_slab_free_bulk(size_t size, void **p)
-{ __bpf_slab_noop(size, p); }
-
-static inline void __bpf_slab_free_sensitive(const void *p, size_t len)
-{ __bpf_slab_noop(p, len); }
-
-static inline void *__bpf_kmem_cache_alloc(struct kmem_cache *s, gfp_t flags)
-{ return __bpf_slab_null(s, flags); }
-
-static inline void *__bpf_kmem_cache_alloc_node(struct kmem_cache *s,
-						gfp_t flags, int node)
-{ return __bpf_slab_null(s, flags, node); }
-
-static inline void *__bpf_kmem_cache_alloc_lru(struct kmem_cache *s,
-					       struct list_lru *lru,
-					       gfp_t flags)
-{ return __bpf_slab_null(s, lru, flags); }
-
-static inline void __bpf_kmem_cache_free(struct kmem_cache *s, void *p)
-{ __bpf_slab_noop(s, p); }
-
-static inline void __bpf_kmem_cache_free_bulk(struct kmem_cache *s,
-					      size_t size, void **p)
-{ __bpf_slab_noop(s, size, p); }
-
-static inline void __bpf_kmem_cache_destroy(struct kmem_cache *s)
-{ __bpf_slab_noop(s); }
-
-static inline unsigned int __bpf_kmem_cache_size(struct kmem_cache *s)
-{ return s ? s->object_size : 0; }
-
-static inline size_t __bpf_ksize(const void *p)
-{ __bpf_slab_noop(p); return 0; }
-
-static inline size_t __bpf_kmalloc_size_roundup(size_t size)
-{ return size; }
+static inline unsigned int __bpf_kmem_cache_size(struct kmem_cache *s) { return s ? s->object_size : 0; }
+static inline size_t __bpf_ksize(const void *p) { __bpf_slab_noop(p); return 0; }
+static inline size_t __bpf_kmalloc_size_roundup(size_t size) { return size; }
 
 #ifndef kmalloc
 #define kmalloc		__bpf_slab_alloc
