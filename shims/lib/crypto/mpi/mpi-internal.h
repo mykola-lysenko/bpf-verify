@@ -22,6 +22,8 @@
 #include <linux/mpi.h>
 #include <linux/errno.h>
 
+#define __bpf_mpi_inline __attribute__((internal_linkage, always_inline))
+
 #define log_debug printk
 #define log_bug printk
 #define assert(x) \
@@ -115,30 +117,22 @@ static inline int RESIZE_IF_NEEDED(MPI a, unsigned b)
 	} while (0)
 
 /*-- mpiutil.c --*/
-__attribute__((internal_linkage, always_inline))
-mpi_ptr_t mpi_alloc_limb_space(unsigned nlimbs);
-__attribute__((internal_linkage, always_inline))
-void mpi_free_limb_space(mpi_ptr_t a);
-__attribute__((internal_linkage, always_inline))
-void mpi_assign_limb_space(MPI a, mpi_ptr_t ap, unsigned nlimbs);
+__bpf_mpi_inline mpi_ptr_t mpi_alloc_limb_space(unsigned nlimbs);
+__bpf_mpi_inline void mpi_free_limb_space(mpi_ptr_t a);
+__bpf_mpi_inline void mpi_assign_limb_space(MPI a, mpi_ptr_t ap, unsigned nlimbs);
 static inline mpi_limb_t mpihelp_add_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr,
 			 mpi_size_t s1_size, mpi_limb_t s2_limb);
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_add_n(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr,
-			 mpi_ptr_t s2_ptr, mpi_size_t size);
+__bpf_mpi_inline mpi_limb_t mpihelp_add_n(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_ptr_t s2_ptr, mpi_size_t size);
 static inline mpi_limb_t mpihelp_add(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_size_t s1_size,
 		       mpi_ptr_t s2_ptr, mpi_size_t s2_size);
 static inline mpi_limb_t mpihelp_sub_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr,
 			 mpi_size_t s1_size, mpi_limb_t s2_limb);
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_sub_n(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr,
-			 mpi_ptr_t s2_ptr, mpi_size_t size);
+__bpf_mpi_inline mpi_limb_t mpihelp_sub_n(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_ptr_t s2_ptr, mpi_size_t size);
 static inline mpi_limb_t mpihelp_sub(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_size_t s1_size,
 		       mpi_ptr_t s2_ptr, mpi_size_t s2_size);
 
 /*-- mpih-cmp.c --*/
-__attribute__((internal_linkage, always_inline))
-int mpihelp_cmp(mpi_ptr_t op1_ptr, mpi_ptr_t op2_ptr, mpi_size_t size);
+__bpf_mpi_inline int mpihelp_cmp(mpi_ptr_t op1_ptr, mpi_ptr_t op2_ptr, mpi_size_t size);
 
 /*-- mpih-mul.c --*/
 struct karatsuba_ctx {
@@ -153,56 +147,28 @@ struct karatsuba_ctx {
  * internal_linkage + always_inline so the BPF backend can DCE them when
  * unreachable and inline them when reachable. internal_linkage must appear
  * on the FIRST declaration (here), not just on the definition. */
-__attribute__((internal_linkage, always_inline))
-void mpihelp_release_karatsuba_ctx(struct karatsuba_ctx *ctx);
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_addmul_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr,
-			    mpi_size_t s1_size, mpi_limb_t s2_limb);
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_submul_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr,
-			    mpi_size_t s1_size, mpi_limb_t s2_limb);
+__bpf_mpi_inline void mpihelp_release_karatsuba_ctx(struct karatsuba_ctx *ctx);
+__bpf_mpi_inline mpi_limb_t mpihelp_addmul_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_size_t s1_size, mpi_limb_t s2_limb);
+__bpf_mpi_inline mpi_limb_t mpihelp_submul_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_size_t s1_size, mpi_limb_t s2_limb);
 /* mpihelp_mul has 6 args. BPF rejects non-static functions with >5 args.
  * Declare it with always_inline + internal_linkage so the BPF backend
  * inlines all calls to it and can DCE it when unreachable. */
-__attribute__((internal_linkage, always_inline))
-int mpihelp_mul(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize,
-		mpi_ptr_t vp, mpi_size_t vsize, mpi_limb_t *_result);
-__attribute__((internal_linkage, always_inline))
-void mpih_sqr_n_basecase(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t size);
-__attribute__((internal_linkage, always_inline))
-void mpih_sqr_n(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t size,
-		mpi_ptr_t tspace);
+__bpf_mpi_inline int mpihelp_mul(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize, mpi_ptr_t vp, mpi_size_t vsize, mpi_limb_t *_result);
+__bpf_mpi_inline void mpih_sqr_n_basecase(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t size);
+__bpf_mpi_inline void mpih_sqr_n(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t size, mpi_ptr_t tspace);
 /* mpihelp_mul_karatsuba_case has 6 args. Same fix. */
-__attribute__((internal_linkage, always_inline))
-int mpihelp_mul_karatsuba_case(mpi_ptr_t prodp,
-			       mpi_ptr_t up, mpi_size_t usize,
-			       mpi_ptr_t vp, mpi_size_t vsize,
-			       struct karatsuba_ctx *ctx);
+__bpf_mpi_inline int mpihelp_mul_karatsuba_case(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize, mpi_ptr_t vp, mpi_size_t vsize, struct karatsuba_ctx *ctx);
 /*-- generic_mpih-mul1.c --*/
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_mul_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr,
-			 mpi_size_t s1_size, mpi_limb_t s2_limb);
+__bpf_mpi_inline mpi_limb_t mpihelp_mul_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_size_t s1_size, mpi_limb_t s2_limb);
 
 /*-- mpih-div.c --*/
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_mod_1(mpi_ptr_t dividend_ptr, mpi_size_t dividend_size,
-			 mpi_limb_t divisor_limb);
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_divrem(mpi_ptr_t qp, mpi_size_t qextra_limbs,
-			  mpi_ptr_t np, mpi_size_t nsize,
-			  mpi_ptr_t dp, mpi_size_t dsize);
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_divmod_1(mpi_ptr_t quot_ptr,
-			    mpi_ptr_t dividend_ptr, mpi_size_t dividend_size,
-			    mpi_limb_t divisor_limb);
+__bpf_mpi_inline mpi_limb_t mpihelp_mod_1(mpi_ptr_t dividend_ptr, mpi_size_t dividend_size, mpi_limb_t divisor_limb);
+__bpf_mpi_inline mpi_limb_t mpihelp_divrem(mpi_ptr_t qp, mpi_size_t qextra_limbs, mpi_ptr_t np, mpi_size_t nsize, mpi_ptr_t dp, mpi_size_t dsize);
+__bpf_mpi_inline mpi_limb_t mpihelp_divmod_1(mpi_ptr_t quot_ptr, mpi_ptr_t dividend_ptr, mpi_size_t dividend_size, mpi_limb_t divisor_limb);
 
 /*-- generic_mpih-[lr]shift.c --*/
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_lshift(mpi_ptr_t wp, mpi_ptr_t up, mpi_size_t usize,
-			  unsigned cnt);
-__attribute__((internal_linkage, always_inline))
-mpi_limb_t mpihelp_rshift(mpi_ptr_t wp, mpi_ptr_t up, mpi_size_t usize,
-			  unsigned cnt);
+__bpf_mpi_inline mpi_limb_t mpihelp_lshift(mpi_ptr_t wp, mpi_ptr_t up, mpi_size_t usize, unsigned cnt);
+__bpf_mpi_inline mpi_limb_t mpihelp_rshift(mpi_ptr_t wp, mpi_ptr_t up, mpi_size_t usize, unsigned cnt);
 
 /* Define stuff for longlong.h.  */
 #define W_TYPE_SIZE BITS_PER_MPI_LIMB
@@ -233,14 +199,8 @@ typedef unsigned long USItype;
 #define mpihelp_mul __bpf_mpihelp_mul
 /* Forward declarations of the renamed functions so mpih-mul.c can call them
  * recursively before their definitions appear. */
-__attribute__((internal_linkage, always_inline))
-int __bpf_mpihelp_mul(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize,
-		      mpi_ptr_t vp, mpi_size_t vsize, mpi_limb_t *_result);
-__attribute__((internal_linkage, always_inline))
-int __bpf_mpihelp_mul_karatsuba_case(mpi_ptr_t prodp,
-				      mpi_ptr_t up, mpi_size_t usize,
-				      mpi_ptr_t vp, mpi_size_t vsize,
-				      struct karatsuba_ctx *ctx);
+__bpf_mpi_inline int __bpf_mpihelp_mul(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize, mpi_ptr_t vp, mpi_size_t vsize, mpi_limb_t *_result);
+__bpf_mpi_inline int __bpf_mpihelp_mul_karatsuba_case(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize, mpi_ptr_t vp, mpi_size_t vsize, struct karatsuba_ctx *ctx);
 /* Force always_inline on all functions defined in mpih-mul.c so the BPF
  * backend inlines them at all call sites (BPF rejects non-static >5-arg
  * function calls and function definitions with stack arguments). */
