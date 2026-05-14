@@ -37,51 +37,53 @@ static inline void arch_atomic_set_release(atomic_t *v, int i)
 }
 #define arch_atomic_set_release arch_atomic_set_release
 
-#define __BPF_ATOMIC_FETCH_OP(op, c_op)				\
-	static inline int arch_atomic_fetch_##op(int i, atomic_t *v)	\
+#define __BPF_ATOMIC_FETCH_OP(prefix, type, value_type, op, c_op)	\
+static inline value_type prefix##_fetch_##op(value_type i, type *v)	\
 {									\
-	int old = READ_ONCE(v->counter);				\
+	value_type old = READ_ONCE(v->counter);				\
 	WRITE_ONCE(v->counter, old c_op i);				\
 	return old;							\
 }
 
-__BPF_ATOMIC_FETCH_OP(add, +)
+#define __BPF_ATOMIC_RETURN_OP(prefix, type, value_type, op, c_op)	\
+static inline value_type prefix##_##op##_return(value_type i, type *v)	\
+{									\
+	return prefix##_fetch_##op(i, v) c_op i;			\
+}
+
+#define __BPF_ATOMIC_OP(prefix, type, value_type, op)			\
+static inline void prefix##_##op(value_type i, type *v)			\
+{									\
+	(void)prefix##_fetch_##op(i, v);				\
+}
+
+#define __BPF_ATOMIC_OPS(prefix, type, value_type)			\
+__BPF_ATOMIC_FETCH_OP(prefix, type, value_type, add, +)			\
+__BPF_ATOMIC_FETCH_OP(prefix, type, value_type, sub, -)			\
+__BPF_ATOMIC_FETCH_OP(prefix, type, value_type, and, &)			\
+__BPF_ATOMIC_FETCH_OP(prefix, type, value_type, or, |)			\
+__BPF_ATOMIC_FETCH_OP(prefix, type, value_type, xor, ^)			\
+__BPF_ATOMIC_RETURN_OP(prefix, type, value_type, add, +)		\
+__BPF_ATOMIC_RETURN_OP(prefix, type, value_type, sub, -)		\
+__BPF_ATOMIC_OP(prefix, type, value_type, add)				\
+__BPF_ATOMIC_OP(prefix, type, value_type, sub)				\
+__BPF_ATOMIC_OP(prefix, type, value_type, and)				\
+__BPF_ATOMIC_OP(prefix, type, value_type, or)				\
+__BPF_ATOMIC_OP(prefix, type, value_type, xor)
+
+__BPF_ATOMIC_OPS(arch_atomic, atomic_t, int)
+
 #define arch_atomic_fetch_add arch_atomic_fetch_add
-__BPF_ATOMIC_FETCH_OP(sub, -)
 #define arch_atomic_fetch_sub arch_atomic_fetch_sub
-__BPF_ATOMIC_FETCH_OP(and, &)
 #define arch_atomic_fetch_and arch_atomic_fetch_and
-__BPF_ATOMIC_FETCH_OP(or, |)
 #define arch_atomic_fetch_or arch_atomic_fetch_or
-__BPF_ATOMIC_FETCH_OP(xor, ^)
 #define arch_atomic_fetch_xor arch_atomic_fetch_xor
-
-#define __BPF_ATOMIC_RETURN_OP(op, c_op)			\
-	static inline int arch_atomic_##op##_return(int i, atomic_t *v)\
-{									\
-	return arch_atomic_fetch_##op(i, v) c_op i;			\
-}
-
-__BPF_ATOMIC_RETURN_OP(add, +)
 #define arch_atomic_add_return arch_atomic_add_return
-__BPF_ATOMIC_RETURN_OP(sub, -)
 #define arch_atomic_sub_return arch_atomic_sub_return
-
-#define __BPF_ATOMIC_OP(op)					\
-	static inline void arch_atomic_##op(int i, atomic_t *v)	\
-{									\
-	(void)arch_atomic_fetch_##op(i, v);				\
-}
-
-__BPF_ATOMIC_OP(add)
 #define arch_atomic_add arch_atomic_add
-__BPF_ATOMIC_OP(sub)
 #define arch_atomic_sub arch_atomic_sub
-__BPF_ATOMIC_OP(and)
 #define arch_atomic_and arch_atomic_and
-__BPF_ATOMIC_OP(or)
 #define arch_atomic_or arch_atomic_or
-__BPF_ATOMIC_OP(xor)
 #define arch_atomic_xor arch_atomic_xor
 
 static inline int arch_atomic_xchg(atomic_t *v, int new)
@@ -129,51 +131,19 @@ static inline void arch_atomic64_set_release(atomic64_t *v, s64 i)
 }
 #define arch_atomic64_set_release arch_atomic64_set_release
 
-#define __BPF_ATOMIC64_FETCH_OP(op, c_op)			\
-	static inline s64 arch_atomic64_fetch_##op(s64 i, atomic64_t *v)\
-{									\
-	s64 old = READ_ONCE(v->counter);				\
-	WRITE_ONCE(v->counter, old c_op i);				\
-	return old;							\
-}
+__BPF_ATOMIC_OPS(arch_atomic64, atomic64_t, s64)
 
-__BPF_ATOMIC64_FETCH_OP(add, +)
 #define arch_atomic64_fetch_add arch_atomic64_fetch_add
-__BPF_ATOMIC64_FETCH_OP(sub, -)
 #define arch_atomic64_fetch_sub arch_atomic64_fetch_sub
-__BPF_ATOMIC64_FETCH_OP(and, &)
 #define arch_atomic64_fetch_and arch_atomic64_fetch_and
-__BPF_ATOMIC64_FETCH_OP(or, |)
 #define arch_atomic64_fetch_or arch_atomic64_fetch_or
-__BPF_ATOMIC64_FETCH_OP(xor, ^)
 #define arch_atomic64_fetch_xor arch_atomic64_fetch_xor
-
-#define __BPF_ATOMIC64_RETURN_OP(op, c_op)			  \
-	static inline s64 arch_atomic64_##op##_return(s64 i, atomic64_t *v)\
-{									  \
-	return arch_atomic64_fetch_##op(i, v) c_op i;			  \
-}
-
-__BPF_ATOMIC64_RETURN_OP(add, +)
 #define arch_atomic64_add_return arch_atomic64_add_return
-__BPF_ATOMIC64_RETURN_OP(sub, -)
 #define arch_atomic64_sub_return arch_atomic64_sub_return
-
-#define __BPF_ATOMIC64_OP(op)					\
-	static inline void arch_atomic64_##op(s64 i, atomic64_t *v)	\
-{									\
-	(void)arch_atomic64_fetch_##op(i, v);				\
-}
-
-__BPF_ATOMIC64_OP(add)
 #define arch_atomic64_add arch_atomic64_add
-__BPF_ATOMIC64_OP(sub)
 #define arch_atomic64_sub arch_atomic64_sub
-__BPF_ATOMIC64_OP(and)
 #define arch_atomic64_and arch_atomic64_and
-__BPF_ATOMIC64_OP(or)
 #define arch_atomic64_or arch_atomic64_or
-__BPF_ATOMIC64_OP(xor)
 #define arch_atomic64_xor arch_atomic64_xor
 
 static inline s64 arch_atomic64_xchg(atomic64_t *v, s64 new)
@@ -199,9 +169,7 @@ static inline bool arch_atomic64_try_cmpxchg(atomic64_t *v,
 #define arch_atomic64_try_cmpxchg arch_atomic64_try_cmpxchg
 #endif /* CONFIG_64BIT */
 
-#undef __BPF_ATOMIC64_OP
-#undef __BPF_ATOMIC64_RETURN_OP
-#undef __BPF_ATOMIC64_FETCH_OP
+#undef __BPF_ATOMIC_OPS
 #undef __BPF_ATOMIC_OP
 #undef __BPF_ATOMIC_RETURN_OP
 #undef __BPF_ATOMIC_FETCH_OP
