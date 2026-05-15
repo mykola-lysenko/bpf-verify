@@ -20,40 +20,29 @@
 #undef __BPF_STRING_64_DEFINED_CONFIG_KMSAN
 #endif
 
+#define __BPF_DEFINE_MEMSET_WORD(name, type)		\
+static inline void *name(type *s, type v, size_t n)	\
+{							\
+	type *p = s;					\
+							\
+	while (n--)					\
+		*p++ = v;				\
+	return s;					\
+}
+
 #ifndef __HAVE_ARCH_MEMSET16
 #define __HAVE_ARCH_MEMSET16
-static inline void *memset16(uint16_t *s, uint16_t v, size_t n)
-{
-	uint16_t *p = s;
-
-	while (n--)
-		*p++ = v;
-	return s;
-}
+__BPF_DEFINE_MEMSET_WORD(memset16, uint16_t)
 #endif
-
 #ifndef __HAVE_ARCH_MEMSET32
 #define __HAVE_ARCH_MEMSET32
-static inline void *memset32(uint32_t *s, uint32_t v, size_t n)
-{
-	uint32_t *p = s;
-
-	while (n--)
-		*p++ = v;
-	return s;
-}
+__BPF_DEFINE_MEMSET_WORD(memset32, uint32_t)
 #endif
-
 #ifndef __HAVE_ARCH_MEMSET64
 #define __HAVE_ARCH_MEMSET64
-static inline void *memset64(uint64_t *s, uint64_t v, size_t n)
-{
-	uint64_t *p = s;
-
-	while (n--)
-		*p++ = v;
-	return s;
-}
+__BPF_DEFINE_MEMSET_WORD(memset64, uint64_t)
 #endif
+
+#undef __BPF_DEFINE_MEMSET_WORD
 
 #endif /* __BPF_ASM_X86_STRING_64_SHIM_H */
