@@ -37,26 +37,37 @@
 #define raw_spin_is_contended		raw_spin_is_locked
 #define assert_raw_spin_locked		raw_spin_lock_init
 
-#define spin_lock_init			raw_spin_lock_init
-#define spin_lock			raw_spin_lock_init
-#define spin_lock_nested		raw_spin_lock_init
-#define spin_lock_nest_lock		raw_spin_lock_init
-#define spin_lock_bh			raw_spin_lock_init
-#define spin_lock_irq			raw_spin_lock_init
-#define spin_lock_irqsave		raw_spin_lock_irqsave
-#define spin_lock_irqsave_nested	raw_spin_lock_irqsave_nested
-#define spin_unlock			raw_spin_lock_init
-#define spin_unlock_bh			raw_spin_lock_init
-#define spin_unlock_irq			raw_spin_lock_init
-#define spin_unlock_irqrestore		raw_spin_lock_init
-#define spin_trylock			raw_spin_trylock
-#define spin_trylock_bh			raw_spin_trylock
-#define spin_trylock_irq		raw_spin_trylock
-#define spin_trylock_irqsave		raw_spin_trylock_irqsave
-#define spin_is_locked			raw_spin_is_locked
-#define spin_is_contended		raw_spin_is_locked
-#define spin_needbreak			raw_spin_is_locked
-#define assert_spin_locked		raw_spin_lock_init
+static inline raw_spinlock_t *spinlock_check(spinlock_t *lock)
+{
+	return &lock->rlock;
+}
+
+#define spin_lock_init(lock)		raw_spin_lock_init(spinlock_check(lock))
+#define spin_lock(lock)			raw_spin_lock(spinlock_check(lock))
+#define spin_lock_nested(lock, subclass) \
+	raw_spin_lock_nested(spinlock_check(lock), subclass)
+#define spin_lock_nest_lock(lock, nest_lock) \
+	raw_spin_lock_nest_lock(spinlock_check(lock), nest_lock)
+#define spin_lock_bh(lock)		raw_spin_lock_bh(spinlock_check(lock))
+#define spin_lock_irq(lock)		raw_spin_lock_irq(spinlock_check(lock))
+#define spin_lock_irqsave(lock, flags) \
+	raw_spin_lock_irqsave(spinlock_check(lock), flags)
+#define spin_lock_irqsave_nested(lock, flags, subclass) \
+	raw_spin_lock_irqsave_nested(spinlock_check(lock), flags, subclass)
+#define spin_unlock(lock)		raw_spin_unlock(spinlock_check(lock))
+#define spin_unlock_bh(lock)		raw_spin_unlock_bh(spinlock_check(lock))
+#define spin_unlock_irq(lock)		raw_spin_unlock_irq(spinlock_check(lock))
+#define spin_unlock_irqrestore(lock, flags) \
+	raw_spin_unlock_irqrestore(spinlock_check(lock), flags)
+#define spin_trylock(lock)		raw_spin_trylock(spinlock_check(lock))
+#define spin_trylock_bh(lock)		raw_spin_trylock_bh(spinlock_check(lock))
+#define spin_trylock_irq(lock)		raw_spin_trylock_irq(spinlock_check(lock))
+#define spin_trylock_irqsave(lock, flags) \
+	raw_spin_trylock_irqsave(spinlock_check(lock), flags)
+#define spin_is_locked(lock)		raw_spin_is_locked(spinlock_check(lock))
+#define spin_is_contended(lock)		raw_spin_is_contended(spinlock_check(lock))
+#define spin_needbreak(lock)		spin_is_contended(lock)
+#define assert_spin_locked(lock)	assert_raw_spin_locked(spinlock_check(lock))
 #define smp_mb__after_spinlock()		do { } while (0)
 
 #define rwlock_init			raw_spin_lock_init
