@@ -11,8 +11,22 @@
 #define rcu_head callback_head
 #endif
 
-#define __bpf_rcu_noop(...)		do { } while (0)
+#define __bpf_rcu_noop()		do { } while (0)
+#define __bpf_rcu_noop1(arg)		do { (void)(arg); } while (0)
+#define __bpf_rcu_noop2(arg1, arg2)	do { (void)(arg1); (void)(arg2); } while (0)
 #define __bpf_rcu_read(p)		READ_ONCE(p)
+
+#define __bpf_kvfree_rcu_arg_2(ptr, rhf)		\
+do {							\
+	typeof(ptr) __ptr = (ptr);			\
+	(void)__ptr;					\
+} while (0)
+
+#define __bpf_kvfree_rcu_arg_1(ptr)			\
+do {							\
+	typeof(ptr) __ptr = (ptr);			\
+	(void)__ptr;					\
+} while (0)
 
 /* RCU read lock/unlock - no-ops */
 #define rcu_read_lock()			__bpf_rcu_noop()
@@ -32,7 +46,7 @@
 #define rcu_dereference_bh_check	rcu_dereference_check
 #define rcu_dereference_sched_check	rcu_dereference_check
 #define rcu_dereference_all_check	rcu_dereference_check
-#define rcu_dereference_raw_check	rcu_dereference
+#define rcu_dereference_raw_check(p)	__bpf_rcu_read(p)
 #define rcu_dereference_all		rcu_dereference
 #define rcu_dereference_protected(p, c)	(p)
 #define rcu_access_pointer		rcu_dereference
@@ -63,39 +77,54 @@ static inline void call_rcu(struct rcu_head *head, rcu_callback_t func)
 #define rcu_barrier			synchronize_rcu
 #define rcu_barrier_tasks		synchronize_rcu
 
-#define rcu_tasks_classic_qs(t, preempt)	__bpf_rcu_noop(t, preempt)
+#define rcu_tasks_classic_qs(t, preempt)	__bpf_rcu_noop2(t, preempt)
 #define rcu_tasks_qs			rcu_tasks_classic_qs
-#define rcu_note_voluntary_context_switch(t)	__bpf_rcu_noop(t)
+#define rcu_note_voluntary_context_switch(t)	__bpf_rcu_noop1(t)
 #define cond_resched_tasks_rcu_qs()		__bpf_rcu_noop()
 
 /* kfree_rcu */
-#define kfree_rcu(ptr, field)		__bpf_rcu_noop(ptr, field)
-#define kvfree_rcu			kfree_rcu
-#define kfree_rcu_mightsleep(ptr)	__bpf_rcu_noop(ptr)
-#define kvfree_rcu_mightsleep		kfree_rcu_mightsleep
+#define kfree_rcu(ptr, rhf)		__bpf_kvfree_rcu_arg_2(ptr, rhf)
+#define kvfree_rcu(ptr, rhf)		__bpf_kvfree_rcu_arg_2(ptr, rhf)
+#define kfree_rcu_mightsleep(ptr)	__bpf_kvfree_rcu_arg_1(ptr)
+#define kvfree_rcu_mightsleep(ptr)	__bpf_kvfree_rcu_arg_1(ptr)
 
 /* RCU init */
-#define INIT_RCU_HEAD(ptr)		__bpf_rcu_noop(ptr)
+static inline void init_rcu_head(struct rcu_head *head)
+{
+	(void)head;
+}
+
+static inline void destroy_rcu_head(struct rcu_head *head)
+{
+	(void)head;
+}
+
+static inline void init_rcu_head_on_stack(struct rcu_head *head)
+{
+	(void)head;
+}
+
+static inline void destroy_rcu_head_on_stack(struct rcu_head *head)
+{
+	(void)head;
+}
+
+#define INIT_RCU_HEAD(ptr)		init_rcu_head(ptr)
 #define RCU_INITIALIZER(v)		(v)
 #define RCU_INIT_POINTER(p, v)		WRITE_ONCE(p, RCU_INITIALIZER(v))
 #define RCU_POINTER_INITIALIZER(p, v)	.p = RCU_INITIALIZER(v)
 
-#define init_rcu_head			__bpf_rcu_noop
-#define destroy_rcu_head		__bpf_rcu_noop
-#define init_rcu_head_on_stack		__bpf_rcu_noop
-#define destroy_rcu_head_on_stack	__bpf_rcu_noop
-
 /* Lock debugging / lockdep stubs */
-#define rcu_read_lock_held(...)		1
+#define rcu_read_lock_held()		1
 #define rcu_read_lock_bh_held		rcu_read_lock_held
 #define rcu_read_lock_sched_held	rcu_read_lock_held
 #define rcu_read_lock_any_held		rcu_read_lock_held
 #define rcu_is_watching		rcu_read_lock_held
-#define rcu_try_lock_acquire		__bpf_rcu_noop
-#define rcu_try_lock_release		__bpf_rcu_noop
+#define rcu_try_lock_acquire(map)	__bpf_rcu_noop1(map)
+#define rcu_try_lock_release(map)	__bpf_rcu_noop1(map)
 
 /* RCU lockdep warn stub */
-#define RCU_LOCKDEP_WARN(c, s)		__bpf_rcu_noop(c, s)
+#define RCU_LOCKDEP_WARN(c, s)		do { } while (0 && (c))
 #define RCU_NOCB_LOCKDEP_WARN		RCU_LOCKDEP_WARN
 #define rcu_sleep_check()		__bpf_rcu_noop()
 #define lockdep_assert_in_rcu_read_lock		rcu_sleep_check
