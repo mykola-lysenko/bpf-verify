@@ -1,9 +1,12 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /* BPF shim: asm/bug.h
  * x86 bug.h uses UD2 inline asm and pushsection directives not valid in BPF.
  * Provide BPF-safe no-op implementations.
  */
 #ifndef _ASM_X86_BUG_H
 #define _ASM_X86_BUG_H
+
+#include <linux/compiler.h>
 
 /* Block asm-generic/bug.h from redefining these */
 #define _ASM_GENERIC_BUG_H
@@ -35,6 +38,9 @@ struct bug_entry {
 	unsigned short	flags;
 };
 
+struct pt_regs;
+struct warn_args;
+
 /* Generated harnesses may predefine these; make the shim authoritative. */
 #undef BUG
 #undef BUG_ON
@@ -50,32 +56,61 @@ struct bug_entry {
 #undef __WARN_printf
 #undef WARN_CONDITION_STR
 
-#define __bpf_bug_noop(...)	do { } while (0)
+#ifndef unlikely
+#define unlikely(x)		(x)
+#endif
 
-#define __bpf_warn_on(cond)						\
+#define __bpf_bug_noop()	do { } while (0)
+
+#define __bpf_warn_flags(cond_str, flags)		\
+do {							\
+	(void)(flags);					\
+} while (0)
+
+#define __bpf_warn_printf(taint, arg...)		\
+do {							\
+	(void)(taint);					\
+} while (0)
+
+#define __bpf_warn_on_flags(condition, flags)				\
 ({									\
-	int __ret_warn_on = !!(cond);					\
-	__ret_warn_on;							\
+	int __ret_warn_on = !!(condition);				\
+	if (unlikely(__ret_warn_on))					\
+		__WARN_FLAGS(#condition, flags);			\
+	unlikely(__ret_warn_on);					\
+})
+
+#define __bpf_warn(condition, taint, format...)				\
+({									\
+	int __ret_warn_on = !!(condition);				\
+	if (unlikely(__ret_warn_on))					\
+		__WARN_printf(taint, ##format);				\
+	unlikely(__ret_warn_on);					\
 })
 
 /* BPF-safe BUG/WARN implementations */
 #define BUG()			__bpf_bug_noop()
-#define BUG_ON(cond)		do { if (cond) __bpf_bug_noop(); } while (0)
-#define WARN_ON(cond)		__bpf_warn_on(cond)
-#define WARN_ON_ONCE(cond)	__bpf_warn_on(cond)
+#define BUG_ON(cond)		do { if (unlikely(cond)) BUG(); } while (0)
+#define WARN_ON(cond)		__bpf_warn_on_flags(cond, BUGFLAG_TAINT(TAINT_WARN))
+#define WARN_ON_ONCE(cond)						\
+	__bpf_warn_on_flags(cond, BUGFLAG_ONCE | BUGFLAG_TAINT(TAINT_WARN))
 #ifdef CONFIG_SMP
-#define WARN_ON_SMP(cond)	__bpf_warn_on(cond)
+#define WARN_ON_SMP(cond)	WARN_ON(cond)
 #else
 #define WARN_ON_SMP(cond)	({ 0; })
 #endif
-#define WARN(cond, fmt...)	__bpf_warn_on(cond)
-#define WARN_ONCE(cond, fmt...)	__bpf_warn_on(cond)
-#define WARN_TAINT(cond, taint, fmt...)	__bpf_warn_on(cond)
-#define WARN_TAINT_ONCE(cond, taint, fmt...)	__bpf_warn_on(cond)
+#define WARN(cond, fmt...)	__bpf_warn(cond, TAINT_WARN, ##fmt)
+#define WARN_ONCE(cond, fmt...)	__bpf_warn(cond, TAINT_WARN, ##fmt)
+#define WARN_TAINT(cond, taint, fmt...)	__bpf_warn(cond, taint, ##fmt)
+#define WARN_TAINT_ONCE(cond, taint, fmt...)	__bpf_warn(cond, taint, ##fmt)
 
-#define __WARN()		__bpf_bug_noop()
-#define __WARN_FLAGS(flags)	__bpf_bug_noop(flags)
-#define __WARN_printf(taint, arg...)	__bpf_bug_noop(taint, ##arg)
-#define WARN_CONDITION_STR(cond_str)	(cond_str)
+#define __WARN()		__WARN_FLAGS("", BUGFLAG_TAINT(TAINT_WARN))
+#define __WARN_FLAGS(cond_str, flags)	__bpf_warn_flags(cond_str, flags)
+#define __WARN_printf(taint, arg...)	__bpf_warn_printf(taint, ##arg)
+#ifdef CONFIG_DEBUG_BUGVERBOSE_DETAILED
+#define WARN_CONDITION_STR(cond_str)	"[" cond_str "] "
+#else
+#define WARN_CONDITION_STR(cond_str)
+#endif
 
 #endif /* _ASM_X86_BUG_H */
