@@ -4383,7 +4383,6 @@ static inline void dma_buf_put(struct dma_buf *dmabuf)
     (void)dmabuf;
     __bpf_iter_dmabuf_puts++;
 }
-#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """
 
 CGROUP_ITER_PRE_INCLUDE = BPF_ITER_PRE_INCLUDE + """\
@@ -5512,7 +5511,6 @@ static inline void *__bpf_iter_core_memset(void *dst, int c, size_t n)
     return dst;
 }
 #define memset(dst, c, n) __bpf_iter_core_memset((dst), (c), (n))
-#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """
 
 BTF_ITER_PRE_INCLUDE = """\
@@ -6904,8 +6902,7 @@ void __bpf_tcx_mprog_clear_all(struct bpf_mprog_entry *entry,
 """
 
 TIMECONV_PRE_INCLUDE = """\
-#define time64_to_tm static __inline __attribute__((always_inline)) time64_to_tm
-#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+#define time64_to_tm static inline time64_to_tm
 """
 
 TIMECOUNTER_PRE_INCLUDE = """\
@@ -6971,9 +6968,8 @@ u64 __bpf_timecounter_read(struct cyclecounter *cc)
     return ((struct __bpf_timecounter_hw *)cc)->now;
 }
 
-#define timecounter_init static __inline __attribute__((always_inline)) timecounter_init
-#define timecounter_read static __inline __attribute__((always_inline)) timecounter_read
-#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+#define timecounter_init static inline timecounter_init
+#define timecounter_read static inline timecounter_read
 """
 
 CRYPTO_CIPHER_PRE_INCLUDE = """\
@@ -7470,7 +7466,7 @@ EXTRA_PRE_INCLUDE = {
     # This generates sdiv which the BPF backend cannot select.
     # Fix: redefine nodes_weight to return unsigned int via a cast.
     # mpi_add and mpi_cmp: mpi-internal.h ends with a pragma clang attribute push
-    # (inside the include guard) that applies internal_linkage+always_inline to
+    # (inside the include guard) that applies internal_linkage to
     # all functions defined in the EXTRA_INCLUDES files (mpiutil.c, mpih-cmp.c, etc.).
     # Without a matching pop, clang reports "unterminated '#pragma clang attribute push'"
     # at end of file. Pop it here (EXTRA_PRE_INCLUDE comes after EXTRA_INCLUDES).
@@ -8665,7 +8661,6 @@ static inline void __bpf_reuseport_init_sock(struct sock *sk, u16 protocol,
     sk->hashed = true;
     sk->cookie = cookie;
 }
-#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
     # bpf_insn_array: block linux/bpf.h and provide just the map/prog/BTF
     # surface used by this compact instruction-array source.
@@ -9560,8 +9555,6 @@ static inline unsigned long __ffs(unsigned long word)
     while (!(word & 1)) { word >>= 1; bit++; }
     return bit;
 }
-/* Force __crypto_xor to be inlined into the BPF program */
-#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
     "lib_sha1": """\
 /* Use the generic SHA-1 implementation and avoid unresolved string/FIPS externs. */
@@ -10030,9 +10023,6 @@ static __always_inline char *__bpf_strcpy(char *d, const char *s)
 """,
 }
 EXTRA_PREAMBLE = {
-    "crypto_utils": """
-#pragma clang attribute pop
-""",
     "cmdline": """\
 #pragma clang attribute pop
 static int __bpf_cmdline_digit(unsigned char c)
@@ -10454,33 +10444,6 @@ static inline void bpf_map_put(struct bpf_map *map)
     "dispatcher": """\
 #pragma clang attribute pop
 """,
-    "reuseport_array": """\
-#pragma clang attribute pop
-""",
-    "prog_iter": """\
-#pragma clang attribute pop
-""",
-    "link_iter": """\
-#pragma clang attribute pop
-""",
-    "map_iter": """\
-#pragma clang attribute pop
-""",
-    "dmabuf_iter": """\
-#pragma clang attribute pop
-""",
-    "cgroup_iter": """\
-#pragma clang attribute pop
-""",
-    "kmem_cache_iter": """\
-#pragma clang attribute pop
-""",
-    "task_iter": """\
-#pragma clang attribute pop
-""",
-    "bpf_iter": """\
-#pragma clang attribute pop
-""",
     "btf_iter": """\
 #pragma clang attribute pop
 """,
@@ -10498,12 +10461,10 @@ static inline void bpf_map_put(struct bpf_map *map)
 """,
     "timeconv": """\
 #undef time64_to_tm
-#pragma clang attribute pop
 """,
     "timecounter": """\
 #undef timecounter_init
 #undef timecounter_read
-#pragma clang attribute pop
 """,
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
