@@ -6929,7 +6929,7 @@ struct __bpf_timecounter_hw {
     struct cyclecounter cc;
     u64 now;
 };
-static __inline __attribute__((always_inline))
+static inline
 u64 cyclecounter_cyc2ns(const struct cyclecounter *cc, u64 cycles,
                         u64 mask, u64 *frac)
 {
@@ -6939,17 +6939,17 @@ u64 cyclecounter_cyc2ns(const struct cyclecounter *cc, u64 cycles,
     *frac = ns & mask;
     return ns >> cc->shift;
 }
-static __inline __attribute__((always_inline))
+static inline
 void timecounter_adjtime(struct timecounter *tc, s64 delta)
 {
     tc->nsec += delta;
 }
-static __inline __attribute__((always_inline))
+static inline
 u64 cc_cyc2ns_backwards(const struct cyclecounter *cc, u64 cycles, u64 frac)
 {
     return ((cycles * cc->mult) - frac) >> cc->shift;
 }
-static __inline __attribute__((always_inline))
+static inline
 u64 timecounter_cyc2time(const struct timecounter *tc, u64 cycle_tstamp)
 {
     const struct cyclecounter *cc = tc->cc;
@@ -6965,7 +6965,7 @@ u64 timecounter_cyc2time(const struct timecounter *tc, u64 cycle_tstamp)
 
     return nsec;
 }
-static __inline __attribute__((always_inline))
+static inline
 u64 __bpf_timecounter_read(struct cyclecounter *cc)
 {
     return ((struct __bpf_timecounter_hw *)cc)->now;
@@ -7013,30 +7013,30 @@ struct crypto_alg {
     } cra_u;
 };
 
-static __inline __attribute__((always_inline))
+static inline
 void *crypto_tfm_ctx(struct crypto_tfm *tfm)
 {
     return tfm->ctx;
 }
 
-static __inline __attribute__((always_inline))
+static inline
 int crypto_register_alg(struct crypto_alg *alg)
 {
     return 0;
 }
 
-static __inline __attribute__((always_inline))
+static inline
 void crypto_unregister_alg(struct crypto_alg *alg)
 {
 }
 
-static __inline __attribute__((always_inline))
+static inline
 int crypto_register_algs(struct crypto_alg *algs, unsigned int count)
 {
     return 0;
 }
 
-static __inline __attribute__((always_inline))
+static inline
 void crypto_unregister_algs(struct crypto_alg *algs, unsigned int count)
 {
 }
@@ -7084,19 +7084,19 @@ static struct arc4_ctx __bpf_arc4_siv;
 
 #define current (&__bpf_current)
 
-static __inline __attribute__((always_inline))
+static inline
 void *crypto_lskcipher_ctx(struct crypto_lskcipher *tfm)
 {
     return &__bpf_arc4_ctx;
 }
 
-static __inline __attribute__((always_inline))
+static inline
 int crypto_register_lskcipher(struct lskcipher_alg *alg)
 {
     return 0;
 }
 
-static __inline __attribute__((always_inline))
+static inline
 void crypto_unregister_lskcipher(struct lskcipher_alg *alg)
 {
 }
@@ -7104,7 +7104,7 @@ void crypto_unregister_lskcipher(struct lskcipher_alg *alg)
 
 CRYPTO_SM4_GENERIC_PRE_INCLUDE = CRYPTO_CIPHER_PRE_INCLUDE + """\
 #include <linux/errno.h>
-static __inline __attribute__((always_inline))
+static inline
 u32 __bpf_rol32(u32 word, unsigned int shift)
 {
     return (word << (shift & 31)) | (word >> ((0 - shift) & 31));
@@ -9554,7 +9554,7 @@ static inline int memcmp(const void *a, const void *b, __kernel_size_t n)
 #undef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS
 #define CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS 1
 /* Provide __ffs as static inline to avoid extern BTF reference */
-static __always_inline unsigned long __ffs(unsigned long word)
+static inline unsigned long __ffs(unsigned long word)
 {
     unsigned long bit = 0;
     while (!(word & 1)) { word >>= 1; bit++; }
