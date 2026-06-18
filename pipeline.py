@@ -7288,8 +7288,8 @@ static __always_inline void *memcpy(void *dst, const void *src, __kernel_size_t 
     return dst;
 }
 
-#define cxl_cper_sec_prot_err_valid __attribute__((__always_inline__, internal_linkage)) cxl_cper_sec_prot_err_valid
-#define cxl_cper_setup_prot_err_work_data __attribute__((__always_inline__, internal_linkage)) cxl_cper_setup_prot_err_work_data
+#define cxl_cper_sec_prot_err_valid __attribute__((internal_linkage)) cxl_cper_sec_prot_err_valid
+#define cxl_cper_setup_prot_err_work_data __attribute__((internal_linkage)) cxl_cper_setup_prot_err_work_data
 """
 
 DRIVER_CUDBG_COMMON_PRE_INCLUDE = """\
@@ -7338,9 +7338,9 @@ static __always_inline void *memset(void *dst, int c, __kernel_size_t n)
     return dst;
 }
 
-#define cudbg_get_buff __attribute__((__always_inline__, internal_linkage)) cudbg_get_buff
-#define cudbg_put_buff __attribute__((__always_inline__, internal_linkage)) cudbg_put_buff
-#define cudbg_update_buff __attribute__((__always_inline__, internal_linkage)) cudbg_update_buff
+#define cudbg_get_buff __attribute__((internal_linkage)) cudbg_get_buff
+#define cudbg_put_buff __attribute__((internal_linkage)) cudbg_put_buff
+#define cudbg_update_buff __attribute__((internal_linkage)) cudbg_update_buff
 """
 
 DRIVER_VIDTV_COMMON_PRE_INCLUDE = """\
@@ -7380,22 +7380,22 @@ static __always_inline void *memset(void *dst, int c, __kernel_size_t n)
 """
 
 NET_CEPH_CRUSH_HASH_PRE_INCLUDE = """\
-#define crush_hash32_5 __attribute__((__always_inline__, internal_linkage)) crush_hash32_5
-#define crush_hash_name __attribute__((__always_inline__, internal_linkage)) crush_hash_name
+#define crush_hash32_5 __attribute__((internal_linkage)) crush_hash32_5
+#define crush_hash_name __attribute__((internal_linkage)) crush_hash_name
 """
 
 NET_CEPH_HASH_PRE_INCLUDE = """\
 #define _FS_CEPH_TYPES_H
 #define CEPH_STR_HASH_LINUX 0x1
 #define CEPH_STR_HASH_RJENKINS 0x2
-#pragma clang attribute push(__attribute__((always_inline, internal_linkage)), apply_to=function)
+#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
 """
 
 FS_NTFS3_BITFUNC_PRE_INCLUDE = """\
 #define _LINUX_NTFS3_NTFS_FS_H
 #define MINUS_ONE_T ((size_t)(-1))
-#define are_bits_clear __attribute__((__always_inline__, internal_linkage)) are_bits_clear
-#define are_bits_set __attribute__((__always_inline__, internal_linkage)) are_bits_set
+#define are_bits_clear __attribute__((internal_linkage)) are_bits_clear
+#define are_bits_set __attribute__((internal_linkage)) are_bits_set
 """
 
 KERNEL_RANGE_PRE_INCLUDE = """\
@@ -7419,7 +7419,7 @@ static __always_inline void *memmove(void *dst, const void *src, __kernel_size_t
     return dst;
 }
 
-#pragma clang attribute push(__attribute__((always_inline, internal_linkage)), apply_to=function)
+#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
 """
 
 # Extra C code injected into the harness BEFORE the source file include,
