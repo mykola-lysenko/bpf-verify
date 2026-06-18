@@ -4100,6 +4100,7 @@ BPF_ITER_PRE_INCLUDE = """\
 #define BPF_MAP_TYPE_PERCPU_ARRAY 4
 #define BPF_MAP_TYPE_LRU_HASH 5
 #define BPF_MAP_TYPE_LRU_PERCPU_HASH 6
+#define BPF_MAP_TYPE_RHASH 7
 #define ERR_PTR(error) ((void *)(long)(error))
 #define PTR_ERR(ptr) ((long)(ptr))
 #define IS_ERR(ptr) ((unsigned long)(void *)(ptr) >= (unsigned long)-4095)
@@ -4184,6 +4185,7 @@ struct bpf_map {
     u32 key_size;
     u32 value_size;
     s64 *elem_count;
+    char *excl_prog_sha;
 };
 struct bpf_link {
     const void *ops;
@@ -8271,6 +8273,7 @@ struct bpf_map {
     bool free_after_mult_rcu_gp;
     bool free_after_rcu_gp;
     atomic64_t sleepable_refcnt;
+    char *excl_prog_sha;
 };
 struct bpf_array {
     struct bpf_map map;
