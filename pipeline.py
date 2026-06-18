@@ -7875,7 +7875,8 @@ int lzogeneric1x_1_compress(
  *   3. ZSTD_createDCtx_advanced takes ZSTD_customMem by value.
  *   4. ZSTD_decompressBlock_internal (6 args), ZSTD_buildFSETable (9 args) are
  *      non-static cross-TU functions with too many args.
- *   5. ZSTD_decompressMultiFrame (8 args) is static but needs __always_inline.
+ *   5. ZSTD_decompressMultiFrame has 8 args and uses the internal_linkage
+ *      static-subprogram path.
  *   6. ZSTD_findFrameSizeInfo/ZSTD_errorFrameSizeInfo return struct by value.
  *   7. ZSTD_memcpy/memset are __builtin_memcpy/__builtin_memset (BPF rejects). */
 /* Step 0: Override __GNUC__ to force software fallback for __builtin_clz/__builtin_ctz
@@ -7908,11 +7909,11 @@ int lzogeneric1x_1_compress(
  * macros for ZSTD_memcpy/memset/memmove. */
 #define ZSTD_DEPS_COMMON
 /* Provide safe BPF implementations of ZSTD_memcpy/memset/memmove. */
-static __always_inline void *__bpf_zstd_memcpy(void *dst, const void *src, size_t n)
+static inline void *__bpf_zstd_memcpy(void *dst, const void *src, size_t n)
 {{ char *d = (char *)dst; const char *s = (const char *)src; while (n--) *d++ = *s++; return dst; }}
-static __always_inline void *__bpf_zstd_memset(void *dst, int c, size_t n)
+static inline void *__bpf_zstd_memset(void *dst, int c, size_t n)
 {{ char *d = (char *)dst; while (n--) *d++ = (char)c; return dst; }}
-static __always_inline void *__bpf_zstd_memmove(void *dst, const void *src, size_t n)
+static inline void *__bpf_zstd_memmove(void *dst, const void *src, size_t n)
 {{ char *d = (char *)dst; const char *s = (const char *)src;
    if (d < s) {{ while (n--) *d++ = *s++; }} else {{ d += n; s += n; while (n--) *--d = *--s; }}
    return dst; }}
