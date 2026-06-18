@@ -7768,14 +7768,8 @@ static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
     # static) BEFORE mpi-mul.c is included. The include guard G10_MPI_INTERNAL_H
     # prevents re-inclusion when mpi-mul.c does #include "mpi-internal.h".
     # mpi_mul: shim is included as first EXTRA_INCLUDE (see EXTRA_INCLUDES)
-    # LZ4_compress_fast() has 6 args (non-static). Same fix.
-    # LZ4_compress_destSize_generic() is static with 6 args; BPF rejects calls
-    # to >5-arg functions even if static. Use internal_linkage forward decl for both.
-    # LZ4_stream_t_internal and tableType_t are defined in lz4defs.h (included by lz4_compress.c).
-    # We cannot forward-declare LZ4_compress_destSize_generic without those types.
-    # Alternative: skip lz4_compress entirely (it's a compressor, not pure algorithm).
-    # lz4_compress: the shim linux/lz4.h adds internal_linkage+always_inline to
-    # LZ4_compress_fast on its first declaration. LZ4_compress_destSize_generic
+    # lz4_compress: the shared lz4 shim gives public LZ4 declarations
+    # internal_linkage; static 6-arg helpers can use BPF stack arguments.
     # lz4_decompress uses LZ4_memmove/__builtin_memmove and LZ4_memcpy/__builtin_memcpy
     # which the BPF backend rejects. Override them to use regular memmove/memcpy.
     "lz4_decompress": """\
@@ -7795,51 +7789,24 @@ static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
 #define LZ4_memmove(dst, src, size) memmove(dst, src, size)
 #define LZ4_memcpy(dst, src, size) memcpy(dst, src, size)
 """,
-    # is static in lz4_compress.c and needs an always_inline forward decl.
     # We include lz4defs.h to get tableType_t and LZ4_stream_t_internal types.
     "lz4_compress": """\
-/* The shims/lz4_compress/linux/lz4.h shim (target-specific override) applies internal_linkage to all
- * LZ4 functions declared in linux/lz4.h (same strategy as lz4_decompress).
- * Pre-include lz4defs.h to override LZ4_memcpy before lz4_compress.c includes it.
- * Also apply always_inline to all functions in the source file to force inlining
- * of static helpers with >5 args (LZ4_compress_fast_extState, LZ4_compress_destSize_generic). */
+/* The shared shims/lz4/linux/lz4.h shim applies internal_linkage to LZ4
+ * declarations. Pre-include lz4defs.h only to override LZ4_memcpy before
+ * lz4_compress.c includes it. */
 /* Pre-include lz4defs.h so its include guard prevents re-inclusion */
 #include "{ksrc}/lib/lz4/lz4defs.h"
 #undef LZ4_memcpy
 #define LZ4_memcpy(dst, src, size) memcpy(dst, src, size)
-/* Apply always_inline to ALL functions in lz4_compress.c (between push and pop
- * in EXTRA_PREAMBLE). This forces inlining of static helpers with >5 args. */
-#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
-    # lzogeneric1x_1_compress() has 6 args (static) - BPF allows static 6-arg.
-    # But lzo1x_1_do_compress() has 8 args (static) - also fine.
-    # The error is at line 434 which is lzogeneric1x_1_compress calling
-    # lzo1x_1_do_compress with 8 args. Since both are static, this should work.
-    # The error 'too many args' at line 434 means the CALL site has too many args.
-    # BPF restricts calls to at most 5 args. Static functions with >5 args
-    # can be DEFINED but not CALLED from BPF programs. The call from
-    # lzogeneric1x_1_compress to lzo1x_1_do_compress (8 args) is the problem.
-    # Fix: use internal_linkage on lzo1x_1_do_compress to make it inlineable.
-    # Since it's already static, we need a different approach: force inline it.
-    # lzo1x_1_do_compress is 'static noinline' with 8 args.
-    # BPF rejects calls to >5-arg functions even if static.
-    # The LZO_SAFE macro is used both for the definition and the call site.
-    # We cannot use always_inline at the call site (invalid syntax).
-    # Instead: rename lzo1x_1_do_compress to __bpf_lzo1x_1_do_compress
-    # and provide a 5-arg wrapper stub in EXTRA_PREAMBLE.
-    # But the 8-arg call in lzogeneric1x_1_compress cannot be easily wrapped.
-    # lzo1x_1_do_compress is static noinline with 8 args. BPF allows calls to
-    # static functions with >5 args (they can be inlined or called directly).
-    # The LZO_SAFE macro just needs to be a no-op (identity function).
+    # lzo_compress: define static away only long enough to provide first
+    # declarations with internal_linkage for the 6/8-arg helpers.
     "lzo_compress": """\
 /* lzo1x_1_do_compress (8 args, static noinline) and lzogeneric1x_1_compress
- * (6 args, static) are called from non-inlined contexts. BPF backend rejects
- * calls to functions with >5 args.
- * Fix: Remove 'static' keyword by defining it as empty (lzo1x_compress.c has
- * only 2 static functions, no static variables). Then provide non-static
- * internal_linkage forward declarations for both functions so the BPF backend
- * inlines them. The shim pre-include (in EXTRA_INCLUDES) ensures kernel headers
- * are already processed before #define static takes effect.
+ * (6 args, static) need first declarations with internal_linkage so they use
+ * BPF's static-subprogram stack-argument path. The shim pre-include (in
+ * EXTRA_INCLUDES) ensures kernel headers are processed before #define static
+ * takes effect.
  *
  * Actual signatures from lzo1x_compress.c:
  *   static noinline int lzo1x_1_do_compress(const unsigned char *in,
@@ -7858,19 +7825,19 @@ static inline void *memcpy(void *dst, const void *src, __kernel_size_t n)
  * declaration in linux/lzo.h does not have that attribute. */
 #define lzo1x_1_compress __bpf_lzo1x_1_compress
 #define lzorle1x_1_compress __bpf_lzorle1x_1_compress
-/* Apply always_inline + internal_linkage to the two static helpers
+/* Apply internal_linkage to the two static helpers
  * (lzo1x_1_do_compress and lzogeneric1x_1_compress) which have >5 args.
  * Their first declaration is the forward decl below (no prior decl in lzo.h),
  * so internal_linkage is valid here. */
-#pragma clang attribute push(__attribute__((always_inline, internal_linkage)), apply_to=function)
-__attribute__((always_inline, internal_linkage))
+#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
+__attribute__((internal_linkage))
 int lzo1x_1_do_compress(
     const unsigned char *in, size_t in_len,
     unsigned char **out, unsigned char *op_end,
     size_t *tp, void *wrkmem,
     signed char *state_offset,
     const unsigned char bitstream_version);
-__attribute__((always_inline, internal_linkage))
+__attribute__((internal_linkage))
 int lzogeneric1x_1_compress(
     const unsigned char *in, size_t in_len,
     unsigned char *out, size_t *out_len,
@@ -8053,7 +8020,7 @@ static inline void *memset(void *dst, int c, __kernel_size_t n)
  * and provide our own wrapper. */
 #define sha256_blocks_generic __bpf_sha256_blocks_orig
 """,
-    # tnum: uses a shim file (static __always_inline functions) -- no EXTRA_PRE_INCLUDE needed.
+    # tnum: uses a shim file with internal_linkage; no EXTRA_PRE_INCLUDE needed.
     # range_tree: include rbtree.c with internal linkage so clang can drop the
     # unused generic augmented-erase wrapper that emits an unsupported callx.
     # Block linux/bpf.h; range_tree.c only needs errno, rbtree/slab, and its
@@ -9313,15 +9280,11 @@ static __attribute__((noinline)) void *bpf_kfifo_memcpy(
        if (__prev == (old)) *(ptr) = (new); \\
        __prev; })
 """,
-    # End the always_inline scope started in shims/lib/crypto/mpi/mpi-internal.h BEFORE mpi-mul.c
-    # is included. This prevents mpi_mul/mpi_mulm from getting alwaysinline,
-    # which would cause the BPF backend to try to emit mpihelp_mul_karatsuba_case
-    # (a recursive 6-arg function) as a standalone function.
+    # End the internal_linkage scope started in shims/lib/crypto/mpi/mpi-internal.h
+    # before mpi_mul/mpi_mulm are renamed below.
     "mpi_mul": """
-/* End the always_inline scope from shims/lib/crypto/mpi/mpi-internal.h (which applied to
- * generic_mpih-mul1.c and mpih-mul.c). The renamed __bpf_mpihelp_mul* functions
- * are always_inline but never called (stubs below replace them), so the BPF
- * backend DCEs them. */
+/* End the internal_linkage scope from shims/lib/crypto/mpi/mpi-internal.h
+ * before the mpi_mul/mpi_mulm renames below. */
 #pragma clang attribute pop
 /* Undo the rename macros so the stubs below use the original names. */
 #undef mpihelp_mul_karatsuba_case
@@ -10212,12 +10175,6 @@ struct {
 } __bpf_sha256_map __attribute__((section(".maps"), used));
 """,
 
-    # lz4_compress: pop the always_inline pragma that was pushed in EXTRA_PRE_INCLUDE.
-    # The pragma applies always_inline to all functions in lz4_compress.c, forcing
-    # inlining of static helpers with >5 args (LZ4_compress_fast_extState, etc.).
-    "lz4_compress": """\
-#pragma clang attribute pop
-""",
     # zstd_decompress: pop the internal_linkage pragma pushed in EXTRA_PRE_INCLUDE.
     # NOTE: Do NOT provide stubs for __bpf_ZSTD_decompressBlock_internal or
     # __bpf_ZSTD_buildFSETable here. These functions are DEFINED in the source
@@ -10242,9 +10199,8 @@ struct {
     # Here we:
     #   1. Undef the rename macros so identifiers are clean in the harness body.
     #   2. Provide a pointer-based wrapper to avoid StructRet in the harness body.
-    # tnum: shim uses static __always_inline -- all calls are inlined, no StructRet.
-    # Pointer-based wrappers are provided here so the harness body can store
-    # results in local variables without triggering StructRet at the call site.
+    # tnum: shim gives the source functions internal linkage; pointer-based
+    # wrappers avoid StructRet in the harness body.
     "range_tree": """\
 static struct range_node __bpf_range_tree_node0;
 static u32 __bpf_range_tree_used;
@@ -10551,8 +10507,8 @@ static inline void bpf_map_put(struct bpf_map *map)
 """,
     "tnum": """\
 /* Pointer-based wrappers for tnum operations.
- * The shim defines all tnum functions as static __always_inline, so they are
- * inlined into these wrappers. The wrappers themselves are __noinline so the
+ * The shim gives tnum functions internal linkage so StructRet calls stay on
+ * the static subprogram path. The wrappers themselves are __noinline so the
  * BPF verifier sees them as separate functions with pointer outputs. */
 static __attribute__((__noinline__))
 void tnum_const_to_ptr(u64 value, struct tnum *out)
@@ -10757,14 +10713,13 @@ static bool __bpf_heap_pop(min_heap_char *heap)
 #undef llist_del_first
 #undef llist_reverse_order
 """,
-    # End the always_inline scope started in lzo_compress EXTRA_PRE_INCLUDE
+    # End the internal_linkage scope started in lzo_compress EXTRA_PRE_INCLUDE.
     "lzo_compress": """
 #pragma clang attribute pop
 #undef static
 #undef lzo1x_1_compress
 #undef lzorle1x_1_compress
 """,
-    # End the internal_linkage + always_inline scope started in mpi_mul EXTRA_PRE_INCLUDE
     # Undef the rename macros added in EXTRA_PRE_INCLUDE for mpi-mul.c.
     "mpi_mul": """
 #undef mpi_resize
@@ -11050,7 +11005,7 @@ def main():
         # Phase 6: kernel/bpf/ targets
         # tnum uses a shim (not the kernel source) because the kernel source defines
         # all functions as non-static StructRet, which the BPF backend rejects.
-        # The shim redefines all functions as static __always_inline.
+        # The shim gives all functions internal linkage.
         "tnum":                  SHIM / "kernel/bpf/tnum.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",

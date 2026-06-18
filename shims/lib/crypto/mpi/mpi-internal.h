@@ -1,10 +1,10 @@
 /* BPF shim: mpi-internal.h
  * Mirrors the kernel's lib/crypto/mpi/mpi-internal.h with BPF-specific
- * internal_linkage annotations for helpers that need to be inlined.
+ * internal_linkage annotations for helpers that need the static subprogram ABI.
  *
- * The BPF backend rejects calls to non-static functions with >5 arguments.
- * Making them static (or giving them internal_linkage) causes the backend to
- * inline them, bypassing the argument-count restriction.
+ * The verifier rejects global functions with >5 arguments. Giving helpers
+ * internal_linkage keeps them on the static subprogram path where stack
+ * arguments are supported.
  *
  * The include guard G10_MPI_INTERNAL_H matches the kernel header's guard so
  * this shim prevents re-inclusion when mpi-mul.c does #include "mpi-internal.h".
@@ -22,7 +22,7 @@
 #include <linux/mpi.h>
 #include <linux/errno.h>
 
-#define __bpf_mpi_inline __attribute__((internal_linkage, always_inline))
+#define __bpf_mpi_inline __attribute__((internal_linkage))
 
 #define log_debug printk
 #define log_bug printk
@@ -144,15 +144,14 @@ struct karatsuba_ctx {
 };
 
 /* All functions defined in mpih-mul.c and generic_mpih-mul1.c get
- * internal_linkage + always_inline so the BPF backend can DCE them when
- * unreachable and inline them when reachable. internal_linkage must appear
- * on the FIRST declaration (here), not just on the definition. */
+ * internal_linkage so the BPF backend can DCE them when unreachable and use
+ * static-subprogram stack arguments when reachable. internal_linkage must
+ * appear on the FIRST declaration (here), not just on the definition. */
 __bpf_mpi_inline void mpihelp_release_karatsuba_ctx(struct karatsuba_ctx *ctx);
 __bpf_mpi_inline mpi_limb_t mpihelp_addmul_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_size_t s1_size, mpi_limb_t s2_limb);
 __bpf_mpi_inline mpi_limb_t mpihelp_submul_1(mpi_ptr_t res_ptr, mpi_ptr_t s1_ptr, mpi_size_t s1_size, mpi_limb_t s2_limb);
-/* mpihelp_mul has 6 args. BPF rejects non-static functions with >5 args.
- * Declare it with always_inline + internal_linkage so the BPF backend
- * inlines all calls to it and can DCE it when unreachable. */
+/* mpihelp_mul has 6 args. Global >5-arg functions are rejected, so keep it
+ * on the internal-linkage static subprogram path. */
 __bpf_mpi_inline int mpihelp_mul(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize, mpi_ptr_t vp, mpi_size_t vsize, mpi_limb_t *_result);
 __bpf_mpi_inline void mpih_sqr_n_basecase(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t size);
 __bpf_mpi_inline void mpih_sqr_n(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t size, mpi_ptr_t tspace);
@@ -201,9 +200,8 @@ typedef unsigned long USItype;
  * recursively before their definitions appear. */
 __bpf_mpi_inline int __bpf_mpihelp_mul(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize, mpi_ptr_t vp, mpi_size_t vsize, mpi_limb_t *_result);
 __bpf_mpi_inline int __bpf_mpihelp_mul_karatsuba_case(mpi_ptr_t prodp, mpi_ptr_t up, mpi_size_t usize, mpi_ptr_t vp, mpi_size_t vsize, struct karatsuba_ctx *ctx);
-/* Force always_inline on all functions defined in mpih-mul.c so the BPF
- * backend inlines them at all call sites (BPF rejects non-static >5-arg
- * function calls and function definitions with stack arguments). */
-#pragma clang attribute push(__attribute__((always_inline, internal_linkage)), apply_to=function)
+/* Force internal linkage on all functions defined in mpih-mul.c so static
+ * helpers with stack arguments remain verifier-eligible. */
+#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
 
 #endif /* G10_MPI_INTERNAL_H */
