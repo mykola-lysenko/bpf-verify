@@ -15,10 +15,6 @@
 #define barrier_data(ptr) do { (void)(ptr); } while (0)
 #define nop()		do { } while (0)
 
-#define mb()		barrier()
-#define rmb()		barrier()
-#define wmb()		barrier()
-
 /* Internal barrier primitives used by asm-generic/barrier.h */
 #define __mb()		barrier()
 #define __rmb()		barrier()
@@ -30,39 +26,42 @@
 
 /* SMP barriers */
 #define __smp_mb()	barrier()
-#define __smp_rmb()	barrier()
+#define __smp_rmb()	dma_rmb()
 #define __smp_wmb()	barrier()
 
 #define __smp_mb__before_atomic() do {} while (0)
 #define __smp_mb__after_atomic()  do {} while (0)
 
 /* __smp_store_mb: store + full barrier */
-#define __smp_store_mb(var, value) do { (var) = (value); barrier(); } while (0)
+#define __smp_store_mb(var, value) do { WRITE_ONCE(var, value); __smp_mb(); } while (0)
 
 /* __smp_store_release / __smp_load_acquire: acquire/release semantics */
 #define __smp_store_release(p, v)					\
 do {									\
+	compiletime_assert_atomic_type(*p);				\
 	barrier();							\
 	WRITE_ONCE(*p, v);						\
 } while (0)
 
-#define __smp_load_acquire(p)					\
-({								\
-	typeof(*p) ___p1 = READ_ONCE(*p);			\
-	barrier();						\
-	___p1;							\
+#define __smp_load_acquire(p)						\
+({									\
+	__unqual_scalar_typeof(*p) ___p1 = READ_ONCE(*p);		\
+	compiletime_assert_atomic_type(*p);				\
+	barrier();							\
+	(typeof(*p))___p1;						\
 })
 
-static inline unsigned long array_index_mask_nospec(unsigned long index,
-						    unsigned long size)
-{
-	return (unsigned long)(-(long)(index < size));
-}
-#define array_index_mask_nospec array_index_mask_nospec
+#define array_index_mask_nospec(idx, sz) ({	\
+	typeof((idx) + (sz)) __idx = (idx);	\
+	typeof(__idx) __sz = (sz);		\
+	0UL - (unsigned long)(__idx < __sz);	\
+})
 
 #define barrier_nospec() barrier()
 
 static inline void weak_wrmsr_fence(void) {}
+
+#define smp_mb__after_switch_mm()	do { } while (0)
 
 /* Include asm-generic/barrier.h for smp_load_acquire, smp_store_release etc. */
 #include <asm-generic/barrier.h>
