@@ -1646,6 +1646,88 @@ HARNESS_BODIES = {
 
     bpf_prog_stream_free(&prog);
     return (int)(__bpf_stream_allocs + __bpf_stream_frees);""",
+
+    "bpf_crypto": """\
+    /* bpf crypto: kfunc validation, refcount lifecycle, and allocator path. */
+    struct bpf_crypto_ctx crypto_ctx = {};
+    struct bpf_dynptr_kern src = {};
+    struct bpf_dynptr_kern dst = {};
+    struct bpf_dynptr_kern siv = {};
+    char src_buf[4] = {1, 2, 3, 4};
+    char dst_buf[4] = {};
+    char siv_buf[1] = {};
+    struct bpf_crypto_ctx *acquired;
+    __u32 key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &key);
+    u32 n = input ? (u32)((*input & 3) + 1) : 1;
+    int err = 0;
+
+    BPF_ASSERT(bpf_crypto_ctx_create(NULL, 0, &err) == NULL);
+    BPF_ASSERT(err == -EINVAL);
+    __bpf_crypto_params.type[0] = 'm';
+    __bpf_crypto_params.type[1] = 'i';
+    __bpf_crypto_params.type[2] = 's';
+    __bpf_crypto_params.type[3] = 's';
+    __bpf_crypto_params.type[4] = '\0';
+    err = 0;
+    BPF_ASSERT(bpf_crypto_ctx_create(&__bpf_crypto_params,
+                                     sizeof(__bpf_crypto_params),
+                                     &err) == NULL);
+    BPF_ASSERT(err == -ENOENT);
+
+    /* NULL avoids storing a function-table pointer in BPF global data; this
+     * still exercises the registration allocator/list-add path. */
+    BPF_ASSERT(bpf_crypto_register_type(NULL) == 0);
+    BPF_ASSERT(__bpf_crypto_allocs == 1);
+    BPF_ASSERT(__bpf_crypto_list_adds == 1);
+    BPF_ASSERT(bpf_crypto_unregister_type(NULL) == -ENOENT);
+
+    refcount_set(&crypto_ctx.usage, 1);
+    acquired = bpf_crypto_ctx_acquire(&crypto_ctx);
+    BPF_ASSERT(acquired == &crypto_ctx);
+    BPF_ASSERT(refcount_read(&crypto_ctx.usage) == 2);
+    bpf_crypto_ctx_release(&crypto_ctx);
+    BPF_ASSERT(refcount_read(&crypto_ctx.usage) == 1);
+    bpf_crypto_ctx_release_dtor(&crypto_ctx);
+    BPF_ASSERT(refcount_read(&crypto_ctx.usage) == 0);
+    BPF_ASSERT(bpf_crypto_ctx_acquire(&crypto_ctx) == NULL);
+
+    src.data = src_buf;
+    src.size = n;
+    dst.data = dst_buf;
+    dst.size = BPF_DYNPTR_RDONLY | n;
+    BPF_ASSERT(bpf_crypto_encrypt(&crypto_ctx, (const struct bpf_dynptr *)&src,
+                                  (const struct bpf_dynptr *)&dst,
+                                  NULL) == -EINVAL);
+
+    dst.size = sizeof(dst_buf);
+    src.size = 0;
+    BPF_ASSERT(bpf_crypto_decrypt(&crypto_ctx, (const struct bpf_dynptr *)&src,
+                                  (const struct bpf_dynptr *)&dst,
+                                  NULL) == -EINVAL);
+
+    src.size = sizeof(src_buf);
+    dst.size = n - 1;
+    BPF_ASSERT(bpf_crypto_encrypt(&crypto_ctx, (const struct bpf_dynptr *)&src,
+                                  (const struct bpf_dynptr *)&dst,
+                                  NULL) == -EINVAL);
+
+    dst.size = sizeof(dst_buf);
+    siv.data = siv_buf;
+    siv.size = n;
+    crypto_ctx.siv_len = n + 1;
+    BPF_ASSERT(bpf_crypto_encrypt(&crypto_ctx, (const struct bpf_dynptr *)&src,
+                                  (const struct bpf_dynptr *)&dst,
+                                  (const struct bpf_dynptr *)&siv) == -EINVAL);
+
+    crypto_ctx.siv_len = 0;
+    src.data = NULL;
+    BPF_ASSERT(bpf_crypto_decrypt(&crypto_ctx, (const struct bpf_dynptr *)&src,
+                                  (const struct bpf_dynptr *)&dst,
+                                  NULL) == -EINVAL);
+
+    return (int)(__bpf_crypto_allocs + __bpf_crypto_frees +
+                 __bpf_crypto_list_adds + __bpf_crypto_list_dels);""",
     "range_tree": """\
     /* range_tree: BPF arena range allocator.
      *
@@ -4660,6 +4742,7 @@ EXTRA_EARLY_CFLAGS = {
     "check_btf": [f"-I{SHIM}/check_btf/include"],
     "cpumask": [f"-I{SHIM}/cpumask/include"],
     "stream": [f"-I{SHIM}/stream/include"],
+    "bpf_crypto": [f"-I{SHIM}/bpf_crypto/include"],
     "bitmap": [f"-I{KSRC}"],
     "string_helpers": [f"-I{KSRC}"],
 }
@@ -10801,6 +10884,14 @@ EXTRA_PREAMBLE = {
 #pragma clang attribute pop
 #pragma clang attribute pop
 """,
+    "bpf_crypto": """\
+#pragma clang attribute pop
+#pragma clang attribute pop
+bool __bpf_crypto_type_registered;
+struct bpf_crypto_type_list __bpf_crypto_type_node;
+struct bpf_crypto_ctx __bpf_crypto_ctx_obj;
+struct bpf_crypto_params __bpf_crypto_params;
+""",
     "cmdline": """\
 #pragma clang attribute pop
 static int __bpf_cmdline_digit(unsigned char c)
@@ -11755,6 +11846,7 @@ def main():
         "check_btf":             KSRC / "kernel/bpf/check_btf.c",
         "cpumask":               KSRC / "kernel/bpf/cpumask.c",
         "stream":                KSRC / "kernel/bpf/stream.c",
+        "bpf_crypto":            KSRC / "kernel/bpf/crypto.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
