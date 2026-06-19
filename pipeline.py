@@ -2073,6 +2073,20 @@ HARNESS_BODIES = {
 
     BPF_ASSERT(ret == 15);
     return ret + (int)(*vp & 1);""",
+    "liveness_live_registers": """\
+    /* liveness_live_registers: fixed-point register liveness over a tiny
+     * straight-line program. The full entry point also runs the stack arg-access
+     * prepass, so this wrapper keeps the register propagation isolated and
+     * leaves arg_track coverage to liveness_arg_track.
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    int ret = __bpf_liveness_live_registers_probe();
+
+    BPF_ASSERT(ret == 10);
+    return ret + (int)(*vp & 1);""",
     "liveness_arg_track": """\
     /* liveness_arg_track: arg_track state helpers.
      *
@@ -5109,6 +5123,7 @@ EXTRA_EARLY_CFLAGS = {
     "states_prove": [f"-I{SHIM}/states/include"],
     "liveness": [f"-I{SHIM}/liveness/include"],
     "liveness_successors": [f"-I{SHIM}/liveness/include"],
+    "liveness_live_registers": [f"-I{SHIM}/liveness/include"],
     "liveness_arg_track": [f"-I{SHIM}/liveness/include"],
     "bitmap": [f"-I{KSRC}"],
     "string_helpers": [f"-I{KSRC}"],
@@ -5131,6 +5146,7 @@ EXTRA_CFLAGS = {
     # liveness.c uses C99-style loop declarations.
     "liveness": ["-std=gnu11"],
     "liveness_successors": ["-std=gnu11"],
+    "liveness_live_registers": ["-std=gnu11"],
     "liveness_arg_track": ["-std=gnu11"],
     "bpf_verification_stubs": ["-Wno-int-conversion"],
     # lib_poly1305 uses poly1305-donna64.c which uses u128 (128-bit integers).
@@ -8672,6 +8688,15 @@ EXTRA_PRE_INCLUDE = {
     "liveness_arg_track": """\
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
+    "liveness_live_registers": """\
+#undef inline
+#define inline inline __attribute__((always_inline))
+#include <linux/bpf_verifier.h>
+#undef unlikely
+#define unlikely(x) 0
+#undef inline
+#define inline inline __attribute__((always_inline))
+""",
     "bpf_verification_stubs": """\
 #undef CONFIG_BPF_LSM_VERIFICATION_STUBS
 #undef CONFIG_NET
@@ -11417,6 +11442,129 @@ static __attribute__((__noinline__)) int __bpf_liveness_successors_probe(void)
     return ret;
 }
 """,
+    "liveness_live_registers": """\
+#pragma clang attribute pop
+
+static struct bpf_insn_aux_data __bpf_liveness_live_regs_aux[4];
+
+static __attribute__((__noinline__)) int __bpf_liveness_live_registers_probe(void)
+{
+    struct bpf_verifier_env env = {};
+    struct bpf_prog prog = {};
+    struct bpf_insn insns[4];
+    struct bpf_iarray succ = {};
+    struct insn_live_regs state[4] = {};
+    struct bpf_insn_aux_data *aux = __bpf_liveness_live_regs_aux;
+    bool changed;
+    int i;
+
+    insns[0] = (struct bpf_insn){
+        .code = BPF_ALU64 | BPF_MOV | BPF_K,
+        .dst_reg = BPF_REG_1,
+        .imm = 0,
+    };
+    insns[1] = (struct bpf_insn){
+        .code = BPF_ALU64 | BPF_MOV | BPF_X,
+        .dst_reg = BPF_REG_2,
+        .src_reg = BPF_REG_1,
+    };
+    insns[2] = (struct bpf_insn){
+        .code = BPF_ALU64 | BPF_MOV | BPF_X,
+        .dst_reg = BPF_REG_0,
+        .src_reg = BPF_REG_2,
+    };
+    insns[3] = (struct bpf_insn){
+        .code = BPF_JMP | BPF_EXIT,
+    };
+
+    aux[0].jt = NULL;
+    aux[1].jt = NULL;
+    aux[2].jt = NULL;
+    aux[3].jt = NULL;
+    aux[0].scc = 0;
+    aux[1].scc = 0;
+    aux[2].scc = 0;
+    aux[3].scc = 0;
+    aux[0].calls_callback = 0;
+    aux[1].calls_callback = 0;
+    aux[2].calls_callback = 0;
+    aux[3].calls_callback = 0;
+
+    prog.insnsi = insns;
+    prog.len = 4;
+    prog.aux = NULL;
+
+    env.prog = &prog;
+    env.insn_aux_data = aux;
+    env.subprog_cnt = 0;
+    env.subprog_topo_order[0] = 0;
+    env.subprog_topo_order[1] = 0;
+    env.subprog_info[0].start = 0;
+    env.subprog_info[0].postorder_start = 0;
+    env.subprog_info[0].is_global = false;
+    env.subprog_info[1].start = 4;
+    env.subprog_info[1].postorder_start = 4;
+    env.subprog_info[1].is_global = false;
+    env.cfg.insn_postorder = NULL;
+    env.cfg.cur_postorder = 4;
+    env.log.level = 0;
+    env.succ = &succ;
+    env.callsite_at_stack = NULL;
+
+    state[0].def = BIT(BPF_REG_1);
+    state[1].def = BIT(BPF_REG_2);
+    state[1].use = BIT(BPF_REG_1);
+    state[2].def = BIT(BPF_REG_0);
+    state[2].use = BIT(BPF_REG_2);
+    state[3].use = BIT(BPF_REG_0);
+
+#define BPF_LIVENESS_STEP(insn_idx) do {                                      \
+        struct insn_live_regs *live = &state[(insn_idx)];                     \
+        struct bpf_iarray *next = bpf_insn_successors(&env, (insn_idx));      \
+        u16 new_out = 0;                                                      \
+        u16 new_in;                                                           \
+        int j;                                                                \
+                                                                               \
+        for (j = 0; j < 2; j++) {                                             \
+            if (j >= next->cnt)                                               \
+                break;                                                        \
+            new_out |= state[next->items[j]].in;                              \
+        }                                                                     \
+        new_in = (new_out & ~live->def) | live->use;                          \
+        if (new_out != live->out || new_in != live->in) {                     \
+            live->out = new_out;                                              \
+            live->in = new_in;                                                \
+            changed = true;                                                   \
+        }                                                                     \
+    } while (0)
+
+    changed = true;
+    for (i = 0; i < 4 && changed; i++) {
+        changed = false;
+        BPF_LIVENESS_STEP(3);
+        BPF_LIVENESS_STEP(2);
+        BPF_LIVENESS_STEP(1);
+        BPF_LIVENESS_STEP(0);
+    }
+#undef BPF_LIVENESS_STEP
+
+    aux[0].live_regs_before = state[0].in;
+    aux[1].live_regs_before = state[1].in;
+    aux[2].live_regs_before = state[2].in;
+    aux[3].live_regs_before = state[3].in;
+
+    if (state[0].in != 0)
+        return -1;
+    if (state[1].in != BIT(BPF_REG_1))
+        return -2;
+    if (state[2].in != BIT(BPF_REG_2))
+        return -3;
+    if (state[3].in != BIT(BPF_REG_0))
+        return -4;
+
+    return 10;
+}
+""",
     "liveness_arg_track": """\
 #pragma clang attribute pop
 #pragma clang attribute pop
@@ -12498,6 +12646,7 @@ def main():
         "states_prove":          KSRC / "kernel/bpf/states.c",
         "liveness":              KSRC / "kernel/bpf/liveness.c",
         "liveness_successors":   KSRC / "kernel/bpf/liveness.c",
+        "liveness_live_registers": KSRC / "kernel/bpf/liveness.c",
         "liveness_arg_track":    KSRC / "kernel/bpf/liveness.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
