@@ -1336,6 +1336,52 @@ HARNESS_BODIES = {
     BPF_ASSERT(bpf_log_attr_finalize(&attr, &log) == 0);
 
     return (int)(actual + buf[0] + env.tmp_str_buf[0]);""",
+    "bpf_verification_stubs": """\
+    /* bpf_verification_stubs: verification-only tracing stubs.
+     * Covers trace printk helper prototypes, generic tracing verifier ops,
+     * tracing kfunc registration, signal-task validation, and callchain stubs.
+     */
+    struct bpf_prog prog = {};
+    struct bpf_insn_access_aux aux = {};
+    struct task_struct task = {};
+    struct pt_regs regs = {};
+    const struct bpf_func_proto *proto;
+    int rctx = 7;
+
+    BPF_ASSERT((s64)bpf_trace_printk(0, 0, 0, 0, 0) == -EOPNOTSUPP);
+    proto = bpf_get_trace_printk_proto();
+    BPF_ASSERT(proto->gpl_only);
+    BPF_ASSERT(proto->ret_type == RET_INTEGER);
+    BPF_ASSERT(proto->arg1_type == (ARG_PTR_TO_MEM | MEM_RDONLY));
+    BPF_ASSERT(proto->arg2_type == ARG_CONST_SIZE);
+
+    BPF_ASSERT((s64)bpf_trace_vprintk(0, 0, 0, 0, 0) == -EOPNOTSUPP);
+    proto = bpf_get_trace_vprintk_proto();
+    BPF_ASSERT(proto->gpl_only);
+    BPF_ASSERT(proto->arg3_type ==
+               (ARG_PTR_TO_MEM | PTR_MAYBE_NULL | MEM_RDONLY));
+    BPF_ASSERT(proto->arg4_type == ARG_CONST_SIZE_OR_ZERO);
+
+    proto = stub_tracing_func_proto(BPF_FUNC_unspec, &prog);
+    BPF_ASSERT(proto->ret_type == RET_INTEGER);
+    BPF_ASSERT(stub_tracing_is_valid_access(0, 4, BPF_READ, &prog, &aux));
+    BPF_ASSERT(!stub_tracing_is_valid_access(-1, 4, BPF_READ, &prog, &aux));
+    BPF_ASSERT(tracing_prog_ops.test_run(&prog) == 0);
+
+    BPF_ASSERT((s64)bpf_send_signal_task(&task, 9, PIDTYPE_PID, 0) == -EOPNOTSUPP);
+    BPF_ASSERT((s64)bpf_send_signal_task(&task, 9, PIDTYPE_TGID, 0) == -EOPNOTSUPP);
+    BPF_ASSERT(bpf_send_signal_task(&task, 9, PIDTYPE_PGID, 0) == -EINVAL);
+    BPF_ASSERT(tracing_stub_kfuncs_init() == 0);
+
+    BPF_ASSERT(sysctl_perf_event_max_stack == PERF_MAX_STACK_DEPTH);
+    BPF_ASSERT(get_callchain_buffers(8) == 0);
+    put_callchain_buffers();
+    BPF_ASSERT(get_callchain_entry(&rctx) == NULL);
+    BPF_ASSERT(rctx == -1);
+    put_callchain_entry(rctx);
+    BPF_ASSERT(get_perf_callchain(&regs, true, false, 8, false, false, 0) == NULL);
+
+    return (int)(proto->ret_type + rctx + sysctl_perf_event_max_stack);""",
     "range_tree": """\
     /* range_tree: BPF arena range allocator.
      *
@@ -4346,6 +4392,7 @@ EXTRA_EARLY_CFLAGS = {
     "cfg": [f"-I{SHIM}/cfg/include"],
     "backtrack": [f"-I{SHIM}/backtrack/include"],
     "log": [f"-I{SHIM}/log/include"],
+    "bpf_verification_stubs": [f"-I{SHIM}/bpf_verification_stubs/include"],
     "bitmap": [f"-I{KSRC}"],
     "string_helpers": [f"-I{KSRC}"],
 }
@@ -7900,6 +7947,10 @@ EXTRA_PRE_INCLUDE = {
     "log": """\
 #pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
 """,
+    "bpf_verification_stubs": """\
+#undef CONFIG_BPF_LSM_VERIFICATION_STUBS
+#undef CONFIG_NET
+""",
     # dim.c uses DIV_ROUND_UP(npkts * USEC_PER_MSEC, delta_us) where npkts is
     # u32 and USEC_PER_MSEC is 1000L (signed). The result is signed, causing
     # the BPF backend to generate sdiv which it cannot select.
@@ -10468,6 +10519,10 @@ EXTRA_PREAMBLE = {
     "log": """\
 #pragma clang attribute pop
 """,
+    "bpf_verification_stubs": """\
+#pragma clang attribute pop
+#pragma clang attribute pop
+""",
     "cmdline": """\
 #pragma clang attribute pop
 static int __bpf_cmdline_digit(unsigned char c)
@@ -11418,6 +11473,7 @@ def main():
         "cfg":                   KSRC / "kernel/bpf/cfg.c",
         "backtrack":             KSRC / "kernel/bpf/backtrack.c",
         "log":                   KSRC / "kernel/bpf/log.c",
+        "bpf_verification_stubs": KSRC / "kernel/bpf/bpf_verification_stubs.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
