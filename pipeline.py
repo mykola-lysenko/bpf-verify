@@ -2058,6 +2058,21 @@ HARNESS_BODIES = {
 
     ret += live.def + (int)out + (int)(*vp & 1);
     return ret;""",
+    "liveness_successors": """\
+    /* liveness_successors: bpf_insn_successors() opcode coverage.
+     *
+     * The wrapper keeps env/prog/aux on stack so pointer fields remain typed
+     * across the bpf_insn_successors() subprogram call. The reusable successor
+     * buffers live in .bss because the helper returns those pointers.
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    int ret = __bpf_liveness_successors_probe();
+
+    BPF_ASSERT(ret == 15);
+    return ret + (int)(*vp & 1);""",
     "range_tree": """\
     /* range_tree: BPF arena range allocator.
      *
@@ -5077,6 +5092,7 @@ EXTRA_EARLY_CFLAGS = {
     "states": [f"-I{SHIM}/states/include"],
     "states_prove": [f"-I{SHIM}/states/include"],
     "liveness": [f"-I{SHIM}/liveness/include"],
+    "liveness_successors": [f"-I{SHIM}/liveness/include"],
     "bitmap": [f"-I{KSRC}"],
     "string_helpers": [f"-I{KSRC}"],
 }
@@ -5097,6 +5113,7 @@ EXTRA_CFLAGS = {
     "div64": ["-U__SIZEOF_INT128__"],
     # liveness.c uses C99-style loop declarations.
     "liveness": ["-std=gnu11"],
+    "liveness_successors": ["-std=gnu11"],
     # lib_poly1305 uses poly1305-donna64.c which uses u128 (128-bit integers).
     # BPF backend does not support 128-bit integers. Use donna32 instead.
     "lib_poly1305": ["-U__SIZEOF_INT128__", "-DCONFIG_CRYPTO_LIB_POLY1305_RSIZE=1"],
@@ -11306,6 +11323,78 @@ states_regsafe_reject_wrap(struct bpf_verifier_env *env,
 static struct bpf_verifier_env __bpf_liveness_env;
 static struct bpf_insn __bpf_liveness_insns[8];
 """,
+    "liveness_successors": """\
+#pragma clang attribute pop
+static struct bpf_iarray __bpf_liveness_successors_succ;
+static struct bpf_iarray __bpf_liveness_successors_jt;
+
+static __attribute__((__noinline__)) int __bpf_liveness_successors_probe(void)
+{
+    struct bpf_verifier_env env = {};
+    struct bpf_insn_aux_data aux = {};
+    struct bpf_prog prog = {};
+    struct bpf_insn insn = {};
+    struct bpf_iarray *succ;
+    int ret = 0;
+
+    prog.insnsi = &insn;
+    prog.len = 8;
+    env.prog = &prog;
+    env.insn_aux_data = &aux;
+    env.succ = &__bpf_liveness_successors_succ;
+
+    insn = (struct bpf_insn){
+        .code = BPF_JMP | BPF_JEQ | BPF_K,
+        .off = 2,
+    };
+    succ = bpf_insn_successors(&env, 0);
+    if (!succ || succ->cnt != 2 || succ->items[0] != 1 || succ->items[1] != 3)
+        return -1;
+    ret += succ->cnt;
+
+    aux.jt = NULL;
+    insn = (struct bpf_insn){
+        .code = BPF_JMP | BPF_JA,
+        .off = 3,
+    };
+    succ = bpf_insn_successors(&env, 0);
+    if (!succ || succ->cnt != 1 || succ->items[0] != 4)
+        return -2;
+    ret += succ->items[0];
+
+    aux.jt = NULL;
+    insn = (struct bpf_insn){
+        .code = BPF_LD | BPF_IMM | BPF_DW,
+    };
+    succ = bpf_insn_successors(&env, 0);
+    if (!succ || succ->cnt != 1 || succ->items[0] != 2)
+        return -3;
+    ret += succ->items[0];
+
+    aux.jt = NULL;
+    insn = (struct bpf_insn){
+        .code = BPF_JMP | BPF_EXIT,
+    };
+    succ = bpf_insn_successors(&env, 0);
+    if (!succ || succ->cnt != 0)
+        return -4;
+
+    __bpf_liveness_successors_jt.cnt = 2;
+    __bpf_liveness_successors_jt.items[0] = 5;
+    __bpf_liveness_successors_jt.items[1] = 7;
+    aux.jt = &__bpf_liveness_successors_jt;
+    insn = (struct bpf_insn){
+        .code = BPF_JMP | BPF_JA,
+        .off = 1,
+    };
+    succ = bpf_insn_successors(&env, 0);
+    if (!succ || succ->cnt != 2 || succ->items[0] != 5 || succ->items[1] != 7)
+        return -5;
+    ret += succ->items[1];
+
+    return ret;
+}
+""",
     "cmdline": """\
 #pragma clang attribute pop
 static int __bpf_cmdline_digit(unsigned char c)
@@ -12303,6 +12392,7 @@ def main():
         "states":                KSRC / "kernel/bpf/states.c",
         "states_prove":          KSRC / "kernel/bpf/states.c",
         "liveness":              KSRC / "kernel/bpf/liveness.c",
+        "liveness_successors":   KSRC / "kernel/bpf/liveness.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
