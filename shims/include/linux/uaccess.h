@@ -33,6 +33,9 @@
 
 #define __bpf_uaccess_noop(...) ((void)0)
 
+extern long copy_from_kernel_nofault(void *dst, const void *src, size_t size);
+extern long copy_to_kernel_nofault(void *dst, const void *src, size_t size);
+
 #define can_do_masked_user_access() 0
 #define masked_user_access_begin(src) ((void *)0)
 #define masked_user_read_access_begin masked_user_access_begin

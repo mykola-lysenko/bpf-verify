@@ -10,6 +10,7 @@
 
 #include <linux/types.h>
 #include <linux/gfp.h>
+#include <linux/err.h>
 
 #define __bpf_slab_noop(...)		do { } while (0)
 #define __bpf_slab_null(...)		((void *)0)
@@ -82,8 +83,16 @@ static inline size_t __bpf_kmalloc_size_roundup(size_t size) { return size; }
 #define kmalloc_track_caller(size, flags) \
 	kmalloc((size), (flags))
 #endif
+#ifndef kmalloc_track_caller_noprof
+#define kmalloc_track_caller_noprof(size, flags) \
+	kmalloc((size), (flags))
+#endif
 #ifndef kmalloc_node_track_caller
 #define kmalloc_node_track_caller(size, flags, node) \
+	kmalloc_node((size), (flags), (node))
+#endif
+#ifndef kmalloc_node_track_caller_noprof
+#define kmalloc_node_track_caller_noprof(size, flags, node) \
 	kmalloc_node((size), (flags), (node))
 #endif
 
@@ -171,6 +180,10 @@ static inline size_t __bpf_kmalloc_size_roundup(size_t size) { return size; }
 #endif
 #ifndef kvmalloc_node
 #define kvmalloc_node	__bpf_slab_alloc_node
+#endif
+#ifndef kvmalloc_node_align_noprof
+#define kvmalloc_node_align_noprof(size, align, flags, node) \
+	kvmalloc_node((size), (flags), (node))
 #endif
 #ifndef kvzalloc
 #define kvzalloc(size, flags)		kvmalloc((size), (flags) | __GFP_ZERO)
