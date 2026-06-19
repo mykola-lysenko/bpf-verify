@@ -3336,6 +3336,31 @@ HARNESS_BODIES = {
         errors |= dec[i] != plain[i];
 
     return errors + dec[0];""",
+    "crypto_blowfish_generic": """\
+    /* crypto/blowfish_generic.c: exercise setkey plus encrypt/decrypt round trip.
+     *
+     * bf_ctx contains a 4 KiB S-box, so the crypto_tfm lives in static storage
+     * through the target-specific preinclude rather than on the BPF stack. */
+    static struct crypto_tfm tfm;
+    static const u8 key[16] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    };
+    static const u8 plain[BF_BLOCK_SIZE] = {
+        0x42, 0x50, 0x46, 0x2d, 0x76, 0x65, 0x72, 0x69,
+    };
+    u8 enc[BF_BLOCK_SIZE];
+    u8 dec[BF_BLOCK_SIZE];
+    int i;
+
+    BPF_ASSERT(blowfish_setkey(&tfm, key, sizeof(key)) == 0);
+    bf_encrypt(&tfm, enc, plain);
+    bf_decrypt(&tfm, dec, enc);
+    for (i = 0; i < BF_BLOCK_SIZE; i++)
+        BPF_ASSERT(dec[i] == plain[i]);
+
+    return enc[0];
+""",
     "driver_cxd2880_common": """\
     /* drivers/media/dvb-frontends/cxd2880_common.c: signed complement conversion. */
     __u32 input_key = 0;
@@ -7121,6 +7146,12 @@ void crypto_unregister_algs(struct crypto_alg *algs, unsigned int count)
 }
 """
 
+CRYPTO_BLOWFISH_GENERIC_PRE_INCLUDE = CRYPTO_CIPHER_PRE_INCLUDE.replace(
+    "u8 ctx[256]", "u8 ctx[5000]",
+) + """\
+#include "{ksrc}/crypto/blowfish_common.c"
+"""
+
 CRYPTO_ARC4_PRE_INCLUDE = CRYPTO_CIPHER_PRE_INCLUDE + """\
 #define _CRYPTO_INTERNAL_SKCIPHER_H
 #define _LINUX_SCHED_H
@@ -7529,6 +7560,7 @@ EXTRA_PRE_INCLUDE = {
     "crypto_tea": CRYPTO_CIPHER_PRE_INCLUDE,
     "crypto_arc4": CRYPTO_ARC4_PRE_INCLUDE,
     "crypto_sm4_generic": CRYPTO_SM4_GENERIC_PRE_INCLUDE,
+    "crypto_blowfish_generic": CRYPTO_BLOWFISH_GENERIC_PRE_INCLUDE,
     "driver_cxd2880_common": DRIVER_CXD2880_COMMON_PRE_INCLUDE,
     "driver_dc_spl_filters": DRIVER_DC_SPL_FILTERS_PRE_INCLUDE,
     "driver_mcp251xfd_crc16": DRIVER_MCP251XFD_CRC16_PRE_INCLUDE,
@@ -11086,6 +11118,7 @@ def main():
         "crypto_tea":            KSRC / "crypto/tea.c",
         "crypto_arc4":           KSRC / "crypto/arc4.c",
         "crypto_sm4_generic":    KSRC / "crypto/sm4_generic.c",
+        "crypto_blowfish_generic": KSRC / "crypto/blowfish_generic.c",
         # Phase 9: selected drivers/ utility targets
         "driver_cxd2880_common":  KSRC / "drivers/media/dvb-frontends/cxd2880/cxd2880_common.c",
         "driver_i915_mmio_range": KSRC / "drivers/gpu/drm/i915/i915_mmio_range.c",
