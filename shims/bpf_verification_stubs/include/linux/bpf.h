@@ -23,6 +23,8 @@
 #define ARG_PTR_TO_MEM		1
 #define ARG_CONST_SIZE		2
 #define ARG_CONST_SIZE_OR_ZERO	3
+#define ARG_PTR_TO_UNINIT_MEM	4
+#define ARG_ANYTHING		5
 
 #define BPF_PROG_TYPE_KPROBE		1
 #define BPF_PROG_TYPE_TRACING		2
@@ -113,6 +115,34 @@ static inline int bpf_prog_test_run_raw_tp(struct bpf_prog *prog)
 	return 0;
 }
 
+static inline int bpf_probe_read_kernel_common(void *dst, u32 size,
+					       const void *unsafe_ptr)
+{
+	(void)dst;
+	(void)size;
+	(void)unsafe_ptr;
+	return 0;
+}
+
+static inline long strncpy_from_kernel_nofault(void *dst,
+					       const void *unsafe_ptr,
+					       u32 size)
+{
+	(void)dst;
+	(void)unsafe_ptr;
+	(void)size;
+	return 0;
+}
+
+static inline void *memset(void *dst, int c, unsigned long size)
+{
+	(void)c;
+	(void)size;
+	return dst;
+}
+
+#define BPF_CALL_3(name, t1, a1, t2, a2, t3, a3) \
+	u64 name(u64 a1, u64 a2, u64 a3, u64 __unused1, u64 __unused2)
 #define BPF_CALL_4(name, t1, a1, t2, a2, t3, a3, t4, a4) \
 	u64 name(u64 a1, u64 a2, u64 a3, u64 a4, u64 __unused)
 #define BPF_CALL_5(name, t1, a1, t2, a2, t3, a3, t4, a4, t5, a5) \

@@ -5132,6 +5132,7 @@ EXTRA_CFLAGS = {
     "liveness": ["-std=gnu11"],
     "liveness_successors": ["-std=gnu11"],
     "liveness_arg_track": ["-std=gnu11"],
+    "bpf_verification_stubs": ["-Wno-int-conversion"],
     # lib_poly1305 uses poly1305-donna64.c which uses u128 (128-bit integers).
     # BPF backend does not support 128-bit integers. Use donna32 instead.
     "lib_poly1305": ["-U__SIZEOF_INT128__", "-DCONFIG_CRYPTO_LIB_POLY1305_RSIZE=1"],
