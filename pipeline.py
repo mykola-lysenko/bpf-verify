@@ -1981,6 +1981,83 @@ HARNESS_BODIES = {
     }
 
     return ret + (int)val64;""",
+    "liveness": """\
+    /* liveness: verifier liveness helpers.
+     *
+     * Keep this first target on BPF-safe call shapes. Helpers returning
+     * struct arg_track by value currently lower to sret-style subprograms
+     * that the BPF verifier rejects, so those remain follow-up targets.
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    struct bpf_verifier_env *env = &__bpf_liveness_env;
+    struct insn_live_regs live = {};
+    struct func_instance inst = {};
+    struct per_frame_masks *masks;
+    s16 out = 0;
+    int ret = 0;
+
+    __bpf_liveness_insns[0] = (struct bpf_insn){
+        .code = BPF_JMP | BPF_JA,
+        .off = 2,
+        .imm = 4,
+    };
+    __bpf_liveness_insns[1] = (struct bpf_insn){
+        .code = BPF_JMP32 | BPF_JA,
+        .imm = -1,
+    };
+    BPF_ASSERT(bpf_jmp_offset(&__bpf_liveness_insns[0]) == 2);
+    BPF_ASSERT(bpf_jmp_offset(&__bpf_liveness_insns[1]) == -1);
+
+    BPF_PROVE(stack_arg_off_to_slot(8) == 0);
+    BPF_PROVE(stack_arg_off_to_slot(56) == 6);
+    BPF_PROVE(stack_arg_off_to_slot(64) == -1);
+    BPF_PROVE(stack_arg_off_to_slot(0) == -1);
+    BPF_PROVE(fp_off_to_slot(-8) == 0);
+    BPF_PROVE(fp_off_to_slot(-512) == 63);
+    BPF_PROVE(fp_off_to_slot(-4) == -1);
+    BPF_PROVE(!arg_add(-32, 24, &out) && out == -8);
+
+    __bpf_liveness_insns[2] = (struct bpf_insn){
+        .code = BPF_ALU64 | BPF_MOV | BPF_K,
+        .dst_reg = BPF_REG_6,
+    };
+    compute_insn_live_regs(env, &__bpf_liveness_insns[2], &live);
+    BPF_ASSERT(live.def == BIT(BPF_REG_6) && live.use == 0);
+
+    __bpf_liveness_insns[3] = (struct bpf_insn){
+        .code = BPF_LDX | BPF_MEM | BPF_DW,
+        .dst_reg = BPF_REG_1,
+        .src_reg = BPF_REG_10,
+    };
+    compute_insn_live_regs(env, &__bpf_liveness_insns[3], &live);
+    BPF_ASSERT(live.def == BIT(BPF_REG_1) && live.use == BIT(BPF_REG_10));
+
+    __bpf_liveness_insns[4] = (struct bpf_insn){
+        .code = BPF_JMP | BPF_CALL,
+    };
+    compute_insn_live_regs(env, &__bpf_liveness_insns[4], &live);
+    BPF_ASSERT(live.def == GENMASK(CALLER_SAVED_REGS - 1, 0));
+    BPF_ASSERT(live.use == GENMASK(MAX_BPF_FUNC_REG_ARGS, 1));
+
+    inst.depth = 0;
+    inst.subprog_start = 0;
+    inst.insn_cnt = 2;
+    BPF_ASSERT(record_stack_access_off(&inst, -8, 8, 0, 0) == 0);
+    BPF_ASSERT(record_stack_access_off(&inst, -8, -8, 0, 1) == 0);
+
+    masks = get_frame_masks(&inst, 0, 0);
+    BPF_ASSERT(masks && spis_test_bit(masks->may_read, 0) &&
+               spis_test_bit(masks->may_read, 1));
+
+    masks = get_frame_masks(&inst, 0, 1);
+    BPF_ASSERT(masks && spis_test_bit(masks->must_write, 0) &&
+               spis_test_bit(masks->must_write, 1));
+
+    ret += live.def + (int)out + (int)(*vp & 1);
+    return ret;""",
     "range_tree": """\
     /* range_tree: BPF arena range allocator.
      *
@@ -4999,6 +5076,7 @@ EXTRA_EARLY_CFLAGS = {
     "bpf_crypto": [f"-I{SHIM}/bpf_crypto/include"],
     "states": [f"-I{SHIM}/states/include"],
     "states_prove": [f"-I{SHIM}/states/include"],
+    "liveness": [f"-I{SHIM}/liveness/include"],
     "bitmap": [f"-I{KSRC}"],
     "string_helpers": [f"-I{KSRC}"],
 }
@@ -5017,6 +5095,8 @@ EXTRA_CFLAGS = {
     # BPF backend does not support 128-bit integers. Undefine it to use the
     # fallback 32-bit implementation.
     "div64": ["-U__SIZEOF_INT128__"],
+    # liveness.c uses C99-style loop declarations.
+    "liveness": ["-std=gnu11"],
     # lib_poly1305 uses poly1305-donna64.c which uses u128 (128-bit integers).
     # BPF backend does not support 128-bit integers. Use donna32 instead.
     "lib_poly1305": ["-U__SIZEOF_INT128__", "-DCONFIG_CRYPTO_LIB_POLY1305_RSIZE=1"],
@@ -11221,6 +11301,11 @@ states_regsafe_reject_wrap(struct bpf_verifier_env *env,
     return (int)idmap->cnt;
 }
 """,
+    "liveness": """\
+#pragma clang attribute pop
+static struct bpf_verifier_env __bpf_liveness_env;
+static struct bpf_insn __bpf_liveness_insns[8];
+""",
     "cmdline": """\
 #pragma clang attribute pop
 static int __bpf_cmdline_digit(unsigned char c)
@@ -12217,6 +12302,7 @@ def main():
         "bpf_crypto":            KSRC / "kernel/bpf/crypto.c",
         "states":                KSRC / "kernel/bpf/states.c",
         "states_prove":          KSRC / "kernel/bpf/states.c",
+        "liveness":              KSRC / "kernel/bpf/liveness.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
