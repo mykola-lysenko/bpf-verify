@@ -1980,6 +1980,24 @@ HARNESS_BODIES = {
         ret += states_regsafe_reject_wrap(env, &old_reg, &cur_reg, &idmap);
     }
 
+    {
+        struct bpf_idmap idmap = {};
+
+        ret += states_refsafe_proof_wrap(old_id, cur_id, &idmap);
+        idmap.tmp_id_gen = 0;
+        idmap.cnt = 0;
+        ret += states_refsafe_reject_wrap(old_id, cur_id, &idmap);
+    }
+
+    {
+        struct bpf_verifier_state old_st = {};
+        struct bpf_verifier_state cur_st = {};
+
+        old_st.curframe = 0;
+        cur_st.curframe = 1;
+        ret += states_looping_reject_wrap(&old_st, &cur_st);
+    }
+
     return ret + (int)val64;""",
     "liveness": """\
     /* liveness: verifier liveness helpers.
@@ -11363,6 +11381,50 @@ states_regsafe_reject_wrap(struct bpf_verifier_env *env,
 {
     BPF_PROVE(!regsafe(env, old_reg, cur_reg, idmap, NOT_EXACT));
     return (int)idmap->cnt;
+}
+
+static __attribute__((__noinline__)) int
+states_refsafe_proof_wrap(u32 old_id, u32 cur_id,
+                          struct bpf_idmap *idmap)
+{
+    struct bpf_verifier_state old_st = {};
+    struct bpf_verifier_state cur_st = {};
+
+    old_st.acquired_refs = 1;
+    cur_st.acquired_refs = 1;
+    old_st.refs[0].type = REF_TYPE_IRQ;
+    old_st.refs[0].id = old_id;
+    cur_st.refs[0].type = REF_TYPE_IRQ;
+    cur_st.refs[0].id = cur_id;
+
+    BPF_PROVE(refsafe(&old_st, &cur_st, idmap));
+    return (int)idmap->cnt;
+}
+
+static __attribute__((__noinline__)) int
+states_refsafe_reject_wrap(u32 old_id, u32 cur_id,
+                           struct bpf_idmap *idmap)
+{
+    struct bpf_verifier_state old_st = {};
+    struct bpf_verifier_state cur_st = {};
+
+    old_st.acquired_refs = 1;
+    cur_st.acquired_refs = 1;
+    old_st.refs[0].type = REF_TYPE_IRQ;
+    old_st.refs[0].id = old_id;
+    cur_st.refs[0].type = REF_TYPE_PTR;
+    cur_st.refs[0].id = cur_id;
+
+    BPF_PROVE(!refsafe(&old_st, &cur_st, idmap));
+    return (int)idmap->cnt;
+}
+
+static __attribute__((__noinline__)) int
+states_looping_reject_wrap(struct bpf_verifier_state *old_st,
+                           struct bpf_verifier_state *cur_st)
+{
+    BPF_PROVE(!states_maybe_looping(old_st, cur_st));
+    return 1;
 }
 """,
     "liveness": """\
