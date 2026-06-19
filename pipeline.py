@@ -2073,6 +2073,22 @@ HARNESS_BODIES = {
 
     BPF_ASSERT(ret == 15);
     return ret + (int)(*vp & 1);""",
+    "liveness_arg_track": """\
+    /* liveness_arg_track: arg_track state helpers.
+     *
+     * This covers struct-return helpers through target-local forced inlining,
+     * avoiding the BPF backend's unsupported sret subprogram ABI. Same-frame
+     * precise offset merging still needs a separate verifier-shaping target:
+     * that path drives variable-count loops over packed off_cnt fields.
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    int ret = __bpf_liveness_arg_track_probe();
+
+    BPF_ASSERT(ret == 35);
+    return ret + (int)(*vp & 1);""",
     "range_tree": """\
     /* range_tree: BPF arena range allocator.
      *
@@ -5093,6 +5109,7 @@ EXTRA_EARLY_CFLAGS = {
     "states_prove": [f"-I{SHIM}/states/include"],
     "liveness": [f"-I{SHIM}/liveness/include"],
     "liveness_successors": [f"-I{SHIM}/liveness/include"],
+    "liveness_arg_track": [f"-I{SHIM}/liveness/include"],
     "bitmap": [f"-I{KSRC}"],
     "string_helpers": [f"-I{KSRC}"],
 }
@@ -5114,6 +5131,7 @@ EXTRA_CFLAGS = {
     # liveness.c uses C99-style loop declarations.
     "liveness": ["-std=gnu11"],
     "liveness_successors": ["-std=gnu11"],
+    "liveness_arg_track": ["-std=gnu11"],
     # lib_poly1305 uses poly1305-donna64.c which uses u128 (128-bit integers).
     # BPF backend does not support 128-bit integers. Use donna32 instead.
     "lib_poly1305": ["-U__SIZEOF_INT128__", "-DCONFIG_CRYPTO_LIB_POLY1305_RSIZE=1"],
@@ -8650,6 +8668,9 @@ EXTRA_PRE_INCLUDE = {
     "log": """\
 #pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
 """,
+    "liveness_arg_track": """\
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     "bpf_verification_stubs": """\
 #undef CONFIG_BPF_LSM_VERIFICATION_STUBS
 #undef CONFIG_NET
@@ -11395,6 +11416,89 @@ static __attribute__((__noinline__)) int __bpf_liveness_successors_probe(void)
     return ret;
 }
 """,
+    "liveness_arg_track": """\
+#pragma clang attribute pop
+#pragma clang attribute pop
+
+static __attribute__((__noinline__)) int __bpf_liveness_arg_track_probe(void)
+{
+    struct bpf_verifier_env env = {};
+    struct arg_track none = { .frame = ARG_NONE };
+    struct arg_track unvisited = { .frame = ARG_UNVISITED };
+    struct arg_track a, b, c, imp, old;
+    s16 out = 0;
+    int ret = 0;
+
+    a = arg_single(0, -8);
+    if (a.frame != 0 || a.off_cnt != 1 || a.off[0] != -8)
+        return -1;
+    ret += a.off_cnt;
+
+    c = __arg_track_join(unvisited, a);
+    if (c.frame != 0 || c.off_cnt != 1 || c.off[0] != -8)
+        return -2;
+    ret += c.off_cnt;
+
+    b = arg_single(2, -16);
+    c = __arg_track_join(a, b);
+    if (c.frame != ARG_IMPRECISE || c.mask != (BIT(0) | BIT(2)))
+        return -3;
+    ret += c.mask;
+
+    imp = arg_join_imprecise(c, arg_single(1, -24));
+    if (imp.frame != ARG_IMPRECISE ||
+        imp.mask != (BIT(0) | BIT(1) | BIT(2)))
+        return -4;
+    ret += imp.mask;
+
+    if (!arg_is_visited(&a) || arg_is_visited(&unvisited))
+        return -5;
+    if (!arg_is_fp(&a) || !arg_is_fp(&imp) || arg_is_fp(&none))
+        return -6;
+    ret += 1;
+
+    old = unvisited;
+    if (!arg_track_join(&env, 1, 2, BPF_REG_1, &old, a))
+        return -7;
+    if (old.frame != 0 || old.off_cnt != 1 || old.off[0] != -8)
+        return -8;
+    ret += old.off_cnt;
+
+    old = a;
+    if (!arg_track_join(&env, 2, 3, BPF_REG_1, &old, b))
+        return -9;
+    if (old.frame != ARG_IMPRECISE || old.mask != (BIT(0) | BIT(2)))
+        return -10;
+    ret += old.mask;
+
+    a = arg_single(0, -64);
+    b = none;
+    arg_track_alu64(&a, &b);
+    if (a.frame != 0 || a.off_cnt != 0)
+        return -11;
+    ret += a.frame + 1;
+
+    a = none;
+    b = arg_single(2, -72);
+    arg_track_alu64(&a, &b);
+    if (a.frame != 2 || a.off_cnt != 0)
+        return -12;
+    ret += a.frame;
+
+    a = arg_single(0, -8);
+    b = arg_single(1, -8);
+    arg_track_alu64(&a, &b);
+    if (a.frame != ARG_IMPRECISE || a.mask != (BIT(0) | BIT(1)))
+        return -13;
+    ret += a.mask;
+
+    if (arg_add(-32, 24, &out) || out != -8)
+        return -14;
+    ret += (int)(-out);
+
+    return ret;
+}
+""",
     "cmdline": """\
 #pragma clang attribute pop
 static int __bpf_cmdline_digit(unsigned char c)
@@ -12393,6 +12497,7 @@ def main():
         "states_prove":          KSRC / "kernel/bpf/states.c",
         "liveness":              KSRC / "kernel/bpf/liveness.c",
         "liveness_successors":   KSRC / "kernel/bpf/liveness.c",
+        "liveness_arg_track":    KSRC / "kernel/bpf/liveness.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
