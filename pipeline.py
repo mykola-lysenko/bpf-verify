@@ -1928,9 +1928,9 @@ HARNESS_BODIES = {
     return (int)(old_reg->id + cur_reg->id);""",
     "states_prove": """\
     /* states proof harness: verifier-enforced invariants over dynamic ID,
-     * scalar range, pointer identity, and reference parent state. Wrappers
-     * are noinline so the checked helper logic is preserved in BPF bytecode
-     * instead of being optimized away by LLVM.
+     * scalar range, pointer identity, and reference parent state, plus
+     * stack-arg equivalence coverage. Helper wrappers keep the checked logic
+     * preserved in BPF bytecode instead of being optimized away by LLVM.
      */
     __u32 key = 0;
     __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
@@ -2000,12 +2000,8 @@ HARNESS_BODIES = {
     }
 
     {
-        struct bpf_verifier_state old_st = {};
-        struct bpf_verifier_state cur_st = {};
-
-        old_st.curframe = 0;
-        cur_st.curframe = 1;
-        ret += states_looping_reject_wrap(&old_st, &cur_st);
+        ret += states_stack_arg_safe_wrap(env, old_id, cur_id, val64);
+        ret += states_looping_reject_wrap();
     }
 
     return ret + (int)val64;""",
@@ -11420,6 +11416,25 @@ struct bpf_reg_state __bpf_states_cur_reg;
 #pragma clang attribute pop
 #pragma clang attribute pop
 const struct bpf_verifier_env __bpf_states_const_env;
+static struct bpf_reg_state __bpf_states_stack_old_args[2];
+static struct bpf_reg_state __bpf_states_stack_cur_args[2];
+static struct bpf_idmap __bpf_states_stack_idmap;
+static const struct bpf_func_state __bpf_states_stack_old_one = {
+    .out_stack_arg_cnt = 1,
+    .stack_arg_regs = __bpf_states_stack_old_args,
+};
+static const struct bpf_func_state __bpf_states_stack_old_two = {
+    .out_stack_arg_cnt = 2,
+    .stack_arg_regs = __bpf_states_stack_old_args,
+};
+static const struct bpf_func_state __bpf_states_stack_cur_one = {
+    .out_stack_arg_cnt = 1,
+    .stack_arg_regs = __bpf_states_stack_cur_args,
+};
+static const struct bpf_func_state __bpf_states_stack_cur_two = {
+    .out_stack_arg_cnt = 2,
+    .stack_arg_regs = __bpf_states_stack_cur_args,
+};
 
 static __attribute__((__noinline__)) int
 states_idmap_proof_wrap(u32 old_id, u32 cur_id, struct bpf_idmap *idmap)
@@ -11546,10 +11561,74 @@ states_refsafe_ptr_proof_wrap(u32 old_id, u32 cur_id,
 }
 
 static __attribute__((__noinline__)) int
-states_looping_reject_wrap(struct bpf_verifier_state *old_st,
-                           struct bpf_verifier_state *cur_st)
+states_stack_arg_safe_wrap(struct bpf_verifier_env *env, u32 old_id,
+                           u32 cur_id, u64 value)
 {
-    BPF_PROVE(!states_maybe_looping(old_st, cur_st));
+    struct bpf_reg_state *old_args = __bpf_states_stack_old_args;
+    struct bpf_reg_state *cur_args = __bpf_states_stack_cur_args;
+    struct bpf_idmap *idmap = &__bpf_states_stack_idmap;
+
+    value &= 0xff;
+    idmap->tmp_id_gen = 0;
+    idmap->cnt = 0;
+
+    old_args[0] = (struct bpf_reg_state){
+        .type = SCALAR_VALUE,
+        .precise = true,
+        .id = old_id,
+        .var_off = { .value = 0, .mask = 0xff },
+        .r64 = { .base = 0, .size = 0xff },
+        .r32 = CNUM32_UNBOUNDED,
+    };
+    cur_args[0] = (struct bpf_reg_state){
+        .type = SCALAR_VALUE,
+        .precise = true,
+        .id = cur_id,
+        .var_off = { .value = value, .mask = 0 },
+        .r64 = { .base = value, .size = 0 },
+        .r32 = CNUM32_UNBOUNDED,
+    };
+    cur_args[1] = (struct bpf_reg_state){
+        .type = SCALAR_VALUE,
+        .precise = true,
+        .id = cur_id + 1,
+        .var_off = { .value = value, .mask = 0 },
+        .r64 = { .base = value, .size = 0 },
+        .r32 = CNUM32_UNBOUNDED,
+    };
+
+    BPF_ASSERT(stack_arg_safe(env,
+                              (struct bpf_func_state *)&__bpf_states_stack_old_one,
+                              (struct bpf_func_state *)&__bpf_states_stack_cur_two,
+                              idmap, NOT_EXACT));
+
+    idmap->tmp_id_gen = 0;
+    idmap->cnt = 0;
+    old_args[1] = old_args[0];
+    BPF_ASSERT(!stack_arg_safe(env,
+                               (struct bpf_func_state *)&__bpf_states_stack_old_two,
+                               (struct bpf_func_state *)&__bpf_states_stack_cur_two,
+                               idmap, NOT_EXACT));
+
+    idmap->tmp_id_gen = 0;
+    idmap->cnt = 0;
+    BPF_ASSERT(!stack_arg_safe(env,
+                               (struct bpf_func_state *)&__bpf_states_stack_old_two,
+                               (struct bpf_func_state *)&__bpf_states_stack_cur_one,
+                               idmap, NOT_EXACT));
+
+    return 3;
+}
+
+static __attribute__((__noinline__)) int
+states_looping_reject_wrap(void)
+{
+    struct bpf_verifier_state old_st = {};
+    struct bpf_verifier_state cur_st = {};
+
+    old_st.curframe = 0;
+    cur_st.curframe = 1;
+    BPF_PROVE(!states_maybe_looping(&old_st, &cur_st));
     return 1;
 }
 """,
