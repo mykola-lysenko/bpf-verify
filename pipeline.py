@@ -2119,9 +2119,8 @@ HARNESS_BODIES = {
     /* liveness_arg_track: arg_track state helpers.
      *
      * This covers struct-return helpers through target-local forced inlining,
-     * avoiding the BPF backend's unsupported sret subprogram ABI. Same-frame
-     * precise offset merging still needs a separate verifier-shaping target:
-     * that path drives variable-count loops over packed off_cnt fields.
+     * avoiding the BPF backend's unsupported sret subprogram ABI, including
+     * same-frame precise offset merge/dedup/overflow cases.
      */
     __u32 key = 0;
     __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
@@ -2129,7 +2128,7 @@ HARNESS_BODIES = {
 
     int ret = __bpf_liveness_arg_track_probe();
 
-    BPF_ASSERT(ret == 35);
+    BPF_ASSERT(ret == 44);
     return ret + (int)(*vp & 1);""",
     "range_tree": """\
     /* range_tree: BPF arena range allocator.
@@ -11919,6 +11918,46 @@ static __attribute__((__noinline__)) int __bpf_liveness_arg_track_probe(void)
     if (old.frame != ARG_IMPRECISE || old.mask != (BIT(0) | BIT(2)))
         return -10;
     ret += old.mask;
+
+    a = arg_single(1, -32);
+    b = arg_single(1, -16);
+    c = __arg_track_join(a, b);
+    if (c.frame != 1 || c.off_cnt != 2 ||
+        c.off[0] != -32 || c.off[1] != -16)
+        return -15;
+    ret += c.off_cnt;
+
+    old = c;
+    b = arg_single(1, -16);
+    c = __arg_track_join(old, b);
+    if (c.frame != 1 || c.off_cnt != 2 ||
+        c.off[0] != -32 || c.off[1] != -16)
+        return -16;
+    ret += c.off_cnt;
+
+    a = (struct arg_track){
+        .off = { -64, -48, -32, -16 },
+        .frame = 1,
+        .off_cnt = 4,
+    };
+    b = arg_single(1, -8);
+    c = __arg_track_join(a, b);
+    if (c.frame != 1 || c.off_cnt != 0)
+        return -17;
+    ret += c.frame + 1;
+
+    old = arg_single(1, -32);
+    b = arg_single(1, -16);
+    if (!arg_track_join(&env, 4, 5, BPF_REG_2, &old, b))
+        return -18;
+    if (old.frame != 1 || old.off_cnt != 2 ||
+        old.off[0] != -32 || old.off[1] != -16)
+        return -19;
+    ret += old.off_cnt;
+
+    if (arg_track_join(&env, 5, 6, BPF_REG_2, &old, b))
+        return -20;
+    ret += 1;
 
     a = arg_single(0, -64);
     b = none;
