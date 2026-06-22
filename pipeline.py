@@ -3837,7 +3837,9 @@ HARNESS_BODIES = {
      *      increments and inactive count decrements.
      *   4. After rotate_active: nodes with ref=0 move to inactive;
      *      nodes with ref=1 stay active (ref cleared).
-     *   5. bpf_lru_list_inactive_low() returns true iff
+     *   5. list_head prev/next links remain coherent across moves,
+     *      rotations, shrink, and local free/pending transitions.
+     *   6. bpf_lru_list_inactive_low() returns true iff
      *      inactive_count < active_count.
      *
      * We use a small static pool and a single bpf_lru_list.
@@ -3907,6 +3909,13 @@ HARNESS_BODIES = {
         &lru_ctx, l, 1, &l->lists[BPF_LRU_LIST_T_FREE],
         BPF_LRU_LIST_T_FREE);
     BPF_ASSERT(shrunk == 1);
+    BPF_ASSERT(n0 == &nodes[2] && n1 == &nodes[1] && n2 == &nodes[0]);
+    BPF_ASSERT(n1->type == BPF_LRU_LIST_T_FREE);
+    BPF_ASSERT(n2->type == BPF_LRU_LIST_T_INACTIVE);
+    BPF_ASSERT(__bpf_lru_list_single(&l->lists[BPF_LRU_LIST_T_ACTIVE], n0));
+    BPF_ASSERT(__bpf_lru_list_single(&l->lists[BPF_LRU_LIST_T_FREE], n1));
+    BPF_ASSERT(__bpf_lru_list_single(&l->lists[BPF_LRU_LIST_T_INACTIVE], n2));
+    BPF_ASSERT(l->counts[BPF_LRU_LIST_T_ACTIVE] == 1);
     BPF_ASSERT(l->counts[BPF_LRU_LIST_T_INACTIVE] == 1);
 
     /* Exercise the common-LRU local free/pending path. */
@@ -3940,9 +3949,14 @@ HARNESS_BODIES = {
 
     p0 = bpf_lru_pop_free(&lru_ctx, 0x87654321);
     BPF_ASSERT(p0 != NULL);
+    BPF_ASSERT(p0 == &elems[1].node);
     e0 = container_of(p0, struct bpf_lru_elem, node);
     BPF_ASSERT(p0->type == BPF_LRU_LOCAL_LIST_T_PENDING);
     BPF_ASSERT(e0->hash == 0x87654321);
+    BPF_ASSERT(__bpf_lru_list_single(local_pending_list(&loc_l), p0));
+    BPF_ASSERT(__bpf_lru_list_empty(local_free_list(&loc_l)));
+    BPF_ASSERT(__bpf_lru_list_single(&l->lists[BPF_LRU_LIST_T_FREE],
+                                     &elems[0].node));
 
     return (int)(l->counts[BPF_LRU_LIST_T_ACTIVE] +
                  l->counts[BPF_LRU_LIST_T_INACTIVE]);""",
@@ -11381,6 +11395,17 @@ bool __bpf_crypto_type_registered;
 struct bpf_crypto_type_list __bpf_crypto_type_node;
 struct bpf_crypto_ctx __bpf_crypto_ctx_obj;
 struct bpf_crypto_params __bpf_crypto_params;
+""",
+    "bpf_lru_list": """\
+#define __bpf_lru_list_empty(head) \
+    ((head)->next == (head) && (head)->prev == (head))
+
+#define __bpf_lru_list_single(head, node) \
+    ((head)->next == &(node)->list && \
+     (head)->prev == &(node)->list && \
+     (node)->list.prev == (head) && \
+     (node)->list.next == (head))
+
 """,
     "states": """\
 #pragma clang attribute pop
