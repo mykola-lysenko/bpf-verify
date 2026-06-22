@@ -1927,9 +1927,10 @@ HARNESS_BODIES = {
 
     return (int)(old_reg->id + cur_reg->id);""",
     "states_prove": """\
-    /* states proof harness: verifier-enforced invariants over dynamic ID and
-     * scalar range state. Wrappers are noinline so the checked helper logic is
-     * preserved in BPF bytecode instead of being optimized away by LLVM.
+    /* states proof harness: verifier-enforced invariants over dynamic ID,
+     * scalar range, pointer identity, and reference parent state. Wrappers
+     * are noinline so the checked helper logic is preserved in BPF bytecode
+     * instead of being optimized away by LLVM.
      */
     __u32 key = 0;
     __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
@@ -1983,10 +1984,19 @@ HARNESS_BODIES = {
     {
         struct bpf_idmap idmap = {};
 
+        ret += states_pkt_regsafe_proof_wrap(env, old_id, cur_id, val64, &idmap);
+    }
+
+    {
+        struct bpf_idmap idmap = {};
+
         ret += states_refsafe_proof_wrap(old_id, cur_id, &idmap);
         idmap.tmp_id_gen = 0;
         idmap.cnt = 0;
         ret += states_refsafe_reject_wrap(old_id, cur_id, &idmap);
+        idmap.tmp_id_gen = 0;
+        idmap.cnt = 0;
+        ret += states_refsafe_ptr_proof_wrap(old_id, cur_id, &idmap);
     }
 
     {
@@ -11384,6 +11394,36 @@ states_regsafe_reject_wrap(struct bpf_verifier_env *env,
 }
 
 static __attribute__((__noinline__)) int
+states_pkt_regsafe_proof_wrap(struct bpf_verifier_env *env, u32 old_id,
+                              u32 cur_id, u64 value,
+                              struct bpf_idmap *idmap)
+{
+    struct bpf_reg_state old_reg = {};
+    struct bpf_reg_state cur_reg = {};
+
+    old_reg.type = PTR_TO_PACKET;
+    old_reg.range = 8;
+    old_reg.id = old_id;
+    old_reg.var_off.value = 0;
+    old_reg.var_off.mask = 0xff;
+    old_reg.r64.base = 0;
+    old_reg.r64.size = 0xff;
+    old_reg.r32 = CNUM32_UNBOUNDED;
+
+    cur_reg.type = PTR_TO_PACKET;
+    cur_reg.range = 16;
+    cur_reg.id = cur_id;
+    cur_reg.var_off.value = value;
+    cur_reg.var_off.mask = 0;
+    cur_reg.r64.base = value;
+    cur_reg.r64.size = 0;
+    cur_reg.r32 = CNUM32_UNBOUNDED;
+
+    BPF_PROVE(regsafe(env, &old_reg, &cur_reg, idmap, NOT_EXACT));
+    return (int)idmap->cnt;
+}
+
+static __attribute__((__noinline__)) int
 states_refsafe_proof_wrap(u32 old_id, u32 cur_id,
                           struct bpf_idmap *idmap)
 {
@@ -11416,6 +11456,26 @@ states_refsafe_reject_wrap(u32 old_id, u32 cur_id,
     cur_st.refs[0].id = cur_id;
 
     BPF_PROVE(!refsafe(&old_st, &cur_st, idmap));
+    return (int)idmap->cnt;
+}
+
+static __attribute__((__noinline__)) int
+states_refsafe_ptr_proof_wrap(u32 old_id, u32 cur_id,
+                              struct bpf_idmap *idmap)
+{
+    struct bpf_verifier_state old_st = {};
+    struct bpf_verifier_state cur_st = {};
+
+    old_st.acquired_refs = 1;
+    cur_st.acquired_refs = 1;
+    old_st.refs[0].type = REF_TYPE_PTR;
+    old_st.refs[0].id = 0;
+    old_st.refs[0].parent_id = old_id + 64;
+    cur_st.refs[0].type = REF_TYPE_PTR;
+    cur_st.refs[0].id = 0;
+    cur_st.refs[0].parent_id = cur_id + 64;
+
+    BPF_PROVE(refsafe(&old_st, &cur_st, idmap));
     return (int)idmap->cnt;
 }
 
