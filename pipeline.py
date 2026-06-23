@@ -1369,6 +1369,52 @@ HARNESS_BODIES = {
     BPF_ASSERT(stack_slots[0].spilled_ptr.precise);
 
     return (int)(st.jmp_history_cnt + bt.reg_masks[0]);""",
+    "backtrack_prove": """\
+    /* backtrack_prove: verifier-enforced backtrack bitmask invariants.
+     *
+     * Use map-derived register/slot indexes so the proof covers a small
+     * symbolic domain instead of only constant folding one fixed case.
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    struct bpf_verifier_env env = {};
+    struct backtrack_state bt = { .env = &env };
+    u32 reg = (u32)(*vp & 3) + BPF_REG_1;
+    u32 slot = (u32)((*vp >> 2) & 3);
+    u32 arg_slot = (u32)((*vp >> 4) & 3);
+
+    bt_init(&bt, 0);
+    BPF_PROVE(bt_empty(&bt));
+
+    bt_set_reg(&bt, reg);
+    BPF_PROVE(bt_is_reg_set(&bt, reg));
+    BPF_PROVE(bt_frame_reg_mask(&bt, 0) == (1U << reg));
+    bt_clear_reg(&bt, reg);
+    BPF_PROVE(!bt_is_reg_set(&bt, reg));
+    BPF_PROVE(bt_empty(&bt));
+
+    bpf_bt_set_frame_slot(&bt, 0, slot);
+    BPF_PROVE(bt_is_frame_slot_set(&bt, 0, slot));
+    BPF_PROVE(bt_frame_stack_mask(&bt, 0) == (1ULL << slot));
+    bt_clear_frame_slot(&bt, 0, slot);
+    BPF_PROVE(!bt_is_frame_slot_set(&bt, 0, slot));
+    BPF_PROVE(bt_empty(&bt));
+
+    bt_set_frame_stack_arg_slot(&bt, 0, arg_slot);
+    BPF_PROVE(bt_is_frame_stack_arg_slot_set(&bt, 0, arg_slot));
+    BPF_PROVE(bt_stack_arg_mask(&bt) == (1U << arg_slot));
+    bt_clear_frame_stack_arg_slot(&bt, 0, arg_slot);
+    BPF_PROVE(!bt_is_frame_stack_arg_slot_set(&bt, 0, arg_slot));
+    BPF_PROVE(bt_empty(&bt));
+
+    BPF_PROVE(bt_subprog_enter(&bt) == 0);
+    BPF_PROVE(bt.frame == 1);
+    BPF_PROVE(bt_subprog_exit(&bt) == 0);
+    BPF_PROVE(bt.frame == 0);
+
+    return (int)(*vp & 1);""",
     "log": """\
     /* log: verifier log bookkeeping and formatting helpers.
      * Covers attribute validation/init/finalize, log reset/alignment,
@@ -2454,6 +2500,31 @@ HARNESS_BODIES = {
     BPF_ASSERT(range_tree_find(&merged_rt, 16) == 0);
     BPF_ASSERT(range_tree_find(&merged_rt, 17) == -ENOENT);
     return 0;""",
+    "range_tree_prove": """\
+    /* range_tree_prove: verifier-enforced range-tree scalar invariants.
+     *
+     * Keep the proof away from rb_to_range_node() traversal for now: embedded
+     * rb-node pointer arithmetic loses too much stack-field precision for the
+     * verifier to prove best-fit search outcomes. These properties still check
+     * symbolic range sizing and empty-tree lookup behavior.
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    struct range_tree rt;
+    struct range_node rn = {};
+    u32 start = (u32)(*vp & 0xff);
+    u32 len = (u32)((*vp >> 8) & 0x1f) + 1;
+
+    rn.rn_start = start;
+    rn.rn_last = start + len - 1;
+    BPF_PROVE(rn_size(&rn) == len);
+
+    range_tree_init(&rt);
+    BPF_PROVE(range_tree_find(&rt, len) == -ENOENT);
+
+    return (int)(*vp & 1);""",
     "percpu_freelist": """\
     /* percpu_freelist: per-CPU free-list used by BPF map internals.
      *
@@ -5427,6 +5498,7 @@ EXTRA_EARLY_CFLAGS = {
     "const_fold": [f"-I{SHIM}/const_fold/include"],
     "cfg": [f"-I{SHIM}/cfg/include"],
     "backtrack": [f"-I{SHIM}/backtrack/include"],
+    "backtrack_prove": [f"-I{SHIM}/backtrack/include"],
     "log": [f"-I{SHIM}/log/include"],
     "bpf_verification_stubs": [f"-I{SHIM}/bpf_verification_stubs/include"],
     "check_btf": [f"-I{SHIM}/check_btf/include"],
@@ -9622,6 +9694,18 @@ static void __bpf_range_tree_free(const void *ptr);
 #define kmalloc_nolock(size, flags, node) __bpf_range_tree_alloc((size), (flags), (node))
 #define kfree_nolock(ptr) __bpf_range_tree_free((ptr))
 """,
+    "range_tree_prove": """\
+#pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
+#include "{ksrc}/lib/rbtree.c"
+#pragma clang attribute pop
+#include <linux/errno.h>
+#define _LINUX_BPF_H 1
+#define NUMA_NO_NODE (-1)
+static void *__bpf_range_tree_alloc(size_t size, unsigned int flags, int node);
+static void __bpf_range_tree_free(const void *ptr);
+#define kmalloc_nolock(size, flags, node) __bpf_range_tree_alloc((size), (flags), (node))
+#define kfree_nolock(ptr) __bpf_range_tree_free((ptr))
+""",
     # percpu_freelist: collapse per-CPU iteration to one CPU and stub
     # rqspinlock so the real source compiles without scheduler/percpu asm.
     "percpu_freelist": """\
@@ -12566,6 +12650,41 @@ static void __bpf_range_tree_free(const void *ptr)
     (void)ptr;
 }
 """,
+    "range_tree_prove": """\
+static struct range_node __bpf_range_tree_node0;
+static u32 __bpf_range_tree_used;
+
+static void __bpf_range_tree_zero_node(struct range_node *rn)
+{
+    rn->rn_rbnode.__rb_parent_color = 0;
+    rn->rn_rbnode.rb_right = 0;
+    rn->rn_rbnode.rb_left = 0;
+    rn->rb_range_size.__rb_parent_color = 0;
+    rn->rb_range_size.rb_right = 0;
+    rn->rb_range_size.rb_left = 0;
+    rn->rn_start = 0;
+    rn->rn_last = 0;
+    rn->__rn_subtree_last = 0;
+}
+
+static void *__bpf_range_tree_alloc(size_t size, unsigned int flags, int node)
+{
+    (void)flags;
+    (void)node;
+    if (size != sizeof(struct range_node))
+        return 0;
+    if (__bpf_range_tree_used)
+        return 0;
+    __bpf_range_tree_used = 1;
+    __bpf_range_tree_zero_node(&__bpf_range_tree_node0);
+    return &__bpf_range_tree_node0;
+}
+
+static void __bpf_range_tree_free(const void *ptr)
+{
+    (void)ptr;
+}
+""",
     "percpu_freelist": """\
 static struct pcpu_freelist_head __bpf_pcpu_head;
 static u32 __bpf_pcpu_allocated;
@@ -13351,6 +13470,7 @@ def main():
         "const_fold":            KSRC / "kernel/bpf/const_fold.c",
         "cfg":                   KSRC / "kernel/bpf/cfg.c",
         "backtrack":             KSRC / "kernel/bpf/backtrack.c",
+        "backtrack_prove":       KSRC / "kernel/bpf/backtrack.c",
         "log":                   KSRC / "kernel/bpf/log.c",
         "bpf_verification_stubs": KSRC / "kernel/bpf/bpf_verification_stubs.c",
         "check_btf":             KSRC / "kernel/bpf/check_btf.c",
@@ -13367,6 +13487,7 @@ def main():
         "liveness_live_registers": KSRC / "kernel/bpf/liveness.c",
         "liveness_arg_track":    KSRC / "kernel/bpf/liveness.c",
         "range_tree":            KSRC / "kernel/bpf/range_tree.c",
+        "range_tree_prove":      KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
         "bpf_insn_array":        KSRC / "kernel/bpf/bpf_insn_array.c",
