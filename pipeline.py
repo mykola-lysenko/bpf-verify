@@ -2805,6 +2805,103 @@ HARNESS_BODIES = {
     n0 = pcpu_freelist_pop(&fl);
     BPF_ASSERT(n0 != 0);
     return two + nr + (n0 != 0);""",
+    "percpu_freelist_prove": """\
+    /* percpu_freelist_prove: verifier-enforced freelist invariants.
+     *
+     * A symbolic branch selects one of two proof modes so the verifier checks
+     * both paths independently:
+     *   1. Explicit push/pop preserves LIFO links and drains to empty.
+     *   2. populate(nr) creates exactly nr poppable elements for nr in [1, 4].
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    if (*vp & 0x10) {
+        struct pcpu_freelist fl;
+        struct pcpu_freelist_head head;
+        struct pcpu_freelist_node push_nodes[2] = {};
+        struct pcpu_freelist_node *p0 = &push_nodes[0];
+        struct pcpu_freelist_node *p1 = &push_nodes[1];
+        struct pcpu_freelist_node *n0, *n1, *n2;
+        u32 two = (u32)(*vp & 1);
+
+        __bpf_hide_ptr(p0);
+        __bpf_hide_ptr(p1);
+        raw_res_spin_lock_init(&head.lock);
+        head.first = 0;
+        fl.freelist = &head;
+
+        BPF_PROVE(pcpu_freelist_pop(&fl) == 0);
+        pcpu_freelist_push(&fl, p0);
+        BPF_PROVE(head.first == p0);
+        BPF_PROVE(p0->next == 0);
+        if (two) {
+            pcpu_freelist_push(&fl, p1);
+            BPF_PROVE(head.first == p1);
+            BPF_PROVE(p1->next == p0);
+        }
+
+        n0 = pcpu_freelist_pop(&fl);
+        BPF_PROVE(n0 != 0);
+        if (two)
+            BPF_PROVE(head.first == p0);
+        else
+            BPF_PROVE(head.first == 0);
+        n1 = pcpu_freelist_pop(&fl);
+        if (two)
+            BPF_PROVE(n1 != 0);
+        else
+            BPF_PROVE(n1 == 0);
+        BPF_PROVE(head.first == 0);
+        n2 = pcpu_freelist_pop(&fl);
+        BPF_PROVE(n2 == 0);
+        return (int)(two + (n0 != 0));
+    } else {
+        struct pcpu_freelist fl;
+        struct pcpu_freelist_head head;
+        struct pcpu_freelist_node nodes[4] = {};
+        struct pcpu_freelist_node *n0, *n1, *n2, *n3, *n4;
+        void *buf = nodes;
+        u32 nr = (u32)((*vp >> 1) & 3) + 1;
+
+        __bpf_hide_ptr(buf);
+        raw_res_spin_lock_init(&head.lock);
+        head.first = 0;
+        fl.freelist = &head;
+
+        if (nr == 1)
+            pcpu_freelist_populate(&fl, buf, sizeof(nodes[0]), 1);
+        else if (nr == 2)
+            pcpu_freelist_populate(&fl, buf, sizeof(nodes[0]), 2);
+        else if (nr == 3)
+            pcpu_freelist_populate(&fl, buf, sizeof(nodes[0]), 3);
+        else
+            pcpu_freelist_populate(&fl, buf, sizeof(nodes[0]), 4);
+
+        n0 = pcpu_freelist_pop(&fl);
+        n1 = pcpu_freelist_pop(&fl);
+        n2 = pcpu_freelist_pop(&fl);
+        n3 = pcpu_freelist_pop(&fl);
+        n4 = pcpu_freelist_pop(&fl);
+
+        BPF_PROVE(n0 != 0);
+        if (nr >= 2)
+            BPF_PROVE(n1 != 0);
+        else
+            BPF_PROVE(n1 == 0);
+        if (nr >= 3)
+            BPF_PROVE(n2 != 0);
+        else
+            BPF_PROVE(n2 == 0);
+        if (nr >= 4)
+            BPF_PROVE(n3 != 0);
+        else
+            BPF_PROVE(n3 == 0);
+        BPF_PROVE(n4 == 0);
+        BPF_PROVE(head.first == 0);
+        return (int)(nr + (n0 != 0));
+    }""",
     "queue_stack_maps": """\
     /* queue_stack_maps: BPF queue/stack map data-path helpers.
      *
@@ -9965,6 +10062,37 @@ static void __bpf_percpu_free(void *ptr);
 #define alloc_percpu(type) ((type *)__bpf_percpu_alloc(sizeof(type)))
 #define free_percpu(ptr) __bpf_percpu_free(ptr)
 """,
+    "percpu_freelist_prove": """\
+#include <linux/errno.h>
+#undef __percpu
+#define __percpu
+#define __LINUX_PREEMPT_H
+#define _LINUX_TRACE_IRQFLAGS_H
+#define __LINUX_PERCPU_H
+#define _ASM_X86_RQSPINLOCK_H
+#undef READ_ONCE
+#undef WRITE_ONCE
+#define READ_ONCE(x) (x)
+#define WRITE_ONCE(x, v) do { (x) = (v); } while (0)
+#define num_possible_cpus() 1U
+#define raw_smp_processor_id() 0
+#define cpu_possible_mask ((const unsigned long *)0)
+#define for_each_possible_cpu(cpu) for ((cpu) = 0; (cpu) < 1; (cpu)++)
+#define for_each_cpu_wrap(cpu, mask, start) for ((cpu) = 0; (cpu) < 1; (cpu)++)
+#define per_cpu_ptr(ptr, cpu) (ptr)
+#define this_cpu_ptr(ptr) (ptr)
+typedef struct { u32 locked; } rqspinlock_t;
+static inline void raw_res_spin_lock_init(rqspinlock_t *lock)
+{ lock->locked = 0; }
+static inline int raw_res_spin_lock(rqspinlock_t *lock)
+{ (void)lock; return 0; }
+static inline void raw_res_spin_unlock(rqspinlock_t *lock)
+{ (void)lock; }
+static void *__bpf_percpu_alloc(size_t size);
+static void __bpf_percpu_free(void *ptr);
+#define alloc_percpu(type) ((type *)__bpf_percpu_alloc(sizeof(type)))
+#define free_percpu(ptr) __bpf_percpu_free(ptr)
+""",
     # queue_stack_maps: this source only needs the map metadata contract, BTF
     # ID placeholder, rqspinlock, and small map-area allocation hooks.
     "queue_stack_maps": """\
@@ -13000,6 +13128,31 @@ static void __bpf_percpu_free(void *ptr)
 #define __bpf_hide_ptr(ptr) asm volatile("" : "+r"(ptr))
 #define __bpf_memory_barrier() asm volatile("" ::: "memory")
 """,
+    "percpu_freelist_prove": """\
+static struct pcpu_freelist_head __bpf_pcpu_head;
+static u32 __bpf_pcpu_allocated;
+
+static void *__bpf_percpu_alloc(size_t size)
+{
+    if (size != sizeof(struct pcpu_freelist_head))
+        return 0;
+    if (__bpf_pcpu_allocated)
+        return 0;
+    __bpf_pcpu_allocated = 1;
+    __bpf_pcpu_head.first = 0;
+    raw_res_spin_lock_init(&__bpf_pcpu_head.lock);
+    return &__bpf_pcpu_head;
+}
+
+static void __bpf_percpu_free(void *ptr)
+{
+    (void)ptr;
+    __bpf_pcpu_allocated = 0;
+}
+
+#define __bpf_hide_ptr(ptr) asm volatile("" : "+r"(ptr))
+#define __bpf_memory_barrier() asm volatile("" ::: "memory")
+""",
     "queue_stack_maps": """\
 #pragma clang attribute pop
 struct __bpf_queue_stack_alloc {
@@ -13781,6 +13934,7 @@ def main():
         "range_tree_prove":      KSRC / "kernel/bpf/range_tree.c",
         "range_tree_find_prove": KSRC / "kernel/bpf/range_tree.c",
         "percpu_freelist":       KSRC / "kernel/bpf/percpu_freelist.c",
+        "percpu_freelist_prove": KSRC / "kernel/bpf/percpu_freelist.c",
         "queue_stack_maps":      KSRC / "kernel/bpf/queue_stack_maps.c",
         "bpf_insn_array":        KSRC / "kernel/bpf/bpf_insn_array.c",
         "map_in_map":            KSRC / "kernel/bpf/map_in_map.c",
