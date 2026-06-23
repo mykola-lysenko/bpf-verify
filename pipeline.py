@@ -2124,19 +2124,17 @@ HARNESS_BODIES = {
     masks = get_frame_masks(&inst, 1, 4);
     BPF_ASSERT(masks && spis_equal(masks->may_read, SPIS_ALL));
 
-    {
-        struct bpf_insn call = {
-            .code = BPF_JMP | BPF_CALL,
-            .src_reg = BPF_REG_7,
-        };
-        struct arg_track call_arg = {
-            .off = { -32 },
-            .frame = 0,
-            .off_cnt = 1,
-        };
-
-        BPF_ASSERT(record_arg_access(env, &inst, &call, &call_arg, 0, 5) == 0);
-    }
+    __bpf_liveness_reset_at(at);
+    at[BPF_REG_1] = (struct arg_track){
+        .off = { -32 },
+        .frame = 0,
+        .off_cnt = 1,
+    };
+    insns[5] = (struct bpf_insn){
+        .code = BPF_JMP | BPF_CALL,
+        .src_reg = BPF_REG_7,
+    };
+    BPF_ASSERT(record_call_access(env, &inst, at, 5) == 0);
     masks = get_frame_masks(&inst, 0, 5);
     BPF_ASSERT(masks && spis_equal(masks->may_read, SPIS_ALL));
     masks = get_frame_masks(&inst, 1, 5);
@@ -8867,6 +8865,10 @@ EXTRA_PRE_INCLUDE = {
 #pragma clang attribute push(__attribute__((internal_linkage)), apply_to=function)
 """,
     "liveness": """\
+#include <linux/bpf_verifier.h>
+/* Keep record_call_access() on the default 5-register-arg path so its loop
+ * remains verifier-bounded after inlining. */
+#define bpf_get_call_summary(env, insn, cs) false
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
     "liveness_arg_track": """\
@@ -11740,6 +11742,7 @@ states_looping_reject_wrap(void)
     "liveness": """\
 #pragma clang attribute pop
 #pragma clang attribute pop
+#undef bpf_get_call_summary
 static __attribute__((always_inline)) void __bpf_liveness_reset_at(struct arg_track *at)
 {
     int i;
