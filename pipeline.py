@@ -2258,6 +2258,40 @@ HARNESS_BODIES = {
                spis_is_zero(masks->may_read));
 
     return (int)(*vp & 1);""",
+    "liveness_stack_access_unknown": """\
+    /* liveness_stack_access_unknown: S64_MIN stack-access semantics.
+     *
+     * Unknown-size helper/kfunc reads should conservatively mark every stack
+     * slot from fp+0 through the known offset, and unknown offsets mark the
+     * whole frame readable.
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    struct func_instance inst = {};
+    struct per_frame_masks *masks;
+    struct arg_track arg = {};
+
+    inst.depth = 0;
+    inst.subprog_start = 0;
+    inst.insn_cnt = 2;
+
+    BPF_ASSERT(record_stack_access_off(&inst, -24, S64_MIN, 0, 0) == 0);
+    masks = get_frame_masks(&inst, 0, 0);
+    BPF_ASSERT(masks && spis_equal(masks->may_read, (spis_t)0x3f) &&
+               spis_is_zero(masks->must_write));
+
+    arg = (struct arg_track){
+        .frame = 0,
+        .off_cnt = 0,
+    };
+    BPF_ASSERT(record_stack_access(&inst, &arg, S64_MIN, 0, 1) == 0);
+    masks = get_frame_masks(&inst, 0, 1);
+    BPF_ASSERT(masks && spis_equal(masks->may_read, SPIS_ALL) &&
+               spis_is_zero(masks->must_write));
+
+    return (int)(*vp & 1);""",
     "liveness_successors": """\
     /* liveness_successors: bpf_insn_successors() opcode coverage.
      *
@@ -5404,6 +5438,7 @@ EXTRA_EARLY_CFLAGS = {
     "liveness": [f"-I{SHIM}/liveness/include"],
     "liveness_call_summary": [f"-I{SHIM}/liveness/include"],
     "liveness_stack_access_bytes": [f"-I{SHIM}/liveness/include"],
+    "liveness_stack_access_unknown": [f"-I{SHIM}/liveness/include"],
     "liveness_successors": [f"-I{SHIM}/liveness/include"],
     "liveness_live_registers": [f"-I{SHIM}/liveness/include"],
     "liveness_arg_track": [f"-I{SHIM}/liveness/include"],
@@ -5429,6 +5464,7 @@ EXTRA_CFLAGS = {
     "liveness": ["-std=gnu11"],
     "liveness_call_summary": ["-std=gnu11"],
     "liveness_stack_access_bytes": ["-std=gnu11"],
+    "liveness_stack_access_unknown": ["-std=gnu11"],
     "liveness_successors": ["-std=gnu11"],
     "liveness_live_registers": ["-std=gnu11"],
     "liveness_arg_track": ["-std=gnu11"],
@@ -8992,6 +9028,9 @@ EXTRA_PRE_INCLUDE = {
     ((void)(env), (void)(insn), (void)(arg_idx), (void)(insn_idx), -8)
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
+    "liveness_stack_access_unknown": """\
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     "liveness_arg_track": """\
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
@@ -11891,6 +11930,10 @@ __bpf_liveness_call_summary_reset_at(struct arg_track *at)
 #undef bpf_helper_stack_access_bytes
 #undef bpf_kfunc_stack_access_bytes
 """,
+    "liveness_stack_access_unknown": """\
+#pragma clang attribute pop
+#pragma clang attribute pop
+""",
     "liveness_successors": """\
 #pragma clang attribute pop
 static struct bpf_iarray __bpf_liveness_successors_succ;
@@ -13319,6 +13362,7 @@ def main():
         "liveness":              KSRC / "kernel/bpf/liveness.c",
         "liveness_call_summary": KSRC / "kernel/bpf/liveness.c",
         "liveness_stack_access_bytes": KSRC / "kernel/bpf/liveness.c",
+        "liveness_stack_access_unknown": KSRC / "kernel/bpf/liveness.c",
         "liveness_successors":   KSRC / "kernel/bpf/liveness.c",
         "liveness_live_registers": KSRC / "kernel/bpf/liveness.c",
         "liveness_arg_track":    KSRC / "kernel/bpf/liveness.c",
