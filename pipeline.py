@@ -2205,6 +2205,59 @@ HARNESS_BODIES = {
     BPF_ASSERT(masks && spis_equal(masks->may_read, SPIS_ALL));
 
     return (int)(*vp & 1);""",
+    "liveness_stack_access_bytes": """\
+    /* liveness_stack_access_bytes: helper/kfunc stack access byte hooks.
+     *
+     * Harness-local overrides make helper calls return read byte counts and
+     * kfunc calls return write byte counts. The mask assertions prove those
+     * hook results flow through record_arg_access().
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    struct bpf_verifier_env env = {};
+    struct bpf_insn helper = {};
+    struct bpf_insn kfunc = {};
+    struct func_instance inst = {};
+    struct per_frame_masks *masks;
+    struct arg_track helper_arg = {};
+    struct arg_track kfunc_arg = {};
+
+    inst.depth = 0;
+    inst.subprog_start = 0;
+    inst.insn_cnt = 2;
+
+    helper_arg = (struct arg_track){
+        .off = { -16 },
+        .frame = 0,
+        .off_cnt = 1,
+    };
+    helper = (struct bpf_insn){
+        .code = BPF_JMP | BPF_CALL,
+    };
+    BPF_ASSERT(record_arg_access(&env, &inst, &helper, &helper_arg, 0, 0) == 0);
+    masks = get_frame_masks(&inst, 0, 0);
+    BPF_ASSERT(masks && spis_test_bit(masks->may_read, 2) &&
+               spis_test_bit(masks->may_read, 3) &&
+               spis_is_zero(masks->must_write));
+
+    kfunc_arg = (struct arg_track){
+        .off = { -24 },
+        .frame = 0,
+        .off_cnt = 1,
+    };
+    kfunc = (struct bpf_insn){
+        .code = BPF_JMP | BPF_CALL,
+        .src_reg = BPF_PSEUDO_KFUNC_CALL,
+    };
+    BPF_ASSERT(record_arg_access(&env, &inst, &kfunc, &kfunc_arg, 0, 1) == 0);
+    masks = get_frame_masks(&inst, 0, 1);
+    BPF_ASSERT(masks && spis_test_bit(masks->must_write, 4) &&
+               spis_test_bit(masks->must_write, 5) &&
+               spis_is_zero(masks->may_read));
+
+    return (int)(*vp & 1);""",
     "liveness_successors": """\
     /* liveness_successors: bpf_insn_successors() opcode coverage.
      *
@@ -5350,6 +5403,7 @@ EXTRA_EARLY_CFLAGS = {
     "states_prove": [f"-I{SHIM}/states/include"],
     "liveness": [f"-I{SHIM}/liveness/include"],
     "liveness_call_summary": [f"-I{SHIM}/liveness/include"],
+    "liveness_stack_access_bytes": [f"-I{SHIM}/liveness/include"],
     "liveness_successors": [f"-I{SHIM}/liveness/include"],
     "liveness_live_registers": [f"-I{SHIM}/liveness/include"],
     "liveness_arg_track": [f"-I{SHIM}/liveness/include"],
@@ -5374,6 +5428,7 @@ EXTRA_CFLAGS = {
     # liveness.c uses C99-style loop declarations.
     "liveness": ["-std=gnu11"],
     "liveness_call_summary": ["-std=gnu11"],
+    "liveness_stack_access_bytes": ["-std=gnu11"],
     "liveness_successors": ["-std=gnu11"],
     "liveness_live_registers": ["-std=gnu11"],
     "liveness_arg_track": ["-std=gnu11"],
@@ -8928,6 +8983,15 @@ EXTRA_PRE_INCLUDE = {
     ((cs)->num_params = MAX_BPF_FUNC_REG_ARGS + 2, true)
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
+    "liveness_stack_access_bytes": """\
+#include <linux/bpf_verifier.h>
+/* Override helper/kfunc byte queries for record_arg_access() coverage. */
+#define bpf_helper_stack_access_bytes(env, insn, arg_idx, insn_idx) \
+    ((void)(env), (void)(insn), (void)(arg_idx), (void)(insn_idx), 8)
+#define bpf_kfunc_stack_access_bytes(env, insn, arg_idx, insn_idx) \
+    ((void)(env), (void)(insn), (void)(arg_idx), (void)(insn_idx), -8)
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     "liveness_arg_track": """\
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
@@ -11821,6 +11885,12 @@ __bpf_liveness_call_summary_reset_at(struct arg_track *at)
         at[i] = (struct arg_track){ .frame = ARG_NONE };
 }
 """,
+    "liveness_stack_access_bytes": """\
+#pragma clang attribute pop
+#pragma clang attribute pop
+#undef bpf_helper_stack_access_bytes
+#undef bpf_kfunc_stack_access_bytes
+""",
     "liveness_successors": """\
 #pragma clang attribute pop
 static struct bpf_iarray __bpf_liveness_successors_succ;
@@ -13248,6 +13318,7 @@ def main():
         "states_prove":          KSRC / "kernel/bpf/states.c",
         "liveness":              KSRC / "kernel/bpf/liveness.c",
         "liveness_call_summary": KSRC / "kernel/bpf/liveness.c",
+        "liveness_stack_access_bytes": KSRC / "kernel/bpf/liveness.c",
         "liveness_successors":   KSRC / "kernel/bpf/liveness.c",
         "liveness_live_registers": KSRC / "kernel/bpf/liveness.c",
         "liveness_arg_track":    KSRC / "kernel/bpf/liveness.c",
