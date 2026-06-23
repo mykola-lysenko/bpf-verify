@@ -2157,6 +2157,54 @@ HARNESS_BODIES = {
 
     ret += live.def + (int)out + (int)(*vp & 1);
     return ret;""",
+    "liveness_call_summary": """\
+    /* liveness_call_summary: record_call_access() stack-arg loop coverage.
+     *
+     * The pre-include makes bpf_get_call_summary() report seven parameters.
+     * Only outgoing stack arg slot 1 is FP-derived, so the SPIS_ALL assertions
+     * below prove that record_call_access() reached the >5-arg loop.
+     */
+    __u32 key = 0;
+    __u64 *vp = bpf_map_lookup_elem(&input_map, &key);
+    if (!vp) return 0;
+
+    /* Keep only env->prog on stack; the access helper only reads that field. */
+    struct {
+        struct bpf_prog *prog;
+    } env_storage = {};
+    struct bpf_prog prog = {};
+    struct bpf_verifier_env *env = (struct bpf_verifier_env *)&env_storage;
+    struct bpf_insn insn = {};
+    struct func_instance inst = {};
+    struct per_frame_masks *masks;
+    struct arg_track at[MAX_AT_TRACK_REGS];
+
+    prog.insnsi = &insn;
+    prog.len = 1;
+    env->prog = &prog;
+
+    inst.depth = 1;
+    inst.subprog_start = 0;
+    inst.insn_cnt = 1;
+
+    __bpf_liveness_call_summary_reset_at(at);
+    at[MAX_BPF_REG + 1] = (struct arg_track){
+        .off = { -32 },
+        .frame = 0,
+        .off_cnt = 1,
+    };
+    insn = (struct bpf_insn){
+        .code = BPF_JMP | BPF_CALL,
+        .src_reg = BPF_REG_7,
+    };
+
+    BPF_ASSERT(record_call_access(env, &inst, at, 0) == 0);
+    masks = get_frame_masks(&inst, 0, 0);
+    BPF_ASSERT(masks && spis_equal(masks->may_read, SPIS_ALL));
+    masks = get_frame_masks(&inst, 1, 0);
+    BPF_ASSERT(masks && spis_equal(masks->may_read, SPIS_ALL));
+
+    return (int)(*vp & 1);""",
     "liveness_successors": """\
     /* liveness_successors: bpf_insn_successors() opcode coverage.
      *
@@ -5301,6 +5349,7 @@ EXTRA_EARLY_CFLAGS = {
     "states": [f"-I{SHIM}/states/include"],
     "states_prove": [f"-I{SHIM}/states/include"],
     "liveness": [f"-I{SHIM}/liveness/include"],
+    "liveness_call_summary": [f"-I{SHIM}/liveness/include"],
     "liveness_successors": [f"-I{SHIM}/liveness/include"],
     "liveness_live_registers": [f"-I{SHIM}/liveness/include"],
     "liveness_arg_track": [f"-I{SHIM}/liveness/include"],
@@ -5324,6 +5373,7 @@ EXTRA_CFLAGS = {
     "div64": ["-U__SIZEOF_INT128__"],
     # liveness.c uses C99-style loop declarations.
     "liveness": ["-std=gnu11"],
+    "liveness_call_summary": ["-std=gnu11"],
     "liveness_successors": ["-std=gnu11"],
     "liveness_live_registers": ["-std=gnu11"],
     "liveness_arg_track": ["-std=gnu11"],
@@ -8871,6 +8921,13 @@ EXTRA_PRE_INCLUDE = {
 #define bpf_get_call_summary(env, insn, cs) false
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
+    "liveness_call_summary": """\
+#include <linux/bpf_verifier.h>
+/* Force a two-stack-arg call summary for record_call_access() coverage. */
+#define bpf_get_call_summary(env, insn, cs) \
+    ((cs)->num_params = MAX_BPF_FUNC_REG_ARGS + 2, true)
+#pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
+""",
     "liveness_arg_track": """\
 #pragma clang attribute push(__attribute__((always_inline)), apply_to=function)
 """,
@@ -11751,6 +11808,19 @@ static __attribute__((always_inline)) void __bpf_liveness_reset_at(struct arg_tr
         at[i] = (struct arg_track){ .frame = ARG_NONE };
 }
 """,
+    "liveness_call_summary": """\
+#pragma clang attribute pop
+#pragma clang attribute pop
+#undef bpf_get_call_summary
+static __attribute__((always_inline)) void
+__bpf_liveness_call_summary_reset_at(struct arg_track *at)
+{
+    int i;
+
+    for (i = 0; i < MAX_AT_TRACK_REGS; i++)
+        at[i] = (struct arg_track){ .frame = ARG_NONE };
+}
+""",
     "liveness_successors": """\
 #pragma clang attribute pop
 static struct bpf_iarray __bpf_liveness_successors_succ;
@@ -13177,6 +13247,7 @@ def main():
         "states":                KSRC / "kernel/bpf/states.c",
         "states_prove":          KSRC / "kernel/bpf/states.c",
         "liveness":              KSRC / "kernel/bpf/liveness.c",
+        "liveness_call_summary": KSRC / "kernel/bpf/liveness.c",
         "liveness_successors":   KSRC / "kernel/bpf/liveness.c",
         "liveness_live_registers": KSRC / "kernel/bpf/liveness.c",
         "liveness_arg_track":    KSRC / "kernel/bpf/liveness.c",
