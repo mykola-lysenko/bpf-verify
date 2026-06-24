@@ -4885,6 +4885,79 @@ HARNESS_BODIES = {
                  __bpf_tcx_syncs + __bpf_tcx_skey_inc +
                  __bpf_tcx_skey_dec + __bpf_tcx_link_settles +
                  __bpf_mprog_prog_puts + (seed & 1));""",
+    "tcx_prove": """\
+    /* tcx_prove: verifier-enforced TCX guard and link invariants.
+     *
+     * The TCX shim keeps mprog attach/detach intentionally focused, so this
+     * proof targets TCX-facing return codes, link-update guards, and link
+     * metadata/fdinfo behavior instead of mprog revision matching.
+     */
+    union bpf_attr attr = {};
+    union bpf_attr uattr = {};
+    struct bpf_link_info info = {};
+    struct seq_file seq = {};
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    u64 seed = input ? *input : 0;
+
+    __bpf_tcx_reset();
+    attr.attach_type = BPF_TCX_INGRESS;
+    attr.target_ifindex = 9;
+    BPF_PROVE(tcx_prog_attach(&attr, &__bpf_mprog_prog0) == -ENODEV);
+    BPF_PROVE(tcx_prog_detach(&attr, &__bpf_mprog_prog0) == -ENODEV);
+    attr.query.attach_type = BPF_TCX_INGRESS;
+    attr.query.target_ifindex = 9;
+    BPF_PROVE(tcx_prog_query(&attr, &uattr) == -ENODEV);
+    attr.link_create.attach_type = BPF_TCX_INGRESS;
+    attr.link_create.target_ifindex = 9;
+    BPF_PROVE(tcx_link_attach(&attr, &__bpf_mprog_prog0) == -ENODEV);
+
+    __bpf_tcx_reset();
+    attr.query.attach_type = BPF_TCX_INGRESS;
+    attr.query.target_ifindex = 1;
+    BPF_PROVE(tcx_prog_query(&attr, &uattr) == 0);
+    attr.attach_type = BPF_TCX_INGRESS;
+    attr.target_ifindex = 1;
+    BPF_PROVE(tcx_prog_detach(&attr, &__bpf_mprog_prog0) == -ENOENT);
+    BPF_PROVE(tcx_prog_attach(&attr, &__bpf_mprog_prog0) == 0);
+    attr.query.attach_type = BPF_TCX_INGRESS;
+    attr.query.target_ifindex = 1;
+    BPF_PROVE(tcx_prog_query(&attr, &uattr) == 0);
+
+    __bpf_tcx_reset();
+    __bpf_tcx_link0.dev = NULL;
+    __bpf_tcx_link0.link.prog = &__bpf_mprog_prog0;
+    __bpf_tcx_link0.link.attach_type = BPF_TCX_INGRESS;
+    BPF_PROVE(tcx_link_update(&__bpf_tcx_link0.link, &__bpf_mprog_prog1,
+                              &__bpf_mprog_prog0) == -ENOLINK);
+    __bpf_tcx_link0.dev = &__bpf_tcx_dev;
+    BPF_PROVE(tcx_link_update(&__bpf_tcx_link0.link, &__bpf_mprog_prog1,
+                              &__bpf_mprog_prog2) == -EPERM);
+    BPF_PROVE(tcx_link_update(&__bpf_tcx_link0.link, &__bpf_mprog_prog0,
+                              &__bpf_mprog_prog0) == 0);
+
+    __bpf_tcx_reset();
+    __bpf_tcx_link0.dev = &__bpf_tcx_dev;
+    __bpf_tcx_link0.link.attach_type = BPF_TCX_INGRESS;
+    BPF_PROVE(tcx_link_fill_info(&__bpf_tcx_link0.link, &info) == 0);
+    BPF_PROVE(info.tcx.ifindex == 1);
+    BPF_PROVE(info.tcx.attach_type == BPF_TCX_INGRESS);
+    tcx_link_fdinfo(&__bpf_tcx_link0.link, &seq);
+    BPF_PROVE(seq.writes == 2);
+
+    __bpf_tcx_reset();
+    attr.link_create.attach_type = BPF_TCX_INGRESS;
+    attr.link_create.target_ifindex = 1;
+    attr.link_create.flags = 0;
+    attr.link_create.tcx.relative_fd = 0;
+    attr.link_create.tcx.expected_revision = 0;
+    BPF_PROVE(tcx_link_attach(&attr, &__bpf_mprog_prog1) == 7);
+    BPF_PROVE(__bpf_tcx_link0.link.id == 200);
+    BPF_PROVE(__bpf_tcx_link0.link.type == BPF_LINK_TYPE_TCX);
+    BPF_PROVE(__bpf_tcx_link0.link.attach_type == BPF_TCX_INGRESS);
+    BPF_PROVE(tcx_link_detach(&__bpf_tcx_link0.link) == 0);
+
+    return (int)(seed & 1);""",
     "timeconv": """\
     /* kernel/time/timeconv.c: prove representative UTC calendar conversions
      * and keep a map-seeded offset path live so the target code is not
@@ -14573,6 +14646,11 @@ EXTRA_PREAMBLE["bpf_inode_storage_prove"] = EXTRA_PREAMBLE.get(
 EXTRA_PRE_INCLUDE["mprog_prove"] = EXTRA_PRE_INCLUDE["mprog"]
 EXTRA_PREAMBLE["mprog_prove"] = EXTRA_PREAMBLE["mprog"]
 
+# tcx_prove exercises the same source and shim surface as tcx; only the
+# verifier proof body differs.
+EXTRA_PRE_INCLUDE["tcx_prove"] = EXTRA_PRE_INCLUDE["tcx"]
+EXTRA_PREAMBLE["tcx_prove"] = EXTRA_PREAMBLE["tcx"]
+
 
 def get_functions(src_path):
     """Extract function names from a C source file."""
@@ -14889,6 +14967,7 @@ def main():
         "mprog":                 KSRC / "kernel/bpf/mprog.c",
         "mprog_prove":           KSRC / "kernel/bpf/mprog.c",
         "tcx":                   KSRC / "kernel/bpf/tcx.c",
+        "tcx_prove":             KSRC / "kernel/bpf/tcx.c",
         "lpm_trie":              SHIM / "kernel/bpf/lpm_trie.c",
         "bpf_lru_list":          SHIM / "kernel/bpf/bpf_lru_list.c",
         "bloom_filter":          SHIM / "kernel/bpf/bloom_filter.c",
