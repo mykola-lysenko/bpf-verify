@@ -3931,6 +3931,17 @@ HARNESS_BODIES = {
 
     errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EBADF;
     linfo.map.map_fd = 1;
+    __bpf_iter_map0.excl_prog_sha = (char *)1;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EPERM;
+    __bpf_iter_map0.excl_prog_sha = NULL;
+
+    aux_cfg.max_rdonly_access = 5;
+    aux_cfg.max_rdwr_access = 8;
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_HASH;
+    __bpf_iter_map0.key_size = 4;
+    __bpf_iter_map0.value_size = 8;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EACCES;
+
     __bpf_iter_map0.map_type = (seed & 2) ? BPF_MAP_TYPE_PERCPU_ARRAY :
                                            BPF_MAP_TYPE_HASH;
     __bpf_iter_map0.key_size = 4 + (seed & 3);
@@ -3954,12 +3965,42 @@ HARNESS_BODIES = {
     __bpf_iter_map0.value_size = 8;
     errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EACCES;
     aux_cfg.max_rdwr_access = 8;
+    aux_cfg.max_rdonly_access = 4;
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_ARRAY;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
+    bpf_iter_detach_map(&aux);
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_LRU_HASH;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
+    bpf_iter_detach_map(&aux);
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_RHASH;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
+    bpf_iter_detach_map(&aux);
     __bpf_iter_map0.map_type = BPF_MAP_TYPE_PERCPU_ARRAY;
     __bpf_iter_map0.value_size = 4;
     errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
     bpf_iter_detach_map(&aux);
+    aux_cfg.max_rdwr_access = 17;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EACCES;
+    aux_cfg.max_rdwr_access = 8;
     __bpf_iter_map0.map_type = 999;
     errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EINVAL;
+
+    errors |= bpf_map_seq_info.seq_priv_size !=
+              sizeof(struct bpf_iter_seq_map_info);
+    errors |= bpf_map_reg_info.ctx_arg_info_size != 1;
+    errors |= bpf_map_reg_info.ctx_arg_info[0].offset !=
+              offsetof(struct bpf_iter__bpf_map, map);
+    errors |= bpf_map_reg_info.ctx_arg_info[0].reg_type !=
+              (PTR_TO_BTF_ID_OR_NULL | PTR_TRUSTED);
+    errors |= bpf_map_elem_reg_info.ctx_arg_info_size != 2;
+    errors |= bpf_map_elem_reg_info.ctx_arg_info[0].offset !=
+              offsetof(struct bpf_iter__bpf_map_elem, key);
+    errors |= bpf_map_elem_reg_info.ctx_arg_info[0].reg_type !=
+              (PTR_TO_BUF | PTR_MAYBE_NULL | MEM_RDONLY);
+    errors |= bpf_map_elem_reg_info.ctx_arg_info[1].offset !=
+              offsetof(struct bpf_iter__bpf_map_elem, value);
+    errors |= bpf_map_elem_reg_info.ctx_arg_info[1].reg_type !=
+              (PTR_TO_BUF | PTR_MAYBE_NULL);
 
     __bpf_iter_map0.elem_count = __bpf_iter_elem_counts;
     __bpf_iter_elem_counts[0] = (s64)(1 + (seed & 7));
@@ -4131,15 +4172,20 @@ HARNESS_BODIES = {
      * registration, and open-coded task iterator kfunc state. */
     struct bpf_iter_seq_task_info task_info = {};
     struct bpf_iter_seq_task_file_info file_info = {};
+    struct bpf_iter_seq_task_vma_info vma_info = {};
     struct seq_file task_seq = { .private = &task_info };
     struct seq_file file_seq = { .private = &file_info };
+    struct seq_file vma_seq = { .private = &vma_info };
     struct seq_file fdseq = {};
     union bpf_iter_link_info linfo = {};
     struct bpf_iter_aux_info aux = {};
     struct bpf_link_info link_info = {};
     struct bpf_iter_task task_it = {};
+    struct bpf_iter_task_vma vma_it = {};
     struct task_struct *task;
     struct file *file;
+    struct vm_area_struct *vma;
+    u64 vma_ctx = 0;
     __u32 input_key = 0;
     __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
     u64 seed = input ? *input : 0;
@@ -4171,6 +4217,20 @@ HARNESS_BODIES = {
     }
     fini_seq_pidns(&task_info);
 
+    linfo.task.tid = 0;
+    linfo.task.pid = 0;
+    linfo.task.pid_fd = 2;
+    errors |= bpf_iter_attach_task(NULL, &linfo, &aux) != -EBADF;
+    linfo.task.pid_fd = 1;
+    errors |= bpf_iter_attach_task(NULL, &linfo, &aux) != 0;
+    errors |= aux.task.type != BPF_TASK_ITER_TGID;
+    errors |= aux.task.pid != 1;
+    link_info.iter.task.tid = 0;
+    link_info.iter.task.pid = 0;
+    errors |= bpf_iter_fill_link_info(&aux, &link_info) != 0;
+    errors |= link_info.iter.task.pid != 1;
+    bpf_iter_task_show_fdinfo(&aux, &fdseq);
+
     aux.task.type = BPF_TASK_ITER_ALL;
     aux.task.pid = 1;
     pos = seed & 1;
@@ -4185,6 +4245,36 @@ HARNESS_BODIES = {
     }
     fini_seq_pidns(&file_info);
 
+    aux.task.type = BPF_TASK_ITER_TID;
+    aux.task.pid = 1;
+    pos = 0;
+    errors |= init_seq_pidns(&vma_info, &aux) != 0;
+    vma = task_vma_seq_start(&vma_seq, &pos);
+    if (vma) {
+        errors |= task_vma_seq_show(&vma_seq, vma) != 7;
+        next = task_vma_seq_next(&vma_seq, vma, &pos);
+        task_vma_seq_stop(&vma_seq, next);
+    } else {
+        errors |= 1;
+        task_vma_seq_stop(&vma_seq, NULL);
+    }
+    fini_seq_pidns(&vma_info);
+
+    errors |= bpf_find_vma(&__bpf_iter_task0, 0x1000, __bpf_iter_vma_cb,
+                           &vma_ctx, 1) != -EINVAL;
+    errors |= bpf_find_vma(NULL, 0x1000, __bpf_iter_vma_cb,
+                           &vma_ctx, 0) != -ENOENT;
+    errors |= bpf_find_vma(&__bpf_iter_task0, 0x3000, __bpf_iter_vma_cb,
+                           &vma_ctx, 0) != -ENOENT;
+    errors |= bpf_find_vma(&__bpf_iter_task0, 0x1000, __bpf_iter_vma_cb,
+                           &vma_ctx, 0) != 0;
+    errors |= vma_ctx != (u64)(long)&__bpf_iter_vma;
+
+    errors |= bpf_iter_task_vma_new(&vma_it, &__bpf_iter_task0, 0x1000) !=
+              -EOPNOTSUPP;
+    errors |= bpf_iter_task_vma_next(&vma_it) != NULL;
+    bpf_iter_task_vma_destroy(&vma_it);
+
     errors |= bpf_iter_task_new(&task_it, NULL, BPF_TASK_ITER_PROC_THREADS) != -EINVAL;
     errors |= bpf_iter_task_new(&task_it, NULL, BPF_TASK_ITER_ALL_PROCS) != 0;
     task = bpf_iter_task_next(&task_it);
@@ -4198,7 +4288,8 @@ HARNESS_BODIES = {
                  __bpf_iter_task_gets + __bpf_iter_task_puts +
                  __bpf_iter_file_gets + __bpf_iter_file_puts +
                  __bpf_iter_pid_ns_gets + __bpf_iter_pid_ns_puts +
-                 fdseq.writes + pos + (next != NULL) +
+                 __bpf_iter_mm_gets + __bpf_iter_mm_puts +
+                 __bpf_iter_vma_callbacks + fdseq.writes + pos + (next != NULL) +
                  (task != NULL) + (seed & 1));""",
     "bpf_iter": """\
     /* bpf_iter core: open-coded numeric iterator state and bounds. The
@@ -9518,6 +9609,7 @@ static volatile u32 __bpf_iter_pid_ns_gets;
 static volatile u32 __bpf_iter_pid_ns_puts;
 static volatile u32 __bpf_iter_mm_gets;
 static volatile u32 __bpf_iter_mm_puts;
+static volatile u32 __bpf_iter_vma_callbacks;
 
 #define current (&__bpf_iter_task0)
 
@@ -9532,6 +9624,7 @@ static inline void __bpf_iter_task_reset(void)
     __bpf_iter_pid_ns_puts = 0;
     __bpf_iter_mm_gets = 0;
     __bpf_iter_mm_puts = 0;
+    __bpf_iter_vma_callbacks = 0;
     init_task.files = &__bpf_iter_files;
     init_task.group_leader = &init_task;
     init_task.next_thread = 0;
@@ -9790,6 +9883,17 @@ static inline void *memcpy(void *dst, const void *src, size_t n)
     while (n--)
         *d++ = *s++;
     return dst;
+}
+static u64 __bpf_iter_vma_cb(u64 task, u64 vma, u64 callback_ctx,
+                             u64 flags, u64 reserved)
+{
+    (void)task;
+    (void)flags;
+    (void)reserved;
+    if (callback_ctx)
+        *(u64 *)(long)callback_ctx = vma;
+    __bpf_iter_vma_callbacks++;
+    return 0;
 }
 """
 
