@@ -91,6 +91,10 @@ struct bpf_map {
 	void *record;
 };
 
+struct btf_record {
+	u32 fields;
+};
+
 static __always_inline void INIT_HLIST_HEAD(struct hlist_head *h)
 {
 	h->first = NULL;
@@ -282,6 +286,12 @@ static __always_inline bool btf_type_is_i32(const struct btf_type *t)
 	return t && t->kind == BTF_KIND_INT && t->size == sizeof(int);
 }
 
+static __always_inline bool btf_record_has_field(const struct btf_record *rec,
+						 u32 field)
+{
+	return rec && (rec->fields & field);
+}
+
 static __always_inline bool selem_linked_to_storage_lockless(
 	const struct bpf_local_storage_elem *selem)
 {
@@ -306,7 +316,11 @@ __bpf_local_storage_insert_cache(struct bpf_local_storage *local_storage,
 				 struct bpf_local_storage_elem *selem)
 {
 	unsigned long flags = 0;
+	u16 cache_idx = smap->cache_idx;
 	int err;
+
+	if (cache_idx >= BPF_LOCAL_STORAGE_CACHE_SIZE)
+		return;
 
 	/* spinlock is needed to avoid racing with the
 	 * parallel delete.  Otherwise, publishing an already
@@ -318,7 +332,7 @@ __bpf_local_storage_insert_cache(struct bpf_local_storage *local_storage,
 		return;
 
 	if (selem_linked_to_storage(selem))
-		rcu_assign_pointer(local_storage->cache[smap->cache_idx],
+		rcu_assign_pointer(local_storage->cache[cache_idx],
 				   SDATA(selem));
 	raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
 }
@@ -331,9 +345,13 @@ bpf_local_storage_lookup(struct bpf_local_storage *local_storage,
 {
 	struct bpf_local_storage_data *sdata;
 	struct bpf_local_storage_elem *selem;
+	u16 cache_idx = smap->cache_idx;
+
+	if (cache_idx >= BPF_LOCAL_STORAGE_CACHE_SIZE)
+		return NULL;
 
 	/* Fast path (cache hit) */
-	sdata = rcu_dereference_check(local_storage->cache[smap->cache_idx],
+	sdata = rcu_dereference_check(local_storage->cache[cache_idx],
 				      bpf_rcu_lock_held());
 	if (sdata && rcu_access_pointer(sdata->smap) == smap)
 		return sdata;
@@ -349,6 +367,20 @@ bpf_local_storage_lookup(struct bpf_local_storage *local_storage,
 	if (cacheit_lockit)
 		__bpf_local_storage_insert_cache(local_storage, smap, selem);
 	return SDATA(selem);
+}
+
+static __always_inline int
+bpf_local_storage_update_flags_check(struct bpf_local_storage_map *smap,
+				     u64 map_flags)
+{
+	/* BPF_EXIST and BPF_NOEXIST cannot be both set */
+	if (unlikely((map_flags & ~BPF_F_LOCK) > BPF_EXIST) ||
+	    /* BPF_F_LOCK can only be used in a value with spin_lock */
+	    unlikely((map_flags & BPF_F_LOCK) &&
+		     !btf_record_has_field(smap->map.record, BPF_SPIN_LOCK)))
+		return -EINVAL;
+
+	return 0;
 }
 
 static __always_inline int check_flags(const struct bpf_local_storage_data *old_sdata,
@@ -385,11 +417,13 @@ bpf_selem_unlink_storage_nolock_misc(struct bpf_local_storage_elem *selem,
 				     bool free_local_storage, bool pin_owner)
 {
 	void *owner = local_storage->owner;
+	u16 cache_idx = smap->cache_idx;
 	u32 uncharge = smap->elem_size;
 
-	if (rcu_access_pointer(local_storage->cache[smap->cache_idx]) ==
+	if (cache_idx < BPF_LOCAL_STORAGE_CACHE_SIZE &&
+	    rcu_access_pointer(local_storage->cache[cache_idx]) ==
 	    SDATA(selem))
-		RCU_INIT_POINTER(local_storage->cache[smap->cache_idx], NULL);
+		RCU_INIT_POINTER(local_storage->cache[cache_idx], NULL);
 
 	if (pin_owner && !refcount_inc_not_zero(&local_storage->owner_refcnt))
 		return;

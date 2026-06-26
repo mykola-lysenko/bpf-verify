@@ -4983,6 +4983,125 @@ HARNESS_BODIES = {
 
     acc += (int)choice;
     return acc;""",
+    "bpf_local_storage_flags_prove": """\
+    /* bpf_local_storage_flags_prove: update flag and pinned-owner guards. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    __u64 choice = input ? *input : 0;
+    struct bpf_local_storage_map smap = {};
+    struct bpf_local_storage storage = {};
+    struct bpf_local_storage_elem selem0 = {};
+    struct btf_record empty_record = {};
+    struct btf_record spin_record = { .fields = BPF_SPIN_LOCK };
+    struct bpf_local_storage *owner_slot;
+    volatile u16 cache_idx = 3;
+    u16 bounded_cache_idx;
+    u64 map_flags;
+    int ret;
+    int acc = 0;
+
+    smap.elem_size = 32;
+    smap.cache_idx = cache_idx;
+    selem0.sdata.smap = &smap;
+    bounded_cache_idx = smap.cache_idx;
+    if (bounded_cache_idx >= BPF_LOCAL_STORAGE_CACHE_SIZE)
+        return -1;
+    BPF_KEEP_SCALAR(bounded_cache_idx);
+    smap.cache_idx = bounded_cache_idx;
+
+    smap.map.record = &empty_record;
+    map_flags = BPF_ANY;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 0);
+    map_flags = BPF_NOEXIST;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 0);
+    map_flags = BPF_EXIST;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 0);
+    map_flags = BPF_NOEXIST | BPF_EXIST;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+    map_flags = BPF_EXIST + 1;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+    map_flags = BPF_F_LOCK;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+    map_flags = BPF_F_LOCK | BPF_EXIST;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+
+    smap.map.record = &spin_record;
+    map_flags = BPF_F_LOCK;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == 0);
+    map_flags = BPF_F_LOCK | BPF_EXIST;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == 0);
+    map_flags = BPF_F_LOCK | BPF_NOEXIST;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == 0);
+    map_flags = BPF_F_LOCK | BPF_NOEXIST | BPF_EXIST;
+    BPF_KEEP_SCALAR(map_flags);
+    ret = bpf_local_storage_update_flags_check(&smap, map_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+
+    owner_slot = &storage;
+    storage.owner = &owner_slot;
+    storage.mem_charge = sizeof(storage) + 32;
+    storage.owner_refcnt.refs = 0;
+    storage.cache[3] = &selem0.sdata;
+    BPF_KEEP_SCALAR(storage.owner_refcnt.refs);
+    bpf_selem_unlink_storage_nolock_misc(&selem0, &smap, &storage,
+                                         true, true);
+    BPF_ASSERT(storage.cache[3] == NULL);
+    BPF_ASSERT(storage.mem_charge == sizeof(storage) + 32);
+    ret = storage.owner_refcnt.refs;
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 0);
+    BPF_ASSERT(storage.owner == &owner_slot);
+    BPF_ASSERT(owner_slot == &storage);
+
+    owner_slot = &storage;
+    storage.owner = &owner_slot;
+    storage.mem_charge = sizeof(storage) + 32;
+    storage.owner_refcnt.refs = 1;
+    storage.cache[3] = &selem0.sdata;
+    BPF_KEEP_SCALAR(storage.owner_refcnt.refs);
+    bpf_selem_unlink_storage_nolock_misc(&selem0, &smap, &storage,
+                                         true, true);
+    BPF_ASSERT(storage.cache[3] == NULL);
+    BPF_ASSERT(storage.mem_charge == 0);
+    ret = storage.owner_refcnt.refs;
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 1);
+    BPF_ASSERT(storage.owner == NULL);
+    BPF_ASSERT(owner_slot == NULL);
+
+    acc += ret + (int)choice;
+    return acc;""",
     "mprog": """\
     /* mprog: multiprogram attach, replace, relative insert, detach, query,
      * and link/prog reference release paths. */
@@ -17899,6 +18018,7 @@ def main():
         "bpf_inode_storage":     KSRC / "kernel/bpf/bpf_inode_storage.c",
         "bpf_inode_storage_prove": KSRC / "kernel/bpf/bpf_inode_storage.c",
         "bpf_local_storage_prove": SHIM / "kernel/bpf/bpf_local_storage.c",
+        "bpf_local_storage_flags_prove": SHIM / "kernel/bpf/bpf_local_storage.c",
         "mprog":                 KSRC / "kernel/bpf/mprog.c",
         "mprog_prove":           KSRC / "kernel/bpf/mprog.c",
         "tcx":                   KSRC / "kernel/bpf/tcx.c",
