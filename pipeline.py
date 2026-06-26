@@ -4737,6 +4737,7 @@ HARNESS_BODIES = {
         struct bpf_local_storage_map other_smap = {};
         struct bpf_local_storage storage = {};
         struct bpf_local_storage_elem selem0 = {};
+        struct bpf_local_storage_data stale_sdata = {};
         struct btf btf = {};
         struct btf_type key_i32 = { .kind = BTF_KIND_INT, .size = sizeof(int) };
         struct btf_type key_i64 = { .kind = BTF_KIND_INT, .size = 8 };
@@ -4795,6 +4796,13 @@ HARNESS_BODIES = {
         BPF_PROVE(storage.mem_charge == 32);
         BPF_PROVE(selem0.local_storage == &storage);
 
+        stale_sdata.smap = &other_smap;
+        storage.cache[3] = &stale_sdata;
+        sdata = bpf_local_storage_lookup(&storage, &smap, false);
+        BPF_ASSERT(sdata == &selem0.sdata);
+        BPF_ASSERT(storage.cache[3] == &stale_sdata);
+        storage.cache[3] = NULL;
+
         sdata = bpf_local_storage_lookup(&storage, &smap, false);
         BPF_ASSERT(sdata == &selem0.sdata);
         BPF_ASSERT(storage.cache[3] == NULL);
@@ -4813,6 +4821,58 @@ HARNESS_BODIES = {
         bpf_selem_unlink_map_nolock(&selem0);
         BPF_PROVE(!selem_linked_to_map(&selem0));
         BPF_PROVE(buckets[0].list.first == NULL);
+
+        {
+            struct hlist_head free_list = {};
+            struct hlist_head free_list2 = {};
+            struct hlist_node extra_node = {};
+            struct bpf_local_storage *owner_slot;
+            bool free_storage;
+
+            INIT_HLIST_HEAD(&storage.list);
+            INIT_HLIST_HEAD(&free_list);
+            INIT_HLIST_NODE(&selem0.snode);
+            INIT_HLIST_NODE(&selem0.free_node);
+            INIT_HLIST_NODE(&extra_node);
+            owner_slot = &storage;
+            storage.mem_charge = 0;
+            storage.owner = &owner_slot;
+            storage.cache[3] = NULL;
+            bpf_selem_link_storage_nolock(&storage, &selem0);
+            hlist_add_head_rcu(&extra_node, &storage.list);
+            storage.cache[3] = &selem0.sdata;
+            free_storage = bpf_selem_unlink_storage_nolock(&storage,
+                                                           &selem0,
+                                                           &free_list);
+            BPF_PROVE(!free_storage);
+            BPF_PROVE(!selem_linked_to_storage(&selem0));
+            BPF_PROVE(storage.cache[3] == NULL);
+            BPF_PROVE(storage.mem_charge == 0);
+            BPF_PROVE(storage.list.first == &extra_node);
+            BPF_PROVE(extra_node.next == NULL);
+            BPF_PROVE(free_list.first == &selem0.free_node);
+
+            INIT_HLIST_HEAD(&storage.list);
+            INIT_HLIST_HEAD(&free_list2);
+            INIT_HLIST_NODE(&selem0.snode);
+            INIT_HLIST_NODE(&selem0.free_node);
+            owner_slot = &storage;
+            storage.mem_charge = sizeof(storage);
+            storage.owner = &owner_slot;
+            storage.cache[3] = &selem0.sdata;
+            bpf_selem_link_storage_nolock(&storage, &selem0);
+            free_storage = bpf_selem_unlink_storage_nolock(&storage,
+                                                           &selem0,
+                                                           &free_list2);
+            BPF_PROVE(free_storage);
+            BPF_PROVE(!selem_linked_to_storage(&selem0));
+            BPF_PROVE(storage.cache[3] == NULL);
+            BPF_PROVE(storage.mem_charge == 0);
+            BPF_PROVE(storage.owner == NULL);
+            BPF_PROVE(owner_slot == NULL);
+            BPF_PROVE(storage.list.first == NULL);
+            BPF_PROVE(free_list2.first == &selem0.free_node);
+        }
         acc += ret;
     }
 

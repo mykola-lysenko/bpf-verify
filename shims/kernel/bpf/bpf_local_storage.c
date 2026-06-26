@@ -124,6 +124,12 @@ static __always_inline void hlist_add_head_rcu(struct hlist_node *n,
 	n->pprev = &h->first;
 }
 
+static __always_inline void hlist_add_head(struct hlist_node *n,
+					   struct hlist_head *h)
+{
+	hlist_add_head_rcu(n, h);
+}
+
 static __always_inline void hlist_del_init_rcu(struct hlist_node *n)
 {
 	if (!hlist_unhashed(n)) {
@@ -207,6 +213,34 @@ struct bpf_local_storage_cache {
 	rqspinlock_t idx_lock;
 	u64 idx_usage_counts[BPF_LOCAL_STORAGE_CACHE_SIZE];
 };
+
+static __always_inline bool refcount_inc_not_zero(refcount_t *r)
+{
+	if (r->refs <= 0)
+		return false;
+	r->refs++;
+	return true;
+}
+
+static __always_inline void refcount_dec(refcount_t *r)
+{
+	r->refs--;
+}
+
+static __always_inline void mem_uncharge(struct bpf_local_storage_map *smap,
+					 void *owner, u32 size)
+{
+	(void)smap;
+	(void)owner;
+	(void)size;
+}
+
+static __always_inline struct bpf_local_storage __rcu **
+owner_storage(struct bpf_local_storage_map *smap, void *owner)
+{
+	(void)smap;
+	return (struct bpf_local_storage __rcu **)owner;
+}
 
 static __always_inline bool bpf_rcu_lock_held(void)
 {
@@ -342,6 +376,60 @@ bpf_selem_link_storage_nolock(struct bpf_local_storage *local_storage,
 
 	RCU_INIT_POINTER(selem->local_storage, local_storage);
 	hlist_add_head_rcu(&selem->snode, &local_storage->list);
+}
+
+static __always_inline void
+bpf_selem_unlink_storage_nolock_misc(struct bpf_local_storage_elem *selem,
+				     struct bpf_local_storage_map *smap,
+				     struct bpf_local_storage *local_storage,
+				     bool free_local_storage, bool pin_owner)
+{
+	void *owner = local_storage->owner;
+	u32 uncharge = smap->elem_size;
+
+	if (rcu_access_pointer(local_storage->cache[smap->cache_idx]) ==
+	    SDATA(selem))
+		RCU_INIT_POINTER(local_storage->cache[smap->cache_idx], NULL);
+
+	if (pin_owner && !refcount_inc_not_zero(&local_storage->owner_refcnt))
+		return;
+
+	uncharge += free_local_storage ? sizeof(*local_storage) : 0;
+	mem_uncharge(smap, local_storage->owner, uncharge);
+	local_storage->mem_charge -= uncharge;
+
+	if (free_local_storage) {
+		local_storage->owner = NULL;
+
+		/* After this RCU_INIT, owner may be freed and cannot be used */
+		RCU_INIT_POINTER(*owner_storage(smap, owner), NULL);
+	}
+
+	if (pin_owner)
+		refcount_dec(&local_storage->owner_refcnt);
+}
+
+static __always_inline bool
+bpf_selem_unlink_storage_nolock(struct bpf_local_storage *local_storage,
+				struct bpf_local_storage_elem *selem,
+				struct hlist_head *free_selem_list)
+{
+	struct bpf_local_storage_map *smap;
+	bool free_local_storage;
+
+	smap = rcu_dereference_check(SDATA(selem)->smap, bpf_rcu_lock_held());
+
+	free_local_storage = hlist_is_singular_node(&selem->snode,
+						    &local_storage->list);
+
+	bpf_selem_unlink_storage_nolock_misc(selem, smap, local_storage,
+					     free_local_storage, false);
+
+	hlist_del_init_rcu(&selem->snode);
+
+	hlist_add_head(&selem->free_node, free_selem_list);
+
+	return free_local_storage;
 }
 
 static __always_inline void
