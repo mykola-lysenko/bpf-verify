@@ -7252,9 +7252,53 @@ HARNESS_BODIES = {
     struct btf_record spin_record = { .fields = BPF_SPIN_LOCK };
     struct bpf_map map = { .record = &empty_record };
     union bpf_attr attr = {};
+    char dst[BPF_OBJ_NAME_LEN];
+    char small_dst[4];
+    char valid_name[BPF_OBJ_NAME_LEN] = "Abc_123.foo";
+    char invalid_name[BPF_OBJ_NAME_LEN] = "bad-name";
+    char full_name[BPF_OBJ_NAME_LEN] = {
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+        'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+    };
+    char empty_name[4] = "";
     u64 flags;
     int ret;
     int acc = 0;
+
+    ret = bpf_obj_name_cpy(dst, valid_name, BPF_OBJ_NAME_LEN);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 11);
+    BPF_ASSERT(dst[0] == 'A');
+    BPF_ASSERT(dst[3] == '_');
+    BPF_ASSERT(dst[4] == '1');
+    BPF_ASSERT(dst[7] == '.');
+    BPF_ASSERT(dst[11] == 0);
+    BPF_ASSERT(dst[15] == 0);
+
+    ret = bpf_obj_name_cpy(dst, invalid_name, BPF_OBJ_NAME_LEN);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+    BPF_ASSERT(dst[0] == 'b');
+    BPF_ASSERT(dst[1] == 'a');
+    BPF_ASSERT(dst[2] == 'd');
+    BPF_ASSERT(dst[3] == 0);
+    BPF_ASSERT(dst[15] == 0);
+
+    ret = bpf_obj_name_cpy(dst, full_name, BPF_OBJ_NAME_LEN);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+    BPF_ASSERT(dst[0] == 'a');
+    BPF_ASSERT(dst[15] == 'p');
+
+    ret = bpf_obj_name_cpy(small_dst, empty_name, sizeof(empty_name));
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 0);
+    BPF_ASSERT(small_dst[0] == 0);
+    BPF_ASSERT(small_dst[3] == 0);
+
+    ret = bpf_obj_name_cpy(small_dst, empty_name, 0);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
 
     map.map_type = BPF_MAP_TYPE_PERF_EVENT_ARRAY;
     BPF_KEEP_SCALAR(map.map_type);

@@ -32,6 +32,7 @@
 #define BPF_F_WRONLY	(1U << 4)
 
 #define BPF_SPIN_LOCK	BIT(0)
+#define BPF_OBJ_NAME_LEN 16U
 
 #ifndef round_up
 #define round_up(x, y) ((((x) + (y) - 1) / (y)) * (y))
@@ -168,6 +169,41 @@ static __always_inline bool btf_record_has_field(const struct btf_record *rec,
 						 u32 field)
 {
 	return rec && (rec->fields & field);
+}
+
+static __always_inline bool syscall_isalnum(char c)
+{
+	return (c >= '0' && c <= '9') ||
+	       (c >= 'A' && c <= 'Z') ||
+	       (c >= 'a' && c <= 'z');
+}
+
+/* dst and src must have at least "size" number of bytes.
+ * Return strlen on success and < 0 on error.
+ */
+static __always_inline int bpf_obj_name_cpy(char *dst, const char *src,
+					    unsigned int size)
+{
+	const char *end = src + size;
+	const char *orig_src = src;
+	unsigned int i;
+
+	for (i = 0; i < size; i++)
+		dst[i] = 0;
+
+	/* Copy all isalnum(), '_' and '.' chars. */
+	while (src < end && *src) {
+		if (!syscall_isalnum(*src) &&
+		    *src != '_' && *src != '.')
+			return -EINVAL;
+		*dst++ = *src++;
+	}
+
+	/* No '\0' found in "size" number of bytes */
+	if (src == end)
+		return -EINVAL;
+
+	return src - orig_src;
 }
 
 static __always_inline u32 bpf_map_value_size(const struct bpf_map *map,
