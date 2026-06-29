@@ -6388,6 +6388,108 @@ HARNESS_BODIES = {
     acc += (int)token.allowed_cmds;
     acc += (choice & 1) ? CAP_BPF : CAP_PERFMON;
     return (int)choice + acc;""",
+    "token_lifecycle_prove": """\
+    /* token_lifecycle_prove: token refcount, fd, info, and create guards. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    __u64 choice = input ? *input : 0;
+    struct user_namespace ns = {};
+    struct bpf_token token = {};
+    struct bpf_token *got;
+    struct bpf_token_info info = {};
+    struct file file = {};
+    struct seq_file seq = {};
+    union bpf_attr attr = {};
+    union bpf_attr out_attr = {};
+    int ret;
+    int acc = 0;
+
+    __bpf_token_work_scheduled = 0;
+    __bpf_token_work_initialized = 0;
+    __bpf_token_saw_work = 0;
+
+    token.userns = &ns;
+    token.allowed_cmds = BIT_ULL(BPF_MAP_CREATE);
+    token.allowed_maps = BIT_ULL(BPF_MAP_TYPE_ARRAY);
+    token.allowed_progs = BIT_ULL(BPF_PROG_TYPE_SOCKET_FILTER);
+    token.allowed_attachs = BIT_ULL(BPF_CGROUP_INET_INGRESS);
+    atomic64_set(&token.refcnt, 2);
+
+    bpf_token_inc(&token);
+    BPF_PROVE(token.refcnt.counter == 3);
+    bpf_token_put(NULL);
+    BPF_ASSERT(__bpf_token_work_scheduled == 0);
+    bpf_token_put(&token);
+    BPF_PROVE(token.refcnt.counter == 2);
+    BPF_ASSERT(__bpf_token_work_scheduled == 0);
+
+    file.private_data = &token;
+    ret = bpf_token_release(NULL, &file);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 0);
+    BPF_PROVE(token.refcnt.counter == 1);
+    BPF_ASSERT(__bpf_token_work_scheduled == 0);
+    bpf_token_put(&token);
+    BPF_PROVE(token.refcnt.counter == 0);
+    BPF_ASSERT(__bpf_token_work_initialized == 1);
+    BPF_ASSERT(__bpf_token_work_scheduled == 1);
+    BPF_ASSERT(__bpf_token_saw_work == 1);
+    bpf_token_put_deferred(&token.work);
+
+    file.private_data = &token;
+    token.allowed_cmds = BIT_ULL(BPF_MAP_CREATE);
+    token.allowed_maps = BIT_ULL(BPF_MAP_TYPE_ARRAY);
+    token.allowed_progs = BIT_ULL(BPF_PROG_TYPE_SOCKET_FILTER);
+    token.allowed_attachs = BIT_ULL(BPF_CGROUP_INET_INGRESS);
+    seq.writes = 0;
+    bpf_token_show_fdinfo(&seq, &file);
+    BPF_PROVE(seq.writes == 4);
+    token.allowed_cmds = ~0ULL;
+    token.allowed_maps = ~0ULL;
+    token.allowed_progs = ~0ULL;
+    token.allowed_attachs = ~0ULL;
+    seq.writes = 0;
+    bpf_token_show_fdinfo(&seq, &file);
+    BPF_PROVE(seq.writes == 4);
+
+    token.allowed_cmds = BIT_ULL(BPF_MAP_CREATE) | BIT_ULL(BPF_PROG_LOAD);
+    token.allowed_maps = BIT_ULL(BPF_MAP_TYPE_ARRAY);
+    token.allowed_progs = BIT_ULL(BPF_PROG_TYPE_SOCKET_FILTER);
+    token.allowed_attachs = BIT_ULL(BPF_CGROUP_INET_INGRESS);
+    attr.info.info = (u64)&info;
+    attr.info.info_len = sizeof(info);
+    out_attr.info.info_len = 0;
+    ret = bpf_token_get_info_by_fd(&token, &attr, &out_attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == 0);
+    BPF_ASSERT(info.allowed_cmds == token.allowed_cmds);
+    BPF_ASSERT(info.allowed_maps == token.allowed_maps);
+    BPF_ASSERT(info.allowed_progs == token.allowed_progs);
+    BPF_ASSERT(info.allowed_attachs == token.allowed_attachs);
+    BPF_ASSERT(out_attr.info.info_len == sizeof(info));
+
+    attr.info.info = 0;
+    attr.info.info_len = sizeof(info);
+    ret = bpf_token_get_info_by_fd(&token, &attr, &out_attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EFAULT);
+
+    got = bpf_token_get_from_fd(0);
+    BPF_ASSERT(IS_ERR(got));
+    BPF_ASSERT(PTR_ERR(got) == -EBADF);
+
+    __bpf_token_file.f_op = NULL;
+    got = bpf_token_get_from_fd(1);
+    BPF_ASSERT(IS_ERR(got));
+    BPF_ASSERT(PTR_ERR(got) == -EINVAL);
+
+    attr.token_create.bpffs_fd = 0;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == -EBADF);
+
+    acc += ret + (int)token.refcnt.counter + (int)__bpf_token_work_scheduled;
+    return (int)choice + acc;""",
     "fixups_prove": """\
     /* fixups_prove: verifier-enforced instruction classifier invariants. */
     __u32 input_key = 0;
@@ -11073,7 +11175,8 @@ BPF_TOKEN_PRE_INCLUDE = """\
     struct fd_prepare _fdf = { .err = 0, .__fd = 7, .__file = (_file_owned) }
 #define fd_prepare_file(_fdf) ((_fdf).__file)
 #define fd_publish(_fdf) ((_fdf).err ? (_fdf).err : (_fdf).__fd)
-#define put_user(value, ptr) (0)
+#define put_user(value, ptr) ({ typeof(ptr) __p = (ptr); \
+    __p ? (*__p = (value), 0) : -EFAULT; })
 #ifndef BIT_ULL
 #define BIT_ULL(nr) (1ULL << (nr))
 #endif
@@ -11184,7 +11287,7 @@ struct super_block {
     void *s_fs_info;
 };
 struct fd {
-    unsigned long word;
+    struct file *file;
 };
 struct fd_prepare {
     s32 err;
@@ -11229,6 +11332,8 @@ static struct file __bpf_token_file = {
 };
 static struct inode __bpf_token_inode;
 static u32 __bpf_token_work_scheduled;
+static u32 __bpf_token_work_initialized;
+static u32 __bpf_token_saw_work;
 
 static inline void __bpf_token_reset_fs(void)
 {
@@ -11297,13 +11402,15 @@ static inline bool atomic64_dec_and_test(atomic64_t *v)
 static inline void INIT_WORK(struct work_struct *work,
                              void (*func)(struct work_struct *work))
 {
-    work->func = func;
+    (void)work;
+    (void)func;
+    __bpf_token_work_initialized++;
 }
 static inline bool schedule_work(struct work_struct *work)
 {
     __bpf_token_work_scheduled++;
-    if (work && work->func)
-        work->func(work);
+    if (work)
+        __bpf_token_saw_work++;
     return true;
 }
 static inline void kfree(const void *ptr)
@@ -11318,15 +11425,15 @@ static inline void *__bpf_token_kzalloc(size_t size)
 static inline struct fd class_fd_constructor(int fd)
 {
     __bpf_token_reset_fs();
-    return (struct fd){ fd == 1 ? (unsigned long)&__bpf_token_file : 0 };
+    return (struct fd){ fd == 1 ? &__bpf_token_file : NULL };
 }
 static inline bool fd_empty(struct fd fd)
 {
-    return !fd.word;
+    return !fd.file;
 }
 static inline struct file *fd_file(struct fd fd)
 {
-    return (struct file *)fd.word;
+    return fd.file;
 }
 static inline int path_permission(const struct path *path, int mask)
 {
@@ -11369,9 +11476,18 @@ static inline void *u64_to_user_ptr(u64 value)
 }
 static inline int copy_to_user(void *dst, const void *src, size_t n)
 {
-    (void)dst;
-    (void)src;
-    (void)n;
+    unsigned char *d = dst;
+    const unsigned char *s = src;
+    size_t i;
+
+    if (!dst && n)
+        return -EFAULT;
+
+    for (i = 0; i < sizeof(struct bpf_token_info); i++) {
+        if (i >= n)
+            break;
+        d[i] = s[i];
+    }
     return 0;
 }
 static inline int __bpf_token_seq_printf(struct seq_file *m)
@@ -13119,6 +13235,7 @@ EXTRA_PRE_INCLUDE = {
     "bpf_lsm_proto": BPF_LSM_PROTO_PRE_INCLUDE,
     "sysfs_btf": SYSFS_BTF_PRE_INCLUDE,
     "token_prove": BPF_TOKEN_PRE_INCLUDE,
+    "token_lifecycle_prove": BPF_TOKEN_PRE_INCLUDE,
     "bpf_cgrp_storage": BPF_CGRP_STORAGE_PRE_INCLUDE,
     "bpf_task_storage": BPF_STORAGE_PRE_INCLUDE,
     "bpf_inode_storage": BPF_INODE_STORAGE_PRE_INCLUDE,
@@ -17653,6 +17770,9 @@ static inline void bpf_map_put(struct bpf_map *map)
     "token_prove": """\
 #pragma clang attribute pop
 """,
+    "token_lifecycle_prove": """\
+#pragma clang attribute pop
+""",
     "btf_iter": """\
 #pragma clang attribute pop
 """,
@@ -18352,6 +18472,7 @@ def main():
         "disasm_prove":          SHIM / "kernel/bpf/disasm.c",
         "ringbuf_prove":         KSRC / "kernel/bpf/ringbuf.c",
         "token_prove":           KSRC / "kernel/bpf/token.c",
+        "token_lifecycle_prove": KSRC / "kernel/bpf/token.c",
         "fixups_prove":          SHIM / "kernel/bpf/fixups.c",
         "arraymap_prove":        SHIM / "kernel/bpf/arraymap.c",
         "hashtab_prove":         SHIM / "kernel/bpf/hashtab.c",
