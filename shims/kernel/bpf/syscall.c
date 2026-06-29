@@ -30,6 +30,12 @@
 #define BPF_F_NUMA_NODE	(1U << 2)
 #define BPF_F_RDONLY	(1U << 3)
 #define BPF_F_WRONLY	(1U << 4)
+#define BPF_F_RDONLY_PROG	(1U << 7)
+#define BPF_F_WRONLY_PROG	(1U << 8)
+
+#define O_RDONLY	0
+#define O_WRONLY	1
+#define O_RDWR		2
 
 #define BPF_SPIN_LOCK	BIT(0)
 #define BPF_OBJ_NAME_LEN 16U
@@ -220,6 +226,17 @@ static __always_inline u32 bpf_map_value_size(const struct bpf_map *map,
 		return sizeof(u32);
 	else
 		return  map->value_size;
+}
+
+static __always_inline int bpf_get_file_flag(int flags)
+{
+	if ((flags & BPF_F_RDONLY) && (flags & BPF_F_WRONLY))
+		return -EINVAL;
+	if (flags & BPF_F_RDONLY)
+		return O_RDONLY;
+	if (flags & BPF_F_WRONLY)
+		return O_WRONLY;
+	return O_RDWR;
 }
 
 static __always_inline u32 bpf_map_flags_retain_permanent(u32 flags)

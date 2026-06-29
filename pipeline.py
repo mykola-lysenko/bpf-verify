@@ -7481,6 +7481,7 @@ HARNESS_BODIES = {
     };
     char empty_name[4] = "";
     u64 flags;
+    u32 file_flags;
     int ret;
     int acc = 0;
 
@@ -7563,6 +7564,32 @@ HARNESS_BODIES = {
               BPF_F_WRONLY | BPF_F_NUMA_NODE) == BPF_F_NUMA_NODE);
     BPF_PROVE(bpf_map_flags_retain_permanent(0) == 0);
 
+    file_flags = 0;
+    BPF_KEEP_SCALAR(file_flags);
+    ret = bpf_get_file_flag(file_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == O_RDWR);
+    file_flags = BPF_F_RDONLY;
+    BPF_KEEP_SCALAR(file_flags);
+    ret = bpf_get_file_flag(file_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == O_RDONLY);
+    file_flags = BPF_F_WRONLY;
+    BPF_KEEP_SCALAR(file_flags);
+    ret = bpf_get_file_flag(file_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == O_WRONLY);
+    file_flags = BPF_F_RDONLY | BPF_F_WRONLY;
+    BPF_KEEP_SCALAR(file_flags);
+    ret = bpf_get_file_flag(file_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+    file_flags = BPF_F_RDONLY_PROG | BPF_F_WRONLY_PROG;
+    BPF_KEEP_SCALAR(file_flags);
+    ret = bpf_get_file_flag(file_flags);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == O_RDWR);
+
     attr.map_type = BPF_MAP_TYPE_HASH;
     attr.key_size = 4;
     attr.value_size = 8;
@@ -7591,6 +7618,22 @@ HARNESS_BODIES = {
     bpf_map_init_from_attr(&map, &attr);
     BPF_ASSERT(map.map_flags == 0);
     BPF_ASSERT(map.numa_node == NUMA_NO_NODE);
+
+    attr.map_flags = 0;
+    attr.numa_node = 3;
+    BPF_KEEP_SCALAR(attr.map_flags);
+    BPF_KEEP_SCALAR(attr.numa_node);
+    BPF_PROVE(bpf_map_attr_numa_node(&attr) == NUMA_NO_NODE);
+    attr.map_flags = BPF_F_NUMA_NODE;
+    BPF_KEEP_SCALAR(attr.map_flags);
+    BPF_PROVE(bpf_map_attr_numa_node(&attr) == 3);
+
+    BPF_PROVE(!btf_record_has_field(&empty_record, BPF_SPIN_LOCK));
+    BPF_PROVE(btf_record_has_field(&spin_record, BPF_SPIN_LOCK));
+    BPF_PROVE(syscall_isalnum('0'));
+    BPF_PROVE(syscall_isalnum('Z'));
+    BPF_PROVE(syscall_isalnum('a'));
+    BPF_PROVE(!syscall_isalnum('-'));
 
     map.map_type = BPF_MAP_TYPE_HASH;
     map.record = &empty_record;
@@ -7636,6 +7679,15 @@ HARNESS_BODIES = {
     ret = bpf_map_check_op_flags(&map, BPF_F_ALL_CPUS, ~0ULL);
     BPF_KEEP_SCALAR(ret);
     BPF_PROVE(ret == 0);
+    ret = bpf_map_check_op_flags(&map, BPF_F_ALL_CPUS, BPF_F_LOCK);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+
+    BPF_PROVE(bpf_map_supports_cpu_flags(BPF_MAP_TYPE_PERCPU_HASH));
+    BPF_PROVE(bpf_map_supports_cpu_flags(BPF_MAP_TYPE_LRU_PERCPU_HASH));
+    BPF_PROVE(bpf_map_supports_cpu_flags(BPF_MAP_TYPE_PERCPU_ARRAY));
+    BPF_PROVE(bpf_map_supports_cpu_flags(BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE));
+    BPF_PROVE(!bpf_map_supports_cpu_flags(BPF_MAP_TYPE_HASH));
 
     BPF_PROVE(is_net_admin_prog_type(BPF_PROG_TYPE_SCHED_CLS));
     BPF_PROVE(is_net_admin_prog_type(BPF_PROG_TYPE_XDP));
@@ -7663,11 +7715,19 @@ HARNESS_BODIES = {
               SYSCALL_MAP_CAP_UNPRIV);
     BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_RINGBUF) ==
               SYSCALL_MAP_CAP_UNPRIV);
+    BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_USER_RINGBUF) ==
+              SYSCALL_MAP_CAP_UNPRIV);
+    BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_CGRP_STORAGE) ==
+              SYSCALL_MAP_CAP_BPF);
     BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_LPM_TRIE) ==
               SYSCALL_MAP_CAP_BPF);
     BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_STRUCT_OPS) ==
               SYSCALL_MAP_CAP_BPF);
+    BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_ARENA) ==
+              SYSCALL_MAP_CAP_BPF);
     BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_SOCKMAP) ==
+              SYSCALL_MAP_CAP_NET_ADMIN);
+    BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_XSKMAP) ==
               SYSCALL_MAP_CAP_NET_ADMIN);
     BPF_PROVE(syscall_map_create_cap(BPF_MAP_TYPE_DEVMAP_HASH) ==
               SYSCALL_MAP_CAP_NET_ADMIN);
