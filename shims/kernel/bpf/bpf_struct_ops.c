@@ -16,12 +16,15 @@
 
 #define E2BIG 7
 #define EBUSY 16
+#define EPERM 1
+#define ENOLINK 67
 #define ENOTSUPP 95
 #define EOPNOTSUPP 95
 #define EINPROGRESS 115
 
 #define PAGE_SIZE 4096UL
 #define MAX_TRAMP_IMAGE_PAGES 8
+#define EPOLLHUP 0x10
 
 #define BPF_F_LINK              (1U << 13)
 #define BPF_F_VTYPE_BTF_OBJ_FD  (1U << 15)
@@ -48,8 +51,10 @@ struct btf_type {
 
 struct bpf_link;
 struct bpf_ksym;
+struct poll_table_struct;
 struct bpf_verifier_ops;
 struct btf_func_model;
+typedef unsigned int __poll_t;
 
 union bpf_attr {
 	struct {
@@ -87,6 +92,25 @@ struct bpf_struct_ops {
 	int (*validate)(void *kdata);
 	void *cfi_stubs;
 	const char *name;
+};
+
+struct bpf_link {
+	struct bpf_map *map;
+};
+
+struct bpf_struct_ops_link {
+	struct bpf_link link;
+	struct bpf_map *map;
+};
+
+struct bpf_link_info {
+	struct {
+		u32 map_id;
+	} struct_ops;
+};
+
+struct file {
+	void *private_data;
 };
 
 struct bpf_struct_ops_desc {
@@ -132,6 +156,16 @@ static __always_inline void atomic64_set(atomic64_t *v, s64 i)
 	v->counter = i;
 }
 
+static __always_inline s64 atomic64_read(const atomic64_t *v)
+{
+	return v->counter;
+}
+
+static __always_inline void refcount_set(refcount_t *r, int n)
+{
+	r->refs = n;
+}
+
 static __always_inline u32 btf_obj_id(struct btf *btf)
 {
 	return btf->id;
@@ -169,6 +203,36 @@ static __always_inline int bpf_struct_ops_map_get_next_key(struct bpf_map *map,
 		return -ENOENT;
 
 	*(u32 *)next_key = 0;
+	return 0;
+}
+
+static __always_inline int bpf_struct_ops_map_sys_lookup_elem(struct bpf_map *map,
+							      void *key,
+							      void *value)
+{
+	struct bpf_struct_ops_map *st_map = (struct bpf_struct_ops_map *)map;
+	struct bpf_struct_ops_value *uvalue, *kvalue;
+	enum bpf_struct_ops_state state;
+	s64 refcnt;
+
+	if (*(u32 *)key != 0)
+		return -ENOENT;
+
+	kvalue = &st_map->kvalue;
+	/* Pair with smp_store_release() during map_update */
+	state = smp_load_acquire(&kvalue->common.state);
+	if (state == BPF_STRUCT_OPS_STATE_INIT) {
+		__builtin_memset(value, 0, map->value_size);
+		return 0;
+	}
+
+	uvalue = value;
+	__builtin_memcpy(uvalue, st_map->uvalue, map->value_size);
+	uvalue->common.state = state;
+
+	refcnt = atomic64_read(&map->refcnt) - atomic64_read(&map->usercnt);
+	refcount_set(&uvalue->common.refcnt, refcnt > 0 ? refcnt : 0);
+
 	return 0;
 }
 
@@ -246,6 +310,61 @@ static __always_inline bool bpf_struct_ops_valid_to_reg(struct bpf_map *map)
 		map->map_flags & BPF_F_LINK &&
 		/* Pair with smp_store_release() during map_update */
 		smp_load_acquire(&st_map->kvalue.common.state) == BPF_STRUCT_OPS_STATE_READY;
+}
+
+static __always_inline int bpf_struct_ops_map_link_fill_link_info(const struct bpf_link *link,
+								  struct bpf_link_info *info)
+{
+	struct bpf_struct_ops_link *st_link;
+	struct bpf_map *map;
+
+	st_link = container_of(link, struct bpf_struct_ops_link, link);
+	map = st_link->map;
+	if (map)
+		info->struct_ops.map_id = map->id;
+	return 0;
+}
+
+static __always_inline int bpf_struct_ops_map_link_update(struct bpf_link *link,
+							  struct bpf_map *new_map,
+							  struct bpf_map *expected_old_map)
+{
+	struct bpf_struct_ops_map *st_map, *old_st_map;
+	struct bpf_struct_ops_link *st_link;
+	struct bpf_map *old_map;
+
+	st_link = container_of(link, struct bpf_struct_ops_link, link);
+	st_map = (struct bpf_struct_ops_map *)new_map;
+
+	if (!bpf_struct_ops_valid_to_reg(new_map))
+		return -EINVAL;
+
+	if (!st_map->st_ops_desc->st_ops->update)
+		return -EOPNOTSUPP;
+
+	old_map = st_link->map;
+	if (!old_map)
+		return -ENOLINK;
+	if (expected_old_map && old_map != expected_old_map)
+		return -EPERM;
+
+	old_st_map = (struct bpf_struct_ops_map *)old_map;
+	/* The new and old struct_ops must be the same type. */
+	if (st_map->st_ops_desc != old_st_map->st_ops_desc)
+		return -EINVAL;
+
+	/* The callback-bearing map swap path is intentionally out of scope for
+	 * this BPF-verifiable shim; the guards above mirror the upstream order. */
+	return 0;
+}
+
+static __always_inline __poll_t bpf_struct_ops_map_link_poll(struct file *file,
+							     struct poll_table_struct *pts)
+{
+	struct bpf_struct_ops_link *st_link = file->private_data;
+
+	(void)pts;
+	return st_link->map ? 0 : EPOLLHUP;
 }
 
 static __always_inline void bpf_map_struct_ops_info_fill(struct bpf_map_info *info,
