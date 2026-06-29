@@ -6617,6 +6617,113 @@ HARNESS_BODIES = {
 
     acc += ret + (int)token.refcnt.counter + (int)__bpf_token_work_scheduled;
     return (int)choice + acc;""",
+    "token_create_prove": """\
+    /* token_create_prove: VFS-backed bpf_token_create() guard ladder and
+     * successful pseudo-file token installation. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    __u64 choice = input ? *input : 0;
+    union bpf_attr attr = {};
+    struct bpf_token *created;
+    struct bpf_token *got;
+    int ret;
+    int acc = 0;
+
+    attr.token_create.bpffs_fd = 1;
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_use_child_dentry = 1;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_bad_super_ops = 1;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EINVAL);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_path_permission_ret = -EACCES;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EACCES);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_current_mismatch = 1;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EPERM);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_clear_caps = 1;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -EPERM);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_use_init_userns = 1;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == -EOPNOTSUPP);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_empty_delegation = 1;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -ENOENT);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_inode_err = -ENOMEM;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_PROVE(ret == -ENOMEM);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_alloc_file_err = -EMFILE;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == -EMFILE);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_alloc_fail = 1;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == -ENOMEM);
+
+    __bpf_token_reset_create_controls();
+    __bpf_token_security_create_ret = -EACCES;
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == -EACCES);
+    BPF_ASSERT(__bpf_token_userns_gets == 0);
+
+    __bpf_token_reset_create_controls();
+    ret = bpf_token_create(&attr);
+    BPF_KEEP_SCALAR(ret);
+    BPF_ASSERT(ret == 7);
+    BPF_ASSERT(__bpf_token_kzallocs == 1);
+    BPF_ASSERT(__bpf_token_userns_gets == 1);
+    BPF_ASSERT(__bpf_token_inode.i_op == &bpf_token_iops);
+    BPF_ASSERT(__bpf_token_inode.i_fop == &bpf_token_fops);
+    BPF_ASSERT(__bpf_token_file.f_op == &bpf_token_fops);
+
+    created = __bpf_token_file.private_data;
+    BPF_ASSERT(created == &__bpf_token_alloc);
+    BPF_ASSERT(created->refcnt.counter == 1);
+    BPF_ASSERT(created->userns == &__bpf_token_owner_ns);
+    BPF_ASSERT(created->allowed_cmds == BIT_ULL(BPF_MAP_CREATE));
+    BPF_ASSERT(created->allowed_maps == BIT_ULL(BPF_MAP_TYPE_ARRAY));
+    BPF_ASSERT(created->allowed_progs ==
+              BIT_ULL(BPF_PROG_TYPE_SOCKET_FILTER));
+    BPF_ASSERT(created->allowed_attachs == BIT_ULL(BPF_CGROUP_INET_INGRESS));
+
+    got = bpf_token_get_from_fd(1);
+    BPF_ASSERT(got == created);
+    BPF_ASSERT(created->refcnt.counter == 2);
+
+    acc += ret + (int)created->refcnt.counter + (int)__bpf_token_userns_gets;
+    return (int)choice + acc;""",
     "fixups_prove": """\
     /* fixups_prove: verifier-enforced instruction classifier invariants. */
     __u32 input_key = 0;
@@ -11546,7 +11653,12 @@ BPF_TOKEN_PRE_INCLUDE = """\
 #define kzalloc_obj(obj, flags) ((typeof(&(obj)))__bpf_token_kzalloc(sizeof(obj)))
 #define CLASS(_name, var) class_##_name##_t var = class_##_name##_constructor
 #define FD_PREPARE(_fdf, _fd_flags, _file_owned) \
-    struct fd_prepare _fdf = { .err = 0, .__fd = 7, .__file = (_file_owned) }
+    struct file *__bpf_owned_file_##_fdf = (_file_owned); \
+    struct fd_prepare _fdf = { \
+        .err = __bpf_token_alloc_file_err, \
+        .__fd = 7, \
+        .__file = __bpf_owned_file_##_fdf, \
+    }
 #define fd_prepare_file(_fdf) ((_fdf).__file)
 #define fd_publish(_fdf) ((_fdf).err ? (_fdf).err : (_fdf).__fd)
 #define put_user(value, ptr) ({ typeof(ptr) __p = (ptr); \
@@ -11689,12 +11801,21 @@ static struct bpf_mount_opts __bpf_token_mnt_opts = {
     .delegate_progs = BIT_ULL(BPF_PROG_TYPE_SOCKET_FILTER),
     .delegate_attachs = BIT_ULL(BPF_CGROUP_INET_INGRESS),
 };
+static struct user_namespace __bpf_token_owner_ns = {
+    .caps = BIT_ULL(CAP_BPF),
+};
+static struct user_namespace __bpf_token_other_ns = {
+    .caps = BIT_ULL(CAP_BPF),
+};
 static struct super_block __bpf_token_sb = {
     .s_op = &bpf_super_ops,
-    .s_user_ns = &init_user_ns,
+    .s_user_ns = &__bpf_token_owner_ns,
     .s_fs_info = &__bpf_token_mnt_opts,
 };
 static struct dentry __bpf_token_root = {
+    .d_sb = &__bpf_token_sb,
+};
+static struct dentry __bpf_token_child = {
     .d_sb = &__bpf_token_sb,
 };
 static struct vfsmount __bpf_token_mnt;
@@ -11705,19 +11826,74 @@ static struct file __bpf_token_file = {
     },
 };
 static struct inode __bpf_token_inode;
+static struct bpf_token __bpf_token_alloc;
+static const struct super_operations __bpf_token_other_super_ops = { };
 static u32 __bpf_token_work_scheduled;
 static u32 __bpf_token_work_initialized;
 static u32 __bpf_token_saw_work;
+static u32 __bpf_token_use_child_dentry;
+static u32 __bpf_token_bad_super_ops;
+static int __bpf_token_path_permission_ret;
+static u32 __bpf_token_current_mismatch;
+static u32 __bpf_token_clear_caps;
+static u32 __bpf_token_use_init_userns;
+static u32 __bpf_token_empty_delegation;
+static int __bpf_token_inode_err;
+static int __bpf_token_alloc_file_err;
+static u32 __bpf_token_alloc_fail;
+static int __bpf_token_security_create_ret;
+static u32 __bpf_token_kzallocs;
+static u32 __bpf_token_userns_gets;
 
 static inline void __bpf_token_reset_fs(void)
 {
     __bpf_token_sb.s_root = &__bpf_token_root;
-    __bpf_token_sb.s_op = &bpf_super_ops;
-    __bpf_token_sb.s_user_ns = &init_user_ns;
+    __bpf_token_sb.s_op = __bpf_token_bad_super_ops ?
+                           &__bpf_token_other_super_ops : &bpf_super_ops;
+    __bpf_token_owner_ns.caps = __bpf_token_clear_caps ?
+                                0 : BIT_ULL(CAP_BPF);
+    __bpf_token_sb.s_user_ns = __bpf_token_use_init_userns ?
+                               &init_user_ns : &__bpf_token_owner_ns;
+    if (__bpf_token_empty_delegation) {
+        __bpf_token_mnt_opts.delegate_cmds = 0;
+        __bpf_token_mnt_opts.delegate_maps = 0;
+        __bpf_token_mnt_opts.delegate_progs = 0;
+        __bpf_token_mnt_opts.delegate_attachs = 0;
+    } else {
+        __bpf_token_mnt_opts.delegate_cmds = BIT_ULL(BPF_MAP_CREATE);
+        __bpf_token_mnt_opts.delegate_maps = BIT_ULL(BPF_MAP_TYPE_ARRAY);
+        __bpf_token_mnt_opts.delegate_progs =
+            BIT_ULL(BPF_PROG_TYPE_SOCKET_FILTER);
+        __bpf_token_mnt_opts.delegate_attachs =
+            BIT_ULL(BPF_CGROUP_INET_INGRESS);
+    }
     __bpf_token_sb.s_fs_info = &__bpf_token_mnt_opts;
     __bpf_token_root.d_sb = &__bpf_token_sb;
+    __bpf_token_child.d_sb = &__bpf_token_sb;
     __bpf_token_file.f_path.mnt = &__bpf_token_mnt;
-    __bpf_token_file.f_path.dentry = &__bpf_token_root;
+    __bpf_token_file.f_path.dentry = __bpf_token_use_child_dentry ?
+                                     &__bpf_token_child : &__bpf_token_root;
+}
+static inline void __bpf_token_reset_create_controls(void)
+{
+    __bpf_token_use_child_dentry = 0;
+    __bpf_token_bad_super_ops = 0;
+    __bpf_token_path_permission_ret = 0;
+    __bpf_token_current_mismatch = 0;
+    __bpf_token_clear_caps = 0;
+    __bpf_token_use_init_userns = 0;
+    __bpf_token_empty_delegation = 0;
+    __bpf_token_inode_err = 0;
+    __bpf_token_alloc_file_err = 0;
+    __bpf_token_alloc_fail = 0;
+    __bpf_token_security_create_ret = 0;
+    __bpf_token_kzallocs = 0;
+    __bpf_token_userns_gets = 0;
+    __bpf_token_file.f_op = NULL;
+    __bpf_token_file.private_data = NULL;
+    __bpf_token_inode.i_op = NULL;
+    __bpf_token_inode.i_fop = NULL;
+    __bpf_token_reset_fs();
 }
 static inline bool ns_capable(struct user_namespace *ns, int cap)
 {
@@ -11725,11 +11901,16 @@ static inline bool ns_capable(struct user_namespace *ns, int cap)
 }
 static inline struct user_namespace *current_user_ns(void)
 {
-    return &init_user_ns;
+    if (__bpf_token_use_init_userns)
+        return &init_user_ns;
+    if (__bpf_token_current_mismatch)
+        return &__bpf_token_other_ns;
+    return &__bpf_token_owner_ns;
 }
 static inline void get_user_ns(struct user_namespace *ns)
 {
     (void)ns;
+    __bpf_token_userns_gets++;
 }
 static inline void put_user_ns(struct user_namespace *ns)
 {
@@ -11754,7 +11935,7 @@ static inline int security_bpf_token_create(struct bpf_token *token,
     (void)token;
     (void)attr;
     (void)path;
-    return 0;
+    return __bpf_token_security_create_ret;
 }
 static inline void security_bpf_token_free(struct bpf_token *token)
 {
@@ -11793,8 +11974,20 @@ static inline void kfree(const void *ptr)
 }
 static inline void *__bpf_token_kzalloc(size_t size)
 {
-    (void)size;
-    return NULL;
+    if (size != sizeof(__bpf_token_alloc))
+        return NULL;
+    if (__bpf_token_alloc_fail)
+        return NULL;
+    __bpf_token_kzallocs++;
+    __bpf_token_alloc.work.func = NULL;
+    __bpf_token_alloc.refcnt.counter = 0;
+    __bpf_token_alloc.userns = NULL;
+    __bpf_token_alloc.allowed_cmds = 0;
+    __bpf_token_alloc.allowed_maps = 0;
+    __bpf_token_alloc.allowed_progs = 0;
+    __bpf_token_alloc.allowed_attachs = 0;
+    __bpf_token_alloc.security = NULL;
+    return &__bpf_token_alloc;
 }
 static inline struct fd class_fd_constructor(int fd)
 {
@@ -11813,7 +12006,7 @@ static inline int path_permission(const struct path *path, int mask)
 {
     (void)path;
     (void)mask;
-    return 0;
+    return __bpf_token_path_permission_ret;
 }
 static inline unsigned int current_umask(void)
 {
@@ -11826,6 +12019,8 @@ static inline struct inode *bpf_get_inode(struct super_block *sb,
     (void)sb;
     (void)dir;
     (void)mode;
+    if (__bpf_token_inode_err)
+        return ERR_PTR(__bpf_token_inode_err);
     return &__bpf_token_inode;
 }
 static inline void clear_nlink(struct inode *inode)
@@ -11841,6 +12036,8 @@ static inline struct file *alloc_file_pseudo(struct inode *inode,
     (void)mnt;
     (void)name;
     (void)flags;
+    if (__bpf_token_alloc_file_err)
+        return ERR_PTR(__bpf_token_alloc_file_err);
     __bpf_token_file.f_op = fops;
     return &__bpf_token_file;
 }
@@ -13610,6 +13807,7 @@ EXTRA_PRE_INCLUDE = {
     "sysfs_btf": SYSFS_BTF_PRE_INCLUDE,
     "token_prove": BPF_TOKEN_PRE_INCLUDE,
     "token_lifecycle_prove": BPF_TOKEN_PRE_INCLUDE,
+    "token_create_prove": BPF_TOKEN_PRE_INCLUDE,
     "bpf_cgrp_storage": BPF_CGRP_STORAGE_PRE_INCLUDE,
     "bpf_task_storage": BPF_STORAGE_PRE_INCLUDE,
     "bpf_inode_storage": BPF_INODE_STORAGE_PRE_INCLUDE,
@@ -18147,6 +18345,9 @@ static inline void bpf_map_put(struct bpf_map *map)
     "token_lifecycle_prove": """\
 #pragma clang attribute pop
 """,
+    "token_create_prove": """\
+#pragma clang attribute pop
+""",
     "btf_iter": """\
 #pragma clang attribute pop
 """,
@@ -18879,6 +19080,7 @@ def main():
         "ringbuf_lifecycle_prove": KSRC / "kernel/bpf/ringbuf.c",
         "token_prove":           KSRC / "kernel/bpf/token.c",
         "token_lifecycle_prove": KSRC / "kernel/bpf/token.c",
+        "token_create_prove":    KSRC / "kernel/bpf/token.c",
         "fixups_prove":          SHIM / "kernel/bpf/fixups.c",
         "arraymap_prove":        SHIM / "kernel/bpf/arraymap.c",
         "hashtab_prove":         SHIM / "kernel/bpf/hashtab.c",
