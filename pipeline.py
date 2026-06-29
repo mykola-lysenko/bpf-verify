@@ -6320,6 +6320,133 @@ HARNESS_BODIES = {
     acc += ringbuf_avail_data_sz(&rb);
     acc += (int)delta;
     return (int)choice + acc;""",
+    "ringbuf_lifecycle_prove": """\
+    /* ringbuf_lifecycle_prove: reserve, commit, discard, and dynptr
+     * state transitions. The commit helper avoids the source pointer-mask
+     * restore step, which the verifier rejects on stack/map-value pointers. */
+    __u32 input_key = 0;
+    __u64 *input = bpf_map_lookup_elem(&input_map, &input_key);
+    __u64 choice = input ? *input : 0;
+    struct {
+        struct bpf_ringbuf rb;
+        char data[128];
+    } storage = {};
+    struct bpf_ringbuf_map map = {};
+    struct bpf_dynptr_kern dynptr = {};
+    struct bpf_ringbuf *rb = &storage.rb;
+    struct bpf_ringbuf_hdr *hdr;
+    void *sample;
+    int ret;
+    int acc = 0;
+
+    rb->mask = 63;
+    rb->consumer_pos = 0;
+    rb->producer_pos = 0;
+    rb->pending_pos = 0;
+    rb->overwrite_pos = 0;
+    rb->overwrite_mode = false;
+    rb->work.queued = 0;
+
+    BPF_PROVE(__bpf_ringbuf_reserve(rb, RINGBUF_MAX_RECORD_SZ + 1ULL) == NULL);
+    BPF_PROVE(__bpf_ringbuf_reserve(rb, 64) == NULL);
+
+    sample = __bpf_ringbuf_reserve(rb, 8);
+    BPF_PROVE(sample != NULL);
+    hdr = sample - BPF_RINGBUF_HDR_SZ;
+    BPF_PROVE(rb->producer_pos == 16);
+    BPF_PROVE(rb->pending_pos == 0);
+    BPF_PROVE(hdr->len == (8 | BPF_RINGBUF_BUSY_BIT));
+    BPF_PROVE(hdr->pg_off == bpf_ringbuf_rec_pg_off(rb, hdr));
+
+    __bpf_ringbuf_commit_direct(rb, sample, BPF_RB_NO_WAKEUP, false);
+    BPF_PROVE(hdr->len == 8);
+    BPF_PROVE(rb->work.queued == 0);
+
+    sample = __bpf_ringbuf_reserve(rb, 8);
+    BPF_PROVE(sample != NULL);
+    hdr = sample - BPF_RINGBUF_HDR_SZ;
+    BPF_PROVE(rb->producer_pos == 32);
+    BPF_PROVE(rb->pending_pos == 16);
+    BPF_PROVE(hdr->len == (8 | BPF_RINGBUF_BUSY_BIT));
+
+    __bpf_ringbuf_commit_direct(rb, sample, BPF_RB_FORCE_WAKEUP, true);
+    BPF_PROVE(hdr->len == (8 | BPF_RINGBUF_DISCARD_BIT));
+    BPF_PROVE(rb->work.queued == 1);
+
+    rb->consumer_pos = 0;
+    rb->producer_pos = 0;
+    rb->pending_pos = 0;
+    rb->overwrite_pos = 0;
+    rb->work.queued = 0;
+    sample = __bpf_ringbuf_reserve(rb, 8);
+    BPF_PROVE(sample != NULL);
+    hdr = sample - BPF_RINGBUF_HDR_SZ;
+    __bpf_ringbuf_commit_direct(rb, sample, 0, false);
+    BPF_PROVE(hdr->len == 8);
+    BPF_PROVE(rb->work.queued == 1);
+
+    rb->consumer_pos = 0;
+    rb->producer_pos = 0;
+    rb->pending_pos = 0;
+    rb->overwrite_pos = 0;
+    rb->work.queued = 0;
+    sample = __bpf_ringbuf_reserve(rb, 8);
+    BPF_PROVE(sample != NULL);
+    hdr = sample - BPF_RINGBUF_HDR_SZ;
+    rb->consumer_pos = 8;
+    __bpf_ringbuf_commit_direct(rb, sample, 0, false);
+    BPF_PROVE(hdr->len == 8);
+    BPF_PROVE(rb->work.queued == 0);
+
+    rb->mask = 31;
+    rb->consumer_pos = 0;
+    rb->producer_pos = 0;
+    rb->pending_pos = 0;
+    rb->overwrite_pos = 0;
+    rb->overwrite_mode = false;
+    sample = __bpf_ringbuf_reserve(rb, 8);
+    BPF_PROVE(sample != NULL);
+    BPF_PROVE(__bpf_ringbuf_reserve(rb, 8) == NULL);
+
+    rb->consumer_pos = 0;
+    rb->producer_pos = 24;
+    rb->pending_pos = 24;
+    rb->overwrite_pos = 0;
+    rb->overwrite_mode = true;
+    hdr = (void *)rb->data;
+    hdr->len = 8;
+    sample = __bpf_ringbuf_reserve(rb, 8);
+    BPF_PROVE(sample != NULL);
+    hdr = sample - BPF_RINGBUF_HDR_SZ;
+    BPF_PROVE(rb->producer_pos == 40);
+    BPF_PROVE(rb->overwrite_pos == 16);
+    BPF_PROVE(hdr->len == (8 | BPF_RINGBUF_BUSY_BIT));
+
+    rb->mask = 63;
+    rb->consumer_pos = 0;
+    rb->producer_pos = 0;
+    rb->pending_pos = 0;
+    rb->overwrite_pos = 0;
+    rb->overwrite_mode = false;
+    rb->work.queued = 0;
+    map.rb = rb;
+    ret = bpf_ringbuf_reserve_dynptr(&map.map, 8, 0, &dynptr);
+    BPF_PROVE(ret == 0);
+    BPF_PROVE(dynptr.data != NULL);
+    BPF_PROVE(dynptr.size == 8);
+    BPF_PROVE(dynptr.type == BPF_DYNPTR_TYPE_RINGBUF);
+    __bpf_ringbuf_commit_direct(rb, dynptr.data, BPF_RB_FORCE_WAKEUP, false);
+    bpf_dynptr_set_null(&dynptr);
+    BPF_PROVE(dynptr.data == NULL);
+    BPF_PROVE(dynptr.size == 0);
+    BPF_PROVE(rb->work.queued == 1);
+
+    ret = bpf_ringbuf_reserve_dynptr(&map.map, 8, 1, &dynptr);
+    BPF_PROVE(ret == -EINVAL);
+    BPF_PROVE(dynptr.data == NULL);
+
+    acc += (int)rb->producer_pos + (int)rb->pending_pos + ret;
+    return (int)choice + acc;""",
     "token_prove": """\
     /* token_prove: verifier-enforced BPF-token permission invariants. */
     __u32 input_key = 0;
@@ -18142,6 +18269,37 @@ EXTRA_EARLY_CFLAGS["disasm_prove"] = EXTRA_EARLY_CFLAGS["disasm"]
 EXTRA_PRE_INCLUDE["disasm_prove"] = EXTRA_PRE_INCLUDE["disasm"]
 EXTRA_PREAMBLE["disasm_prove"] = EXTRA_PREAMBLE["disasm"]
 
+# ringbuf_lifecycle_prove keeps the page-aligned ringbuf backing object on
+# stack for stronger BPF_PROVE assertions. The source commit helper restores
+# rb through pointer masking, so the harness uses a direct-rb commit equivalent.
+EXTRA_PRE_INCLUDE["ringbuf_lifecycle_prove"] = EXTRA_PRE_INCLUDE[
+    "ringbuf_prove"
+].replace("#define PAGE_SHIFT 6", "#define PAGE_SHIFT 5")
+EXTRA_PREAMBLE["ringbuf_lifecycle_prove"] = EXTRA_PREAMBLE["ringbuf_prove"] + """\
+static __always_inline void __bpf_ringbuf_commit_direct(struct bpf_ringbuf *rb,
+                                                        void *sample,
+                                                        u64 flags,
+                                                        bool discard)
+{
+    unsigned long rec_pos, cons_pos;
+    struct bpf_ringbuf_hdr *hdr;
+    u32 new_len;
+
+    hdr = sample - BPF_RINGBUF_HDR_SZ;
+    new_len = hdr->len ^ BPF_RINGBUF_BUSY_BIT;
+    if (discard)
+        new_len |= BPF_RINGBUF_DISCARD_BIT;
+    xchg(&hdr->len, new_len);
+
+    rec_pos = (void *)hdr - (void *)rb->data;
+    cons_pos = smp_load_acquire(&rb->consumer_pos) & rb->mask;
+    if (flags & BPF_RB_FORCE_WAKEUP)
+        irq_work_queue(&rb->work);
+    else if (cons_pos == rec_pos && !(flags & BPF_RB_NO_WAKEUP))
+        irq_work_queue(&rb->work);
+}
+"""
+
 
 def get_functions(src_path):
     """Extract function names from a C source file."""
@@ -18471,6 +18629,7 @@ def main():
         "disasm":                SHIM / "kernel/bpf/disasm.c",
         "disasm_prove":          SHIM / "kernel/bpf/disasm.c",
         "ringbuf_prove":         KSRC / "kernel/bpf/ringbuf.c",
+        "ringbuf_lifecycle_prove": KSRC / "kernel/bpf/ringbuf.c",
         "token_prove":           KSRC / "kernel/bpf/token.c",
         "token_lifecycle_prove": KSRC / "kernel/bpf/token.c",
         "fixups_prove":          SHIM / "kernel/bpf/fixups.c",
