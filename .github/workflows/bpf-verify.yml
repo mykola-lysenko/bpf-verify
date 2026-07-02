@@ -145,6 +145,17 @@ jobs:
           fi
 
       # -----------------------------------------------------------------------
+      # 3b. Check that functions copied into shims/ still match the kernel
+      #     source. Adapted functions report drift as warnings; a function
+      #     that vanished from the kernel (rename/move) fails the job.
+      # -----------------------------------------------------------------------
+      - name: Check shim drift against kernel source
+        working-directory: bpf-verify
+        env:
+          BPF_KSRC: ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
+        run: python3 scripts/check_shim_drift.py
+
+      # -----------------------------------------------------------------------
       # 4. Run the full pipeline (compile + verify via uml-veristat)
       # -----------------------------------------------------------------------
       - name: Run BPF verification pipeline
