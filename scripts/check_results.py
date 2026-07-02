@@ -11,6 +11,9 @@ Hard failures (exit 1):
     (object could not be opened / program skipped)
   - any program got a "failure" verdict
   - a baseline target is missing from the results, or its verdict regressed
+  - a target's instruction count collapsed below DEGENERATION_RATIO of the
+    baseline (suspected constant-folding: the harness no longer exercises
+    the target code)
   - a new target is not in the baseline (run with --update-baseline and
     commit the refreshed baseline together with the new target)
 
@@ -20,6 +23,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
+# A verified program whose instruction count drops below this fraction of
+# the baseline is treated as degenerated (constant-folded) harness.
+DEGENERATION_RATIO = 0.5
 
 errors = []
 warnings = []
@@ -97,8 +104,13 @@ def main():
             if not t.get("compiled") or t.get("verdict") != "success":
                 continue  # already reported by the absolute gates
             b_insns, t_insns = b.get("insns"), t.get("insns")
-            if b_insns and t_insns is not None and t_insns != b_insns:
-                drift.append(f"{name}: insns {b_insns} -> {t_insns}")
+            if b_insns and t_insns is not None:
+                if t_insns < b_insns * DEGENERATION_RATIO:
+                    error(f"{name}: instruction count collapsed "
+                          f"{b_insns} -> {t_insns} (suspected constant-folded "
+                          f"harness; if intentional, refresh the baseline)")
+                elif t_insns != b_insns:
+                    drift.append(f"{name}: insns {b_insns} -> {t_insns}")
         for name in sorted(set(targets) - set(baseline)):
             error(f"{name}: not in baseline; run scripts/check_results.py "
                   f"--update-baseline and commit the refreshed baseline")
