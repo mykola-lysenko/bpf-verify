@@ -123,20 +123,23 @@ jobs:
             fi
           fi
 
-          # oid_registry_data.c
+          # oid_registry_data.c -- the generator moved from scripts/ to lib/
+          # and now takes <in-h-file> <out-c-file> arguments (older trees
+          # read lib/oid_registry.c from stdin), so try both forms.
           if [ ! -f "$KSRC/lib/oid_registry_data.c" ]; then
-            OID_SCRIPT=$(find "$KSRC/scripts" -name "build_OID_registry" 2>/dev/null | head -1)
-            if [ -n "$OID_SCRIPT" ] && [ -f "$KSRC/lib/oid_registry.c" ]; then
+            OID_SCRIPT=$(find "$KSRC/lib" "$KSRC/scripts" -name "build_OID_registry" 2>/dev/null | head -1)
+            if [ -n "$OID_SCRIPT" ]; then
+              perl "$OID_SCRIPT" "$KSRC/include/linux/oid_registry.h" \
+                  "$KSRC/lib/oid_registry_data.c" 2>/dev/null || \
               perl "$OID_SCRIPT" \
-                < "$KSRC/lib/oid_registry.c" \
-                > "$KSRC/lib/oid_registry_data.c" 2>&1 && \
-                echo "Generated oid_registry_data.c" || {
-                echo "::warning::build_OID_registry failed, creating stub"
-                printf 'static const unsigned char oid_data[1] = { 0 };\nstatic const unsigned char oid_index[OID__NR + 1] = { 0 };\nstatic const struct { unsigned char hash; enum OID oid; } oid_search_table[1] = { { 0, 0 } };\n' \
-                  > "$KSRC/lib/oid_registry_data.c"
-              }
+                  < "$KSRC/lib/oid_registry.c" \
+                  > "$KSRC/lib/oid_registry_data.c" 2>/dev/null || \
+                rm -f "$KSRC/lib/oid_registry_data.c"
+            fi
+            if [ -s "$KSRC/lib/oid_registry_data.c" ]; then
+              echo "Generated oid_registry_data.c"
             else
-              echo "::warning::build_OID_registry not found, creating stub"
+              echo "::warning::build_OID_registry failed or not found, creating stub"
               printf 'static const unsigned char oid_data[1] = { 0 };\nstatic const unsigned char oid_index[OID__NR + 1] = { 0 };\nstatic const struct { unsigned char hash; enum OID oid; } oid_search_table[1] = { { 0, 0 } };\n' \
                 > "$KSRC/lib/oid_registry_data.c"
             fi
