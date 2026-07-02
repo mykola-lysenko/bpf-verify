@@ -41,6 +41,23 @@ the current kernel and should not be reported upstream. (The semi-convergent
 term `t = min((max_denominator - d0) / d1, (max_numerator - n0) / n1)` is by
 construction the largest step that keeps both fields within bounds.)
 
+### Userspace sanitizer/property fuzzing — clean (no defects found)
+
+All userspace harnesses (`userspace/harnesses/`, ASan + UBSan) pass with zero
+failures against current bpf-next. These are mainline, heavily-fuzzed functions
+(most are covered by OSS-Fuzz upstream), so clean runs are the expected and
+legitimate result — they exercise and validate the framework:
+
+| Target | Property | Iterations | Result |
+|---|---|---|---|
+| `reciprocal_div` | `reciprocal_divide(a, R(d)) == a / d` (differential vs real division, full 32-bit) | 20,000,000 | 0 failures |
+| `int_sqrt` | `y² ≤ x < (y+1)²` (exact floor(sqrt), full u64 range) | 20,000,000 | 0 failures |
+| `lz4_roundtrip` | `decompress(compress(x)) == x`, and mutated frames never OOB (ASan) | 3,000,000 | 0 failures |
+| `lz4_decompress` | random/corrupt input never OOB (ASan) | 2,000,000 | 0 failures |
+
+The value of the leg is the capability plus the property/differential oracles;
+it is ready to point at less-travelled kernel code as targets are added.
+
 ## Confirmed findings
 
 _None yet._

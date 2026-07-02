@@ -1,0 +1,3 @@
+#ifndef _SHIM_LINUX_MODULE_H
+#define _SHIM_LINUX_MODULE_H
+#endif

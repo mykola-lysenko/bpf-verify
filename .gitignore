@@ -5,3 +5,5 @@ __pycache__/
 *.profraw
 # Built fuzz-execution runner (build with tools/build_runner.sh)
 tools/bpf_runner
+# Built userspace fuzzers are compiled fresh by userspace/run.sh
+userspace/**/*.o
