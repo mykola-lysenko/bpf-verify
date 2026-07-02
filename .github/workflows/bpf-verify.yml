@@ -165,6 +165,8 @@ jobs:
           BPF_CLANG:        ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/clang
           BPF_LLVM_OBJCOPY: ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/llvm-objcopy
           BPF_VERISTAT:     ${{ env.UML_VERISTAT_DIR }}/uml-veristat
+          # capture full verifier logs as a debugging artifact (extra veristat pass)
+          BPF_VERISTAT_VERBOSE: "1"
         run: |
           set -o pipefail
           python3 pipeline.py 2>&1 | tee pipeline.log

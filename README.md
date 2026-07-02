@@ -56,11 +56,15 @@ To use a custom veristat binary instead of uml-veristat:
 BPF_VERISTAT=/path/to/veristat BPF_VERISTAT_SUDO=1 python3 pipeline.py
 ```
 
-## Current Status (as of Phase 4)
+## Current Status
 
-- **77 OK** / 18 FAIL out of 95 targets
-- All 18 remaining failures are due to known BPF backend limitations (stack size, memcpy on stack buffers, global function pointers)
+The current baseline is **156 targets compiled and verified, 0 skipped**
+(see [`PROGRESS.md`](PROGRESS.md) for the running log). The authoritative
+per-target numbers are `baseline/results.json` and the latest CI run's
+`veristat-results` artifact; targets that could not be made
+verifier-compatible are documented in the findings and kept as disabled
+directories under `targets/` (not listed in `targets/ORDER`).
 
 ## Findings Summary
 
-See [`BPF_Verification_Findings.md`](BPF_Verification_Findings.md) for detailed per-target analysis across all four phases.
+See [`BPF_Verification_Findings.md`](BPF_Verification_Findings.md) for detailed per-target analysis across all phases.

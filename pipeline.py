@@ -300,8 +300,11 @@ def parse_veristat_csv(csv_text):
 def run_veristat(obj_files):
     """Run veristat on a list of BPF object files.
 
-    One verbose run captures the full verifier log (debugging artifact);
-    one CSV run produces the machine-readable per-program stats.
+    Objects are verified in batches (BPF_VERISTAT_BATCH, default 32) with a
+    per-batch timeout, so one pathological program cannot take down the whole
+    run. The machine-readable stats come from CSV output; an additional
+    verbose run capturing the full verifier log (useful as a CI artifact) is
+    enabled with BPF_VERISTAT_VERBOSE=1 since it doubles verification time.
     Returns (ran, rc, rows, stderr).
     """
     if not os.path.isfile(VERISTAT):
@@ -311,28 +314,49 @@ def run_veristat(obj_files):
     if os.environ.get("BPF_VERISTAT_SUDO", ""):
         veristat_cmd = ["sudo"] + veristat_cmd
 
-    try:
-        verbose_out = OUTPUT / "veristat_verbose_step1.txt"
-        verbose_result = subprocess.run(
-            veristat_cmd + ["-v"] + obj_files,
-            capture_output=True, timeout=600
-        )
-        vout = verbose_result.stdout.decode('utf-8', errors='replace')
-        verr = verbose_result.stderr.decode('utf-8', errors='replace')
-        verbose_out.write_text(vout + "\nSTDERR:\n" + verr)
+    batch_size = int(os.environ.get("BPF_VERISTAT_BATCH", "32"))
+    batches = [obj_files[i:i + batch_size]
+               for i in range(0, len(obj_files), batch_size)]
 
-        result = subprocess.run(
-            veristat_cmd + ["-o", "csv", "-e", VERISTAT_EMIT] + obj_files,
-            capture_output=True, timeout=600
-        )
-        csv_text = result.stdout.decode('utf-8', errors='replace')
-        stderr = result.stderr.decode('utf-8', errors='replace')
-        (OUTPUT / "veristat.csv").write_text(csv_text)
-        return True, result.returncode, parse_veristat_csv(csv_text), stderr
-    except FileNotFoundError:
-        return False, 0, {}, "(veristat not runnable - skipped)"
-    except subprocess.TimeoutExpired:
-        return True, 1, {}, "veristat timed out"
+    rows = {}
+    csv_texts = []
+    stderr_parts = []
+    verbose_parts = []
+    rc = 0
+    ran = True
+    for i, batch in enumerate(batches):
+        try:
+            if os.environ.get("BPF_VERISTAT_VERBOSE", ""):
+                verbose_result = subprocess.run(
+                    veristat_cmd + ["-v"] + batch,
+                    capture_output=True, timeout=600
+                )
+                verbose_parts.append(
+                    verbose_result.stdout.decode('utf-8', errors='replace')
+                    + "\nSTDERR:\n"
+                    + verbose_result.stderr.decode('utf-8', errors='replace'))
+
+            result = subprocess.run(
+                veristat_cmd + ["-o", "csv", "-e", VERISTAT_EMIT] + batch,
+                capture_output=True, timeout=600
+            )
+            csv_text = result.stdout.decode('utf-8', errors='replace')
+            csv_texts.append(csv_text)
+            rows.update(parse_veristat_csv(csv_text))
+            stderr_parts.append(result.stderr.decode('utf-8', errors='replace'))
+            rc = rc or result.returncode
+        except FileNotFoundError:
+            return False, 0, {}, "(veristat not runnable - skipped)"
+        except subprocess.TimeoutExpired:
+            # affected objects get no verdict; check_results flags them
+            names = ", ".join(Path(o).name for o in batch)
+            stderr_parts.append(f"veristat timed out on batch {i + 1} ({names})\n")
+            rc = rc or 1
+
+    (OUTPUT / "veristat.csv").write_text("\n".join(csv_texts))
+    if verbose_parts:
+        (OUTPUT / "veristat_verbose_step1.txt").write_text("\n".join(verbose_parts))
+    return ran, rc, rows, "".join(stderr_parts)
 
 
 def collect_meta():
