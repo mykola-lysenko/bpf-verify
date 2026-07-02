@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/disasm.c"
+  ],
+  "extra_early_cflags": [
+    "-I{ksrc}"
+  ]
+}

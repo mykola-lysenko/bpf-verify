@@ -1,0 +1,2 @@
+
+#undef crc_ccitt

@@ -1,0 +1,10 @@
+{
+  "src": [
+    "{ksrc}/lib/zlib_deflate/deftree.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/bitrev.c"
+    ]
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/drivers/gpu/drm/amd/display/dc/sspl/dc_spl_filters.c"
+  ]
+}

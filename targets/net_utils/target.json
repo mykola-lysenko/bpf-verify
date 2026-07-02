@@ -1,0 +1,18 @@
+{
+  "src": [
+    "{ksrc}/lib/net_utils.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/ctype.c"
+    ]
+  ],
+  "extra_cflags": [
+    "-D_LINUX_MM_H",
+    "-D_LINUX_HIGHMEM_H",
+    "-D_LINUX_SCATTERLIST_H",
+    "-D__LINUX_BVEC_H",
+    "-D_LINUX_SKBUFF_H",
+    "-DETH_ALEN=6"
+  ]
+}

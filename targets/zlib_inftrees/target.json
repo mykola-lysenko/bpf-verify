@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/lib/zlib_inflate/inftrees.c"
+  ],
+  "extra_cflags": [
+    "-I{ksrc}/lib/zlib_inflate"
+  ]
+}

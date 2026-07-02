@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/lib/win_minmax.c"
+  ]
+}

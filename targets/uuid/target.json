@@ -1,0 +1,10 @@
+{
+  "src": [
+    "{ksrc}/lib/uuid.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/ctype.c"
+    ]
+  ]
+}

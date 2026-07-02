@@ -1,0 +1,13 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/chacha.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/crypto/chacha-block-generic.c"
+    ],
+    [
+      "{ksrc}/lib/crypto/utils.c"
+    ]
+  ]
+}

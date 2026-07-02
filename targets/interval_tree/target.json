@@ -1,0 +1,10 @@
+{
+  "src": [
+    "{ksrc}/lib/interval_tree.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/rbtree.c"
+    ]
+  ]
+}

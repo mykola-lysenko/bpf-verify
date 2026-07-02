@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/lib/crc/crc-ccitt.c",
+    "{ksrc}/lib/crc-ccitt.c"
+  ]
+}

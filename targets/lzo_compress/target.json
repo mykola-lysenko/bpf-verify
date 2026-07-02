@@ -1,0 +1,10 @@
+{
+  "src": [
+    "{ksrc}/lib/lzo/lzo1x_compress.c"
+  ],
+  "extra_includes": [
+    [
+      "{shim}/lib/lzo/lzo-shim.h"
+    ]
+  ]
+}

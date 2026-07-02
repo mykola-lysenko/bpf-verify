@@ -1,0 +1,9 @@
+{
+  "extra_cflags": [
+    "-DCONFIG_HAVE_ARCH_BITREVERSE=1",
+    "-D__LINUX_BITMAP_H",
+    "-Dbitmap_find_next_zero_area_off=__bpf_bitmap_fnzao_stub",
+    "-Dbitmap_find_next_zero_area=__bpf_bitmap_fnza_stub",
+    "-Dbitmap_remap=__bpf_bitmap_remap_stub"
+  ]
+}

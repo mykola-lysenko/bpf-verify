@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/drivers/media/dvb-frontends/cxd2880/cxd2880_common.c"
+  ]
+}

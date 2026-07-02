@@ -10,7 +10,9 @@ This project systematically compiles kernel library functions (CRC, MPI, string 
 
 | File | Description |
 |------|-------------|
-| `pipeline.py` | Main pipeline: compiles 86+ kernel lib targets to BPF `.o` files, then runs `veristat` |
+| `pipeline.py` | Pipeline driver: compiles each target listed in `targets/ORDER` to a BPF `.o` file, then runs `veristat` |
+| `targets/` | Per-target configuration: `targets/<name>/target.json` (source paths, flags), `harness.c` (harness body), optional `pre_include.h`/`preamble.h`. `targets/harness_template.c` is the shared harness skeleton; `targets/_shared/` holds pre-include snippets used by several targets |
+| `shims/` | Shadow kernel-header tree that stubs out infrastructure (atomics, spinlocks, printk, per-CPU, MM) the BPF backend cannot compile |
 | `BPF_Verification_Findings.md` | Detailed findings from each phase of the verification campaign |
 | `test_compile.py` | Helper script for testing individual target compilation |
 

@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/tcx.c"
+  ],
+  "pre_include_shared": [
+    "bpf_mprog_common_pre.h"
+  ]
+}

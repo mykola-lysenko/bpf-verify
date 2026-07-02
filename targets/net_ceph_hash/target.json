@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/net/ceph/ceph_hash.c"
+  ]
+}

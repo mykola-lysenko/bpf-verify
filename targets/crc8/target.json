@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/lib/crc/crc8.c",
+    "{ksrc}/lib/crc8.c"
+  ]
+}

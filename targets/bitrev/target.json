@@ -1,0 +1,10 @@
+{
+  "src": [
+    "{ksrc}/lib/bitrev.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/hweight.c"
+    ]
+  ]
+}

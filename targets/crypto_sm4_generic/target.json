@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/crypto/sm4_generic.c"
+  ],
+  "pre_include_shared": [
+    "crypto_cipher_pre.h"
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/lib/math/rational.c"
+  ]
+}

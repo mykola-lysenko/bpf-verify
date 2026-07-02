@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/drivers/media/test-drivers/vidtv/vidtv_common.c"
+  ]
+}

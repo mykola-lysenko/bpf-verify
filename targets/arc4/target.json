@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/arc4.c"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/lib/crc/crc32-main.c",
+    "{ksrc}/lib/crc32.c"
+  ]
+}

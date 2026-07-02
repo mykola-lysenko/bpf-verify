@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/drivers/net/ethernet/chelsio/cxgb4/cudbg_common.c"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/sha1.c"
+  ],
+  "extra_cflags": [
+    "-std=gnu11"
+  ]
+}

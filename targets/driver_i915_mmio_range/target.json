@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/drivers/gpu/drm/i915/i915_mmio_range.c"
+  ]
+}

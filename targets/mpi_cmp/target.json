@@ -1,0 +1,32 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/mpi/mpi-cmp.c",
+    "{ksrc}/lib/mpi/mpi-cmp.c"
+  ],
+  "extra_includes": [
+    [
+      "{shim}/lib/crypto/mpi/mpi-internal.h"
+    ],
+    [
+      "{ksrc}/lib/crypto/mpi/mpiutil.c",
+      "{ksrc}/lib/mpi/mpiutil.c"
+    ],
+    [
+      "{ksrc}/lib/crypto/mpi/mpih-cmp.c",
+      "{ksrc}/lib/mpi/mpih-cmp.c"
+    ],
+    [
+      "{ksrc}/lib/crypto/mpi/mpi-bit.c",
+      "{ksrc}/lib/mpi/mpi-bit.c"
+    ]
+  ],
+  "extra_cflags": [
+    "-D_LINUX_MM_H",
+    "-D_LINUX_SCATTERLIST_H",
+    "-D_LINUX_HIGHMEM_H",
+    "-D_LINUX_SCHED_H",
+    "-Wno-int-conversion",
+    "-I{ksrc}/lib/crypto/mpi",
+    "-I{ksrc}/lib/mpi"
+  ]
+}

@@ -1,0 +1,3 @@
+
+#undef cxl_cper_sec_prot_err_valid
+#undef cxl_cper_setup_prot_err_work_data

@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/lpm_trie.c"
+  ]
+}

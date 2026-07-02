@@ -1,0 +1,10 @@
+{
+  "src": [
+    "{ksrc}/lib/ts_fsm.c"
+  ],
+  "extra_cflags": [
+    "-D__exit=",
+    "-D__init=",
+    "-D_LINUX_SCHED_H"
+  ]
+}

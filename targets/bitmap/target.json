@@ -1,0 +1,13 @@
+{
+  "src": [
+    "{shim}/lib/bitmap.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/hweight.c"
+    ]
+  ],
+  "extra_early_cflags": [
+    "-I{ksrc}"
+  ]
+}

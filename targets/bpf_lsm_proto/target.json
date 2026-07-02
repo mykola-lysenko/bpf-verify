@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/bpf_lsm_proto.c"
+  ]
+}

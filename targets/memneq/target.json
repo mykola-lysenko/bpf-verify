@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/memneq.c"
+  ]
+}

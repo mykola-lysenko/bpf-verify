@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/lib/ashldi3.c"
+  ]
+}

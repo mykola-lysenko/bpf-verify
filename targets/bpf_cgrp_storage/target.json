@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/bpf_cgrp_storage.c"
+  ],
+  "pre_include_shared": [
+    "bpf_storage_pre.h"
+  ]
+}

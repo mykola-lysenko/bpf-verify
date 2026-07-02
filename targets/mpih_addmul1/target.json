@@ -1,0 +1,12 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/mpi/generic_mpih-mul2.c",
+    "{ksrc}/lib/mpi/generic_mpih-mul2.c"
+  ],
+  "extra_cflags": [
+    "-D_LINUX_MM_H",
+    "-D_LINUX_SCATTERLIST_H",
+    "-D_LINUX_HIGHMEM_H",
+    "-D_LINUX_SCHED_H"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/tnum.c"
+  ],
+  "extra_early_cflags": [
+    "-I{ksrc}"
+  ]
+}

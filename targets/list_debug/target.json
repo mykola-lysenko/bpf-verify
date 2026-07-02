@@ -1,0 +1,9 @@
+{
+  "src": [
+    "{ksrc}/lib/list_debug.c"
+  ],
+  "extra_cflags": [
+    "-DCONFIG_DEBUG_LIST=1",
+    "-DCONFIG_LIST_HARDENED=1"
+  ]
+}

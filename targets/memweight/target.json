@@ -1,0 +1,10 @@
+{
+  "src": [
+    "{ksrc}/lib/memweight.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/hweight.c"
+    ]
+  ]
+}

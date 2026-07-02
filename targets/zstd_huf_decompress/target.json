@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/lib/zstd/decompress/huf_decompress.c"
+  ]
+}

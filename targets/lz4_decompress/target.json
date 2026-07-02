@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/lib/lz4/lz4_decompress.c"
+  ],
+  "extra_early_cflags": [
+    "-I{shim}/lz4"
+  ]
+}

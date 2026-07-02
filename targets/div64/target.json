@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/lib/math/div64.c"
+  ],
+  "extra_cflags": [
+    "-U__SIZEOF_INT128__"
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/bloom_filter.c"
+  ]
+}

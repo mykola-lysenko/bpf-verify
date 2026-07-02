@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{ksrc}/lib/plist.c"
+  ]
+}

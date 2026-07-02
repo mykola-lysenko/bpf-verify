@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/lib/oid_registry.c"
+  ],
+  "extra_cflags": [
+    "-I{ksrc}/lib"
+  ]
+}

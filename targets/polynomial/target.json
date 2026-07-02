@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{shim}/lib/math/polynomial.c"
+  ]
+}

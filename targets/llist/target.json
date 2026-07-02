@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/lib/llist.c"
+  ],
+  "extra_cflags": [
+    "-Wno-int-conversion"
+  ]
+}

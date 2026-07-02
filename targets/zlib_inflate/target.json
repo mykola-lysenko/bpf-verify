@@ -1,0 +1,13 @@
+{
+  "src": [
+    "{ksrc}/lib/zlib_inflate/inflate.c"
+  ],
+  "extra_includes": [
+    [
+      "{ksrc}/lib/zlib_inflate/inffast.c"
+    ]
+  ],
+  "extra_cflags": [
+    "-I{ksrc}/lib/zlib_inflate"
+  ]
+}

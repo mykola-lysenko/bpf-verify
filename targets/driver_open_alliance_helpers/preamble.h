@@ -1,0 +1,3 @@
+
+#undef oa_1000bt1_get_ethtool_cable_result_code
+#undef oa_1000bt1_get_tdr_distance

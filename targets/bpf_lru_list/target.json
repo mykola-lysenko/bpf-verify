@@ -1,0 +1,5 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/bpf_lru_list.c"
+  ]
+}

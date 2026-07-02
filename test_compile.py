@@ -1,32 +1,69 @@
-#!/usr/bin/env python3.11
-"""Test compilation of specific targets to diagnose errors."""
-import subprocess, sys
-sys.path.insert(0, '/home/ubuntu/bpf-verify')
+#!/usr/bin/env python3
+"""Compile (and optionally verify) individual targets to diagnose errors.
 
-# Read pipeline constants by executing the top of pipeline.py
-pipeline_src = open('/home/ubuntu/bpf-verify/pipeline.py').read()
-# Execute just the constant definitions
-exec_globals = {}
-# Find the end of constants (before first function def)
-setup_code = pipeline_src.split('\ndef compile_harness')[0]
-exec(setup_code, exec_globals)
+Usage:
+  python3 test_compile.py <target> [<target> ...] [--veristat]
 
-CLANG = exec_globals['CLANG']
-BASE_CFLAGS = exec_globals['BPF_CFLAGS']
-KSRC = exec_globals['KSRC']
+Targets are directory names under targets/ (e.g. "string", "mpi_add").
+"""
+import argparse
+import os
+import subprocess
+import sys
 
-def test_compile(src_path, name):
-    cmd = [CLANG, '-target', 'bpf', '-O2', '-g'] + BASE_CFLAGS + ['-c', str(src_path), '-o', f'/tmp/{name}_test.o']
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    print(f"\n=== {name} (rc={result.returncode}) ===")
-    if result.returncode != 0:
-        # Show first 20 error lines
-        errors = [l for l in result.stderr.split('\n') if 'error:' in l][:20]
+import pipeline
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("targets", nargs="+", help="target names (targets/<name>)")
+    parser.add_argument("--veristat", action="store_true",
+                        help="run veristat on each successfully compiled object")
+    args = parser.parse_args()
+
+    failed = False
+    for name in args.targets:
+        print(f"=== {name} ===")
+        try:
+            cfg = pipeline.load_target(name)
+        except SystemExit as e:
+            print(f"  [FAIL] {e}")
+            failed = True
+            continue
+        if "src" not in cfg:
+            print("  [SKIP] no src in target.json (disabled target)")
+            continue
+        src = pipeline.resolve_candidates(cfg["src"])
+        if not src.exists():
+            print(f"  [SKIP] source not found: {src}")
+            continue
+
+        out = pipeline.OUTPUT / f"{name}.bpf.o"
+        ok, errors = pipeline.compile_harness(name, src, cfg, out)
+        if not ok:
+            failed = True
+            print("  COMPILE FAILED:")
+            for e in errors[:20]:
+                print(f"    {e}")
+            continue
+        print(f"  Compile OK: {out}")
         for e in errors:
-            print(e)
-    else:
-        print("  SUCCESS")
+            print(f"    {e}")
 
-test_compile(KSRC / 'lib/string.c', 'string')
-test_compile(KSRC / 'lib/checksum.c', 'checksum')
-test_compile(KSRC / 'lib/mpi/mpi-add.c', 'mpi_add')
+        if args.veristat:
+            veristat_cmd = [str(pipeline.VERISTAT)]
+            if os.environ.get("BPF_VERISTAT_SUDO", ""):
+                veristat_cmd = ["sudo"] + veristat_cmd
+            r = subprocess.run(veristat_cmd + [str(out)],
+                               capture_output=True, text=True, timeout=60)
+            print(r.stdout.strip())
+            if r.returncode != 0:
+                failed = True
+                print("  VERISTAT STDERR:", r.stderr[-200:])
+        print()
+
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/prog_iter.c"
+  ],
+  "pre_include_shared": [
+    "bpf_iter_pre.h"
+  ]
+}
