@@ -199,6 +199,9 @@ def load_targets():
         for line in (TARGETS_DIR / "ORDER").read_text().splitlines()
         if line.strip() and not line.startswith("#")
     ]
+    dupes = {n for n in order if order.count(n) > 1}
+    if dupes:
+        raise SystemExit(f"targets/ORDER lists targets more than once: {sorted(dupes)}")
     return {name: load_target(name) for name in order}
 
 
