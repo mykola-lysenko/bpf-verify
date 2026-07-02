@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/base64.c"
-  ]
+  ],
+  "execute": true
 }

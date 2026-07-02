@@ -18,8 +18,8 @@
     },
     "base64": {
       "verdict": "success",
-      "insns": 169,
-      "states": 8
+      "insns": 246,
+      "states": 14
     },
     "bcd": {
       "verdict": "success",
@@ -138,8 +138,8 @@
     },
     "crc16": {
       "verdict": "success",
-      "insns": 92,
-      "states": 4
+      "insns": 359,
+      "states": 21
     },
     "crc32": {
       "verdict": "success",
@@ -318,8 +318,8 @@
     },
     "hexdump": {
       "verdict": "success",
-      "insns": 87,
-      "states": 1
+      "insns": 120,
+      "states": 4
     },
     "hweight": {
       "verdict": "success",
