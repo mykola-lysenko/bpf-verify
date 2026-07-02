@@ -1,0 +1,790 @@
+{
+  "schema": 1,
+  "targets": {
+    "arc4": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "ashldi3": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "ashrdi3": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "base64": {
+      "verdict": "success",
+      "insns": 169,
+      "states": 8
+    },
+    "bcd": {
+      "verdict": "success",
+      "insns": 26,
+      "states": 1
+    },
+    "bitmap": {
+      "verdict": "success",
+      "insns": 169,
+      "states": 6
+    },
+    "bitrev": {
+      "verdict": "success",
+      "insns": 88,
+      "states": 2
+    },
+    "bloom_filter": {
+      "verdict": "success",
+      "insns": 2547,
+      "states": 81
+    },
+    "bpf_cgrp_storage": {
+      "verdict": "success",
+      "insns": 289,
+      "states": 13
+    },
+    "bpf_inode_storage": {
+      "verdict": "success",
+      "insns": 160,
+      "states": 6
+    },
+    "bpf_insn_array": {
+      "verdict": "success",
+      "insns": 211,
+      "states": 11
+    },
+    "bpf_iter": {
+      "verdict": "success",
+      "insns": 101,
+      "states": 5
+    },
+    "bpf_lru_list": {
+      "verdict": "success",
+      "insns": 2599,
+      "states": 134
+    },
+    "bpf_lsm_proto": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "bpf_task_storage": {
+      "verdict": "success",
+      "insns": 266,
+      "states": 12
+    },
+    "bsearch": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "btf_iter": {
+      "verdict": "success",
+      "insns": 40,
+      "states": 1
+    },
+    "cgroup_iter": {
+      "verdict": "success",
+      "insns": 311,
+      "states": 6
+    },
+    "chacha_block": {
+      "verdict": "success",
+      "insns": 3444,
+      "states": 17
+    },
+    "checksum": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "clz_ctz": {
+      "verdict": "success",
+      "insns": 98,
+      "states": 10
+    },
+    "clz_tab": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "cmdline": {
+      "verdict": "success",
+      "insns": 504,
+      "states": 38
+    },
+    "cmpdi2": {
+      "verdict": "success",
+      "insns": 37,
+      "states": 3
+    },
+    "cordic": {
+      "verdict": "success",
+      "insns": 260,
+      "states": 7
+    },
+    "crc-ccitt": {
+      "verdict": "success",
+      "insns": 88,
+      "states": 4
+    },
+    "crc-itu-t": {
+      "verdict": "success",
+      "insns": 92,
+      "states": 4
+    },
+    "crc16": {
+      "verdict": "success",
+      "insns": 92,
+      "states": 4
+    },
+    "crc32": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "crc4": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "crc64": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "crc7": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "crc8": {
+      "verdict": "success",
+      "insns": 2701,
+      "states": 30
+    },
+    "crc_t10dif": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "crypto_arc4": {
+      "verdict": "success",
+      "insns": 7788,
+      "states": 82
+    },
+    "crypto_sm4_generic": {
+      "verdict": "success",
+      "insns": 6309,
+      "states": 33
+    },
+    "crypto_tea": {
+      "verdict": "success",
+      "insns": 7178,
+      "states": 87
+    },
+    "crypto_utils": {
+      "verdict": "success",
+      "insns": 24,
+      "states": 2
+    },
+    "ctype": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "dim": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "disasm": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "dispatcher": {
+      "verdict": "success",
+      "insns": 18277,
+      "states": 1242
+    },
+    "div64": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "dmabuf_iter": {
+      "verdict": "success",
+      "insns": 136,
+      "states": 6
+    },
+    "driver_cudbg_common": {
+      "verdict": "success",
+      "insns": 191,
+      "states": 7
+    },
+    "driver_cxd2880_common": {
+      "verdict": "success",
+      "insns": 35,
+      "states": 2
+    },
+    "driver_dc_spl_filters": {
+      "verdict": "success",
+      "insns": 5617,
+      "states": 90
+    },
+    "driver_dp_utils": {
+      "verdict": "success",
+      "insns": 846,
+      "states": 7
+    },
+    "driver_ghes_helpers": {
+      "verdict": "success",
+      "insns": 3123,
+      "states": 37
+    },
+    "driver_i915_mmio_range": {
+      "verdict": "success",
+      "insns": 130,
+      "states": 14
+    },
+    "driver_mcp251xfd_crc16": {
+      "verdict": "success",
+      "insns": 109,
+      "states": 1
+    },
+    "driver_open_alliance_helpers": {
+      "verdict": "success",
+      "insns": 152,
+      "states": 17
+    },
+    "driver_vidtv_common": {
+      "verdict": "success",
+      "insns": 317,
+      "states": 6
+    },
+    "dynamic_queue_limits": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "errname": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "errseq": {
+      "verdict": "success",
+      "insns": 10,
+      "states": 1
+    },
+    "find_bit": {
+      "verdict": "success",
+      "insns": 31,
+      "states": 2
+    },
+    "fs_ntfs3_bitfunc": {
+      "verdict": "success",
+      "insns": 18,
+      "states": 1
+    },
+    "fs_proc_util": {
+      "verdict": "success",
+      "insns": 28,
+      "states": 1
+    },
+    "gcd": {
+      "verdict": "success",
+      "insns": 23,
+      "states": 2
+    },
+    "gf128hash": {
+      "verdict": "success",
+      "insns": 990,
+      "states": 13
+    },
+    "gf128mul": {
+      "verdict": "success",
+      "insns": 26,
+      "states": 1
+    },
+    "glob": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "hexdump": {
+      "verdict": "success",
+      "insns": 87,
+      "states": 1
+    },
+    "hweight": {
+      "verdict": "success",
+      "insns": 65,
+      "states": 2
+    },
+    "int_log": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "int_pow": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "int_sqrt": {
+      "verdict": "success",
+      "insns": 119,
+      "states": 11
+    },
+    "interval_tree": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "kernel_range": {
+      "verdict": "success",
+      "insns": 977,
+      "states": 71
+    },
+    "kmem_cache_iter": {
+      "verdict": "success",
+      "insns": 963,
+      "states": 78
+    },
+    "kstrtox": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lcm": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lib_aes": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lib_blake2s": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lib_chacha": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lib_poly1305": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lib_sha1": {
+      "verdict": "success",
+      "insns": 11118,
+      "states": 103
+    },
+    "lib_sha256": {
+      "verdict": "success",
+      "insns": 6207,
+      "states": 15
+    },
+    "linear_ranges": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "link_iter": {
+      "verdict": "success",
+      "insns": 115,
+      "states": 4
+    },
+    "list_debug": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "list_sort": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "llist": {
+      "verdict": "success",
+      "insns": 22,
+      "states": 1
+    },
+    "lpm_trie": {
+      "verdict": "success",
+      "insns": 45445,
+      "states": 2659
+    },
+    "lshrdi3": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lz4_compress": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lz4_decompress": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lzo_compress": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "lzo_decompress": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "map_in_map": {
+      "verdict": "success",
+      "insns": 83,
+      "states": 3
+    },
+    "map_iter": {
+      "verdict": "success",
+      "insns": 547,
+      "states": 33
+    },
+    "memneq": {
+      "verdict": "success",
+      "insns": 112,
+      "states": 6
+    },
+    "memweight": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "min_heap": {
+      "verdict": "success",
+      "insns": 99,
+      "states": 6
+    },
+    "mpi_add": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpi_cmp": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpi_mul": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpih_add1": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpih_addmul1": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpih_cmp": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpih_lshift": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpih_mul1": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpih_rshift": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpih_sub1": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mpih_submul1": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "mprog": {
+      "verdict": "success",
+      "insns": 247305,
+      "states": 13004
+    },
+    "muldi3": {
+      "verdict": "success",
+      "insns": 13,
+      "states": 1
+    },
+    "net_ceph_crush_hash": {
+      "verdict": "success",
+      "insns": 912,
+      "states": 5
+    },
+    "net_ceph_hash": {
+      "verdict": "success",
+      "insns": 140,
+      "states": 1
+    },
+    "net_dim": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "net_utils": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "nh": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "oid_registry": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "packing": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "percpu_freelist": {
+      "verdict": "success",
+      "insns": 167,
+      "states": 12
+    },
+    "plist": {
+      "verdict": "success",
+      "insns": 10,
+      "states": 1
+    },
+    "polynomial": {
+      "verdict": "success",
+      "insns": 229,
+      "states": 13
+    },
+    "prog_iter": {
+      "verdict": "success",
+      "insns": 115,
+      "states": 4
+    },
+    "queue_stack_maps": {
+      "verdict": "success",
+      "insns": 64,
+      "states": 6
+    },
+    "range_tree": {
+      "verdict": "success",
+      "insns": 358,
+      "states": 29
+    },
+    "ratelimit": {
+      "verdict": "success",
+      "insns": 25,
+      "states": 2
+    },
+    "rational": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "rational_v2": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "rbtree": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "reciprocal_div": {
+      "verdict": "success",
+      "insns": 10,
+      "states": 1
+    },
+    "refcount": {
+      "verdict": "success",
+      "insns": 22,
+      "states": 2
+    },
+    "reuseport_array": {
+      "verdict": "success",
+      "insns": 310,
+      "states": 21
+    },
+    "seq_buf": {
+      "verdict": "success",
+      "insns": 537,
+      "states": 34
+    },
+    "siphash": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "sort": {
+      "verdict": "success",
+      "insns": 168,
+      "states": 8
+    },
+    "string": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "string_helpers": {
+      "verdict": "success",
+      "insns": 714,
+      "states": 57
+    },
+    "sysfs_btf": {
+      "verdict": "success",
+      "insns": 6,
+      "states": 0
+    },
+    "task_iter": {
+      "verdict": "success",
+      "insns": 1233,
+      "states": 62
+    },
+    "tcx": {
+      "verdict": "success",
+      "insns": 1063,
+      "states": 20
+    },
+    "timeconv": {
+      "verdict": "success",
+      "insns": 30,
+      "states": 2
+    },
+    "timecounter": {
+      "verdict": "success",
+      "insns": 17,
+      "states": 1
+    },
+    "timerqueue": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "tnum": {
+      "verdict": "success",
+      "insns": 131,
+      "states": 12
+    },
+    "ts_fsm": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "ts_kmp": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "uaccess": {
+      "verdict": "success",
+      "insns": 228,
+      "states": 18
+    },
+    "ucmpdi2": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "ucs2_string": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "union_find": {
+      "verdict": "success",
+      "insns": 37,
+      "states": 2
+    },
+    "uuid": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "win_minmax": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "xxhash": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "zlib_deftree": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "zlib_inffast": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "zlib_inflate": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "zlib_inftrees": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "zstd_decompress": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "zstd_entropy_common": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "zstd_fse_decompress": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    },
+    "zstd_huf_decompress": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
+    }
+  }
+}

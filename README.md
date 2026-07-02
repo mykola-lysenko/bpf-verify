@@ -58,7 +58,7 @@ BPF_VERISTAT=/path/to/veristat BPF_VERISTAT_SUDO=1 python3 pipeline.py
 
 ## Current Status
 
-The current baseline is **156 targets compiled and verified, 0 skipped**
+The current baseline is **157 targets compiled and verified, 0 skipped**
 (see [`PROGRESS.md`](PROGRESS.md) for the running log). The authoritative
 per-target numbers are `baseline/results.json` and the latest CI run's
 `veristat-results` artifact; targets that could not be made
