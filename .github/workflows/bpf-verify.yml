@@ -159,7 +159,16 @@ jobs:
         run: python3 scripts/check_shim_drift.py
 
       # -----------------------------------------------------------------------
-      # 4. Run the full pipeline (compile + verify via uml-veristat)
+      # 3c. Build the fuzz-execution runner (links the submodule's libbpf).
+      #     Phase 3 of the pipeline runs execute:true targets through it.
+      # -----------------------------------------------------------------------
+      - name: Build bpf_runner
+        working-directory: bpf-verify
+        run: bash tools/build_runner.sh
+
+      # -----------------------------------------------------------------------
+      # 4. Run the full pipeline (compile + verify via uml-veristat, then
+      #    fuzz-execute the execute:true targets in the UML guest)
       # -----------------------------------------------------------------------
       - name: Run BPF verification pipeline
         working-directory: bpf-verify
@@ -239,4 +248,5 @@ jobs:
             bpf-verify/output/results.json
             bpf-verify/output/veristat.csv
             bpf-verify/output/veristat_verbose_step1.txt
+            bpf-verify/output/execution.log
           if-no-files-found: ignore

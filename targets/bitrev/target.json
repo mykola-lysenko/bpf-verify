@@ -6,5 +6,6 @@
     [
       "{ksrc}/lib/hweight.c"
     ]
-  ]
+  ],
+  "execute": true
 }

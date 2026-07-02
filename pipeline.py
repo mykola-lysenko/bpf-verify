@@ -384,6 +384,70 @@ def run_veristat(obj_files):
     return ran, rc, rows, "".join(stderr_parts)
 
 
+# Execution leg (BPF_PROG_TEST_RUN via the UML guest). Enabled when both a
+# runner binary and the UML-run wrapper are configured; see tools/bpf_runner.c
+# and tools/uml-run.sh. BPF_EXECUTE_ITERS controls fuzz iterations per target.
+BPF_RUNNER = os.environ.get(
+    "BPF_RUNNER", str(Path(__file__).parent / "tools" / "bpf_runner"))
+BPF_UML_RUN = os.environ.get(
+    "BPF_UML_RUN", str(Path(__file__).parent / "tools" / "uml-run.sh"))
+BPF_EXECUTE_ITERS = os.environ.get("BPF_EXECUTE_ITERS", "20000")
+
+
+def run_execution(exec_objs):
+    """Fuzz-execute the given {name: obj_path} via the runner inside UML.
+
+    Returns {name: result_dict}. A result has executed=True with iters/failures
+    (+ sample cases) on success, or executed=False with an error otherwise.
+    Runs all objects in a single UML boot. Returns {} (nothing executed) when
+    the runner or UML wrapper is unavailable, so the phase degrades gracefully
+    on hosts without the toolchain.
+    """
+    if not exec_objs:
+        return {}
+    if not (os.path.isfile(BPF_RUNNER) and os.path.isfile(BPF_UML_RUN)):
+        print(f"  (execution skipped: runner {BPF_RUNNER} or "
+              f"wrapper {BPF_UML_RUN} not found)")
+        return {}
+
+    by_base = {f"{name}.bpf.o": name for name in exec_objs}
+    cmd = ["bash", BPF_UML_RUN, BPF_RUNNER, "--iters", BPF_EXECUTE_ITERS]
+    cmd += [str(exec_objs[name]) for name in exec_objs]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+    except subprocess.TimeoutExpired:
+        return {name: {"executed": False, "error": "runner timed out"}
+                for name in exec_objs}
+
+    (OUTPUT / "execution.log").write_text(proc.stdout + "\nSTDERR:\n" + proc.stderr)
+    results = {}
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        name = by_base.get(row.get("file"))
+        if name is None:
+            continue
+        if not row.get("loaded"):
+            results[name] = {"executed": False,
+                             "error": row.get("error", "load failed")}
+        else:
+            results[name] = {
+                "executed": True,
+                "iters": row.get("iters"),
+                "failures": row.get("failures", 0),
+                "cases": row.get("cases", []),
+            }
+    # Targets we asked to run but got no line for (runner crashed mid-run).
+    for name in exec_objs:
+        results.setdefault(name, {"executed": False, "error": "no runner output"})
+    return results
+
+
 def collect_meta():
     """Record toolchain and kernel versions for reproducibility."""
     meta = {"kernel_src": str(KSRC)}
@@ -485,11 +549,35 @@ def main():
 
     print(f"\nveristat exit: {rc}")
 
+    # Phase 3: fuzz-execute the verified objects that opt in (execute:true) and
+    # follow the strict return contract (0 = success; non-zero = a BPF_ASSERT
+    # property failure). Only run objects that actually verified.
+    verified = {name for name, _ in compiled_ok
+                if rows.get(f"{name}.bpf.o", {}).get("verdict") == "success"}
+    exec_objs = {name: out for name, out in compiled_ok
+                 if targets[name].get("execute") and name in verified}
+    exec_results = {}
+    if exec_objs:
+        print(f"\n--- Phase 3: Fuzz-executing {len(exec_objs)} target(s) "
+              f"({BPF_EXECUTE_ITERS} iters each) ---")
+        exec_results = run_execution(exec_objs)
+        for name in sorted(exec_results):
+            r = exec_results[name]
+            if not r.get("executed"):
+                print(f"  [exec-skip] {name}: {r.get('error')}")
+            elif r.get("failures"):
+                print(f"  [PROP-FAIL] {name}: {r['failures']}/{r['iters']} "
+                      f"cases; e.g. {r['cases'][:1]}")
+            else:
+                print(f"  [exec-ok]   {name}: 0/{r['iters']} failures")
+
     # Per-target machine-readable results (consumed by scripts/check_results.py)
     results = {"schema": 1, "meta": collect_meta(), "veristat_ran": ran, "targets": {}}
     for name, _ in compiled_ok:
         entry = {"compiled": True}
         entry.update(rows.get(f"{name}.bpf.o", {"verdict": None}))
+        if name in exec_results:
+            entry["execution"] = exec_results[name]
         results["targets"][name] = entry
     for name, err in compiled_fail:
         results["targets"][name] = {"compiled": False, "error": err}

@@ -64,6 +64,15 @@ def main():
         elif veristat_ran and t.get("verdict") != "success":
             error(f"{name}: verifier verdict is {t.get('verdict')!r}")
 
+        # Execution leg: a property failure is a candidate finding -- the
+        # program verified but a fuzzed input violated an asserted property.
+        ex = t.get("execution")
+        if ex and ex.get("executed") and ex.get("failures"):
+            case = (ex.get("cases") or [{}])[0]
+            error(f"{name}: property FAILED on {ex['failures']}/{ex['iters']} "
+                  f"fuzzed inputs (e.g. seeds={case.get('seeds')} "
+                  f"retval={case.get('retval')}) -- investigate as a finding")
+
     stderr = results.get("veristat_stderr", "")
     for line in stderr.splitlines():
         if "Failed to open" in line:

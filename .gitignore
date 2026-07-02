@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .claude/
 *.profraw
+# Built fuzz-execution runner (build with tools/build_runner.sh)
+tools/bpf_runner

@@ -39,3 +39,24 @@ directory) placeholders, substituted at build time.
 - `extra_cflags` — flags appended after the standard flags.
 - `pre_include_shared` — snippets from `_shared/` concatenated (in order)
   before this target's own `pre_include.h`.
+- `execute` — when `true`, the pipeline fuzz-executes this target after it
+  verifies (Phase 3, `BPF_PROG_TEST_RUN` in the UML guest, see
+  `tools/bpf_runner.c`). Requires the strict execution contract below.
+
+## Execution contract (`execute: true`)
+
+Load-only harnesses may return any value — veristat only checks that the
+program verifies. Execution harnesses are different: the runner treats the
+program's **return value as a pass/fail signal**, so they must
+
+- return **0 on success**, and
+- return non-zero **only** through `BPF_ASSERT(cond)` (which returns -1 when
+  `cond` is false).
+
+Do **not** `return` a computed value from an execution harness — it would read
+as a property failure on every input. Seed inputs from `input_map` (a 4-entry
+`u64` array; the runner writes fuzzed values into keys 0–3 each iteration) so
+the target code stays live and is exercised with real values. Assert genuine
+properties — round-trips (`decode(encode(x)) == x`), differential checks (two
+implementations agree), or documented postconditions. A non-zero return on any
+fuzzed input is reported by `scripts/check_results.py` as a candidate finding.

@@ -271,6 +271,12 @@ else
     warn "Verification step will be skipped."
 fi
 
+# Build the fuzz-execution runner if the submodule's libbpf is available.
+if [ -f "${UML_VERISTAT_DIR}/.build/bpftool-output/libbpf/libbpf.a" ]; then
+    info "Building fuzz-execution runner (tools/bpf_runner)..."
+    bash "${SCRIPT_DIR}/tools/build_runner.sh" || warn "runner build failed; Phase 3 execution will be skipped."
+fi
+
 echo ""
 info "Setup complete!"
 info ""
