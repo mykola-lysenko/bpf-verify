@@ -10,7 +10,7 @@
 #
 # What it does:
 #   1. Installs LLVM 23 nightly (clang-23) from apt.llvm.org
-#   2. Fetches the bpf-next kernel source tarball from Google Drive
+#   2. Fetches the pinned bpf-next kernel snapshot from git.kernel.org
 #   3. Extracts it to ~/bpf-next-0aa637869
 #   4. Creates the generated kernel headers (autoconf.h, bounds.h, etc.)
 #   5. Verifies the setup is complete
@@ -22,10 +22,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KSRC="${HOME}/bpf-next-0aa637869"
 KERNEL_COMMIT="0aa637869"
-GDRIVE_FILE_ID="14spgX-TYzW9hTmhe6EPHg3VByHoZtN8M"   # Set this after first upload to Google Drive
-GDRIVE_TARBALL="bpf-next-${KERNEL_COMMIT}.tar.gz"
+KSRC="${HOME}/bpf-next-${KERNEL_COMMIT}"
+export KSRC
+# Pinned, publicly reproducible kernel snapshot (cgit serves a snapshot
+# tarball for any commit id; extracts to bpf-next-${KERNEL_COMMIT}/).
+SNAPSHOT_URL="https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/snapshot/bpf-next-${KERNEL_COMMIT}.tar.gz"
 
 info()  { echo "[INFO]  $*"; }
 step()  { echo ""; echo "==> $*"; }
@@ -68,31 +70,29 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 2: Fetch bpf-next kernel source from Google Drive
+# Step 2: Fetch the pinned bpf-next kernel snapshot from git.kernel.org
 # ---------------------------------------------------------------------------
 step "2/5  Fetching bpf-next kernel source (commit ${KERNEL_COMMIT})"
 
 if [ -d "${KSRC}/include/linux" ]; then
     info "Kernel source already present at ${KSRC}"
 else
-    if [ -n "${GDRIVE_FILE_ID}" ]; then
-        info "Downloading ${GDRIVE_TARBALL} from Google Drive..."
-        # Use rclone to download from Google Drive
-        rclone copy "manus_google_drive:bpf-verify/${GDRIVE_TARBALL}" "${HOME}/" \
-            --config "${HOME}/.gdrive-rclone.ini" \
-            --progress 2>&1 | tail -5
-
+    TARBALL="${HOME}/bpf-next-${KERNEL_COMMIT}.tar.gz"
+    info "Downloading pinned snapshot from git.kernel.org (~250 MB)..."
+    if curl -fL --retry 3 -o "${TARBALL}" "${SNAPSHOT_URL}"; then
         info "Extracting kernel source..."
-        tar -xzf "${HOME}/${GDRIVE_TARBALL}" -C "${HOME}/"
-        rm -f "${HOME}/${GDRIVE_TARBALL}"
+        tar -xzf "${TARBALL}" -C "${HOME}/"
+        rm -f "${TARBALL}"
         info "Kernel source extracted to ${KSRC}"
     else
-        # Fallback: clone from kernel.org (slower but always works)
-        info "No Google Drive file ID set. Cloning from kernel.org (this takes ~5 min)..."
+        # Fallback: shallow clone of current tip (NOT the pinned commit --
+        # results may differ from the committed baseline).
+        info "Snapshot download failed. Falling back to a shallow clone of bpf-next tip..."
         git clone --depth=1 \
             https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git \
             "${KSRC}" 2>&1 | tail -3
         info "Cloned bpf-next: $(git -C "${KSRC}" rev-parse --short HEAD)"
+        info "WARNING: tip-of-tree checkout, not the pinned ${KERNEL_COMMIT}."
     fi
 fi
 
@@ -110,7 +110,7 @@ if [ ! -f "${GENERATED}/autoconf.h" ]; then
     python3 - <<'PYEOF'
 import gzip, os, re
 
-ksrc = os.path.expanduser("~/bpf-next-0aa637869")
+ksrc = os.environ["KSRC"]
 out_path = f"{ksrc}/include/generated/autoconf.h"
 
 with gzip.open("/proc/config.gz", "rt") as f:

@@ -335,6 +335,25 @@ def run_veristat(obj_files):
         return True, 1, {}, "veristat timed out"
 
 
+def collect_meta():
+    """Record toolchain and kernel versions for reproducibility."""
+    meta = {"kernel_src": str(KSRC)}
+    try:
+        r = subprocess.run([CLANG, "--version"], capture_output=True, text=True)
+        meta["clang"] = r.stdout.splitlines()[0].strip() if r.returncode == 0 else "unknown"
+    except (FileNotFoundError, OSError):
+        meta["clang"] = "unknown"
+    try:
+        r = subprocess.run(["git", "-C", str(KSRC), "rev-parse", "HEAD"],
+                           capture_output=True, text=True)
+        # a cgit snapshot tree is not a git repo; fall back to the dir name,
+        # which encodes the pinned commit (bpf-next-<sha>)
+        meta["kernel_commit"] = r.stdout.strip() if r.returncode == 0 else KSRC.name
+    except (FileNotFoundError, OSError):
+        meta["kernel_commit"] = KSRC.name
+    return meta
+
+
 def render_table(rows):
     """Render veristat rows as an aligned text table."""
     header = ["File", "Verdict", "Duration (us)", "Insns", "States", "Peak states"]
@@ -418,7 +437,7 @@ def main():
     print(f"\nveristat exit: {rc}")
 
     # Per-target machine-readable results (consumed by scripts/check_results.py)
-    results = {"schema": 1, "veristat_ran": ran, "targets": {}}
+    results = {"schema": 1, "meta": collect_meta(), "veristat_ran": ran, "targets": {}}
     for name, _ in compiled_ok:
         entry = {"compiled": True}
         entry.update(rows.get(f"{name}.bpf.o", {"verdict": None}))
