@@ -58,6 +58,27 @@ legitimate result — they exercise and validate the framework:
 The value of the leg is the capability plus the property/differential oracles;
 it is ready to point at less-travelled kernel code as targets are added.
 
+### BPF verifier abstract-domain soundness (`tnum`) — sound (no violation found)
+
+`userspace/harnesses/tnum_soundness.c` fuzzes the verifier's own tristate-number
+domain (`kernel/bpf/tnum.c`) for **soundness**: for random small tnums `a`, `b`,
+it enumerates `gamma(a)` and `gamma(b)` *exhaustively* and checks that every
+concrete `OP(x, y)` is contained in `tnum_OP(a, b)` for
+`OP ∈ {add, sub, and, or, xor, mul, lshift, rshift}`. An escape would be a real,
+reportable verifier bug (the verifier could conclude a register cannot hold a
+value it actually can).
+
+- 5,000,000 iterations (each a complete soundness proof for its tnum pair, up to
+  6 unknown bits per operand): **0 violations**.
+- Detector validated by construction: injecting a deliberately-unsound
+  `tnum_or` (dropping one bit of uncertainty) is caught at the first iteration
+  with a concrete witness `(x, y, OP(x,y), tnum_OP(a,b))`.
+
+Coverage note: the exhaustive check is complete only within the small-tnum
+regime (≤ 6 unknown bits per operand); it is a strong soundness check there but
+not a proof for arbitrary tnums. Runs continuously in CI, so it re-checks every
+kernel/LLVM bump.
+
 ## Confirmed findings
 
 _None yet._

@@ -196,6 +196,18 @@ jobs:
         run: python3 scripts/check_results.py output/results.json
 
       # -----------------------------------------------------------------------
+      # 4c. Userspace sanitizer/property/differential fuzzing (ASan + UBSan),
+      #     including the BPF-verifier tnum abstract-domain soundness check.
+      #     Reaches code the verifier cannot load; a failure is a candidate
+      #     finding. Iteration count kept modest to bound CI wall-clock.
+      # -----------------------------------------------------------------------
+      - name: Userspace property/soundness fuzzing
+        working-directory: bpf-verify
+        env:
+          BPF_KSRC: ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
+        run: bash userspace/run.sh --iters 2000000
+
+      # -----------------------------------------------------------------------
       # 5. Report results as a job summary
       # -----------------------------------------------------------------------
       - name: Report results
