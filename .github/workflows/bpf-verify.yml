@@ -157,30 +157,18 @@ jobs:
         run: |
           set -o pipefail
           python3 pipeline.py 2>&1 | tee pipeline.log
-          # Fail the step if any target failed to compile
-          if grep -qP '^\s*\[FAIL\]' pipeline.log; then
-            echo "::error::One or more targets failed to compile"
-            grep -P '^\s*\[FAIL\]' pipeline.log
-            exit 1
-          fi
-          # Fail if veristat skipped any compiled object/program. Skips usually
-          # mean libbpf could not open an object due to unresolved externs.
-          if [ -f output/results.txt ] && grep -q "Failed to open" output/results.txt; then
-            echo "::error::One or more BPF objects could not be opened by veristat"
-            grep "Failed to open" output/results.txt
-            exit 1
-          fi
-          if [ -f output/results.txt ] && grep -Eq 'Skipped ([1-9][0-9]* files|[0-9]+ files, [1-9][0-9]* programs)' output/results.txt; then
-            echo "::error::One or more BPF objects/programs were skipped by veristat"
-            grep -E 'Done\. Processed .* Skipped ' output/results.txt
-            exit 1
-          fi
-          # Fail if any BPF program failed the verifier
-          if [ -f output/results.txt ] && grep -qw "failure" output/results.txt; then
-            echo "::error::One or more BPF programs failed the verifier"
-            grep -w "failure" output/results.txt
-            exit 1
-          fi
+
+      # -----------------------------------------------------------------------
+      # 4b. Gate the results: compile failures, veristat skips, verifier
+      #     failures, and per-target regressions against the committed
+      #     baseline (missing targets, verdict changes, instruction-count
+      #     collapse). To refresh the baseline after an intentional change:
+      #       python3 scripts/check_results.py output/results.json --update-baseline
+      #     and commit baseline/results.json.
+      # -----------------------------------------------------------------------
+      - name: Check results against baseline
+        working-directory: bpf-verify
+        run: python3 scripts/check_results.py output/results.json
 
       # -----------------------------------------------------------------------
       # 5. Report results as a job summary
@@ -195,13 +183,13 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Kernel commit:** \`${KERNEL_COMMIT}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f output/results.txt ]; then
-            SUCCESS=$(grep -cw "success" output/results.txt || true)
-            FAILURE=$(grep -cw "failure" output/results.txt || true)
+          if [ -f output/results.json ]; then
+            SUCCESS=$(python3 -c "import json,sys; t=json.load(open('output/results.json'))['targets']; print(sum(1 for v in t.values() if v.get('verdict')=='success'))")
+            FAILURE=$(python3 -c "import json,sys; t=json.load(open('output/results.json'))['targets']; print(sum(1 for v in t.values() if v.get('compiled') and v.get('verdict')!='success'))")
             echo "| Metric | Count |" >> "$GITHUB_STEP_SUMMARY"
             echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
             echo "| Veristat: success | $SUCCESS |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Veristat: failure | $FAILURE |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Veristat: failure or skipped | $FAILURE |" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "<details><summary>Full veristat table</summary>" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -232,5 +220,7 @@ jobs:
           name: veristat-results
           path: |
             bpf-verify/output/results.txt
+            bpf-verify/output/results.json
+            bpf-verify/output/veristat.csv
             bpf-verify/output/veristat_verbose_step1.txt
           if-no-files-found: ignore

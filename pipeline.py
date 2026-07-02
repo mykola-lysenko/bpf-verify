@@ -273,10 +273,39 @@ def compile_harness(src_name, src_path, cfg, out_path):
     return True, errors
 
 
+# Stats requested from veristat; the CSV header for this spec is
+# file_name,prog_name,verdict,duration,total_insns,total_states,peak_states
+VERISTAT_EMIT = "file,prog,verdict,duration,insns,states,peak_states"
+
+
+def parse_veristat_csv(csv_text):
+    """Parse veristat CSV output into {obj-file basename: row dict}."""
+    import csv as csv_mod
+    import io
+    rows = {}
+    reader = csv_mod.DictReader(io.StringIO(csv_text))
+    for row in reader:
+        fname = Path(row["file_name"]).name
+        rows[fname] = {
+            "prog": row.get("prog_name"),
+            "verdict": row.get("verdict"),
+            "duration_us": int(row["duration"]) if row.get("duration") else None,
+            "insns": int(row["total_insns"]) if row.get("total_insns") else None,
+            "states": int(row["total_states"]) if row.get("total_states") else None,
+            "peak_states": int(row["peak_states"]) if row.get("peak_states") else None,
+        }
+    return rows
+
+
 def run_veristat(obj_files):
-    """Run veristat on a list of BPF object files, with verbose log."""
+    """Run veristat on a list of BPF object files.
+
+    One verbose run captures the full verifier log (debugging artifact);
+    one CSV run produces the machine-readable per-program stats.
+    Returns (ran, rc, rows, stderr).
+    """
     if not os.path.isfile(VERISTAT):
-        return 0, "(veristat not available - skipped)", ""
+        return False, 0, {}, "(veristat not available - skipped)"
 
     veristat_cmd = [VERISTAT]
     if os.environ.get("BPF_VERISTAT_SUDO", ""):
@@ -293,16 +322,33 @@ def run_veristat(obj_files):
         verbose_out.write_text(vout + "\nSTDERR:\n" + verr)
 
         result = subprocess.run(
-            veristat_cmd + obj_files,
+            veristat_cmd + ["-o", "csv", "-e", VERISTAT_EMIT] + obj_files,
             capture_output=True, timeout=600
         )
-        result_stdout = result.stdout.decode('utf-8', errors='replace')
-        result_stderr = result.stderr.decode('utf-8', errors='replace')
-        return result.returncode, result_stdout, result_stderr
+        csv_text = result.stdout.decode('utf-8', errors='replace')
+        stderr = result.stderr.decode('utf-8', errors='replace')
+        (OUTPUT / "veristat.csv").write_text(csv_text)
+        return True, result.returncode, parse_veristat_csv(csv_text), stderr
     except FileNotFoundError:
-        return 0, "(veristat not runnable - skipped)", ""
+        return False, 0, {}, "(veristat not runnable - skipped)"
     except subprocess.TimeoutExpired:
-        return 1, "", "veristat timed out"
+        return True, 1, {}, "veristat timed out"
+
+
+def render_table(rows):
+    """Render veristat rows as an aligned text table."""
+    header = ["File", "Verdict", "Duration (us)", "Insns", "States", "Peak states"]
+    table = [header]
+    for fname, r in rows.items():
+        table.append([
+            fname, str(r["verdict"]), str(r["duration_us"]),
+            str(r["insns"]), str(r["states"]), str(r["peak_states"]),
+        ])
+    widths = [max(len(row[i]) for row in table) for i in range(len(header))]
+    lines = ["  ".join(cell.ljust(w) for cell, w in zip(row, widths)).rstrip()
+             for row in table]
+    lines.insert(1, "  ".join("-" * w for w in widths))
+    return "\n".join(lines)
 
 
 def main():
@@ -358,10 +404,11 @@ def main():
 
     print("\n--- Phase 2: Running veristat ---")
     obj_files = [str(o) for _, o in compiled_ok]
-    rc, stdout, stderr = run_veristat(obj_files)
+    ran, rc, rows, stderr = run_veristat(obj_files)
 
-    print(stdout)
-    if stderr:
+    table = render_table(rows) if rows else "(no veristat results)"
+    print(table if ran else stderr)
+    if ran and stderr:
         # Only show non-libbpf-skip messages
         important = [l for l in stderr.splitlines()
                      if 'skipping' not in l and l.strip()]
@@ -370,7 +417,20 @@ def main():
 
     print(f"\nveristat exit: {rc}")
 
-    # Save results
+    # Per-target machine-readable results (consumed by scripts/check_results.py)
+    results = {"schema": 1, "veristat_ran": ran, "targets": {}}
+    for name, _ in compiled_ok:
+        entry = {"compiled": True}
+        entry.update(rows.get(f"{name}.bpf.o", {"verdict": None}))
+        results["targets"][name] = entry
+    for name, err in compiled_fail:
+        results["targets"][name] = {"compiled": False, "error": err}
+    if stderr.strip():
+        results["veristat_stderr"] = stderr
+    results_json = OUTPUT / "results.json"
+    results_json.write_text(json.dumps(results, indent=2) + "\n")
+
+    # Human-readable summary
     results_file = OUTPUT / "results.txt"
     with open(results_file, 'w') as f:
         f.write("BPF Kernel Verification Pipeline Results\n")
@@ -383,11 +443,11 @@ def main():
             f.write(f"  {name}: {err}\n")
         f.write("\n" + "=" * 70 + "\n")
         f.write("Veristat Results:\n")
-        f.write(stdout)
+        f.write(table + "\n")
         if stderr:
             f.write("\nVeristat STDERR:\n" + stderr)
 
-    print(f"\nResults saved to: {results_file}")
+    print(f"\nResults saved to: {results_file} and {results_json}")
 
     if rc != 0:
         sys.exit(rc)

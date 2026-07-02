@@ -42,7 +42,14 @@ python3 pipeline.py --compile-only   # compile only
 python3 pipeline.py                  # compile + verify with uml-veristat
 ```
 
-Results are written to `output2/results.txt`.
+Results are written to `output2/results.txt` (human-readable) and
+`output2/results.json` (per-target machine-readable stats). CI gates every
+run against the committed per-target baseline:
+
+```bash
+python3 scripts/check_results.py output2/results.json      # compare against baseline/
+python3 scripts/check_results.py output2/results.json --update-baseline
+```
 
 To use a custom veristat binary instead of uml-veristat:
 ```bash
