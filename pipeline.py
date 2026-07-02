@@ -279,22 +279,44 @@ VERISTAT_EMIT = "file,prog,verdict,duration,insns,states,peak_states"
 
 
 def parse_veristat_csv(csv_text):
-    """Parse veristat CSV output into {obj-file basename: row dict}."""
+    """Parse veristat CSV output into ({obj-file basename: row dict}, noise).
+
+    veristat prints load diagnostics like "Failed to open 'x.bpf.o': -2" on
+    STDOUT ahead of the CSV header, so skip to the header line and return
+    the preceding noise lines for surfacing alongside stderr (check_results
+    scans them for open failures).
+    """
     import csv as csv_mod
     import io
+
+    def to_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    lines = csv_text.splitlines()
+    header = next((i for i, l in enumerate(lines)
+                   if l.startswith("file_name,")), None)
+    if header is None:
+        return {}, lines
+    noise = lines[:header]
     rows = {}
-    reader = csv_mod.DictReader(io.StringIO(csv_text))
+    reader = csv_mod.DictReader(io.StringIO("\n".join(lines[header:])))
     for row in reader:
+        if not row.get("file_name") or not row.get("verdict"):
+            noise.append(",".join(v for v in row.values() if v))
+            continue
         fname = Path(row["file_name"]).name
         rows[fname] = {
             "prog": row.get("prog_name"),
             "verdict": row.get("verdict"),
-            "duration_us": int(row["duration"]) if row.get("duration") else None,
-            "insns": int(row["total_insns"]) if row.get("total_insns") else None,
-            "states": int(row["total_states"]) if row.get("total_states") else None,
-            "peak_states": int(row["peak_states"]) if row.get("peak_states") else None,
+            "duration_us": to_int(row.get("duration")),
+            "insns": to_int(row.get("total_insns")),
+            "states": to_int(row.get("total_states")),
+            "peak_states": to_int(row.get("peak_states")),
         }
-    return rows
+    return rows, noise
 
 
 def run_veristat(obj_files):
@@ -342,7 +364,10 @@ def run_veristat(obj_files):
             )
             csv_text = result.stdout.decode('utf-8', errors='replace')
             csv_texts.append(csv_text)
-            rows.update(parse_veristat_csv(csv_text))
+            batch_rows, noise = parse_veristat_csv(csv_text)
+            rows.update(batch_rows)
+            if noise:
+                stderr_parts.append("\n".join(noise) + "\n")
             stderr_parts.append(result.stderr.decode('utf-8', errors='replace'))
             rc = rc or result.returncode
         except FileNotFoundError:
