@@ -1,0 +1,3 @@
+${KSRC}/lib/crypto/mldsa.c
+${KSRC}/lib/crypto/sha3.c
+${KSRC}/lib/crypto/utils.c

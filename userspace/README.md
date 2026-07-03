@@ -27,6 +27,7 @@ This complements the in-kernel leg rather than replacing it:
 | `shim/linux/*.h` | Minimal replacements for kernel infra headers so real `.c` files include cleanly (real API headers like `linux/lz4.h` still come from the kernel tree). |
 | `harnesses/<name>.c` | One target: defines `fuzz_case()` + `fuzz_name`. Includes the real kernel source (preferred, tracks upstream) or copies a small function verbatim. |
 | `harnesses/<name>.flags` | Optional per-harness compiler flags (may reference `$KSRC`, `$HERE`, `$REPO`). |
+| `harnesses/<name>.sources` | Optional extra kernel `.c` files (one per line, may reference `$KSRC`) compiled as separate TUs and linked — for a target function whose implementation spans several files (e.g. `mldsa` links `sha3.c` + `utils.c`). |
 | `run.sh` | Build each harness with ASan+UBSan and run it. |
 
 ## Running

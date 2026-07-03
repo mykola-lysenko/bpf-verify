@@ -17,6 +17,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <limits.h>
+#include <errno.h>   /* ENOMEM, EBADMSG, EKEYREJECTED, ... for kernel returns */
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -49,6 +50,9 @@ typedef u16 __be16; typedef u32 __be32; typedef u64 __be64;
 #define __pure __attribute__((pure))
 #define __init
 #define __exit
+#define __initconst
+#define __initdata
+#define __ro_after_init
 #define __user
 #define __force
 #define __iomem
@@ -121,10 +125,69 @@ static inline int fls(unsigned int x)  { return x ? 32 - __builtin_clz(x) : 0; }
 static inline int fls64(u64 x)         { return x ? 64 - __builtin_clzll(x) : 0; }
 static inline int __ffs(unsigned long x) { return __builtin_ctzl(x); }
 static inline unsigned long __fls(unsigned long x) { return 63 - __builtin_clzl(x); }
+static inline u64 rol64(u64 w, unsigned int s) { return (w << s) | (w >> (64 - s)); }
+static inline u64 ror64(u64 w, unsigned int s) { return (w >> s) | (w << (64 - s)); }
+static inline u32 rol32(u32 w, unsigned int s) { return (w << s) | (w >> (32 - s)); }
+static inline u32 ror32(u32 w, unsigned int s) { return (w >> s) | (w << (32 - s)); }
+/* Host is little-endian: the LE conversions are the identity. */
+static inline u64 le64_to_cpu(u64 x) { return x; }
+static inline u32 le32_to_cpu(u32 x) { return x; }
+static inline u16 le16_to_cpu(u16 x) { return x; }
+static inline u64 cpu_to_le64(u64 x) { return x; }
+static inline u32 cpu_to_le32(u32 x) { return x; }
+static inline u16 cpu_to_le16(u16 x) { return x; }
+static inline void memzero_explicit(void *s, size_t n)
+{
+	memset(s, 0, n);
+	__asm__ __volatile__("" : : "r"(s) : "memory");
+}
+static inline bool mem_is_zero(const void *p, size_t n)
+{
+	const unsigned char *b = p;
+	for (size_t i = 0; i < n; i++)
+		if (b[i])
+			return false;
+	return true;
+}
+/* In-place LE conversions: no-ops on a little-endian host. */
+static inline void le64_to_cpus(void *p) { (void)p; }
+static inline void le32_to_cpus(void *p) { (void)p; }
+static inline void le16_to_cpus(void *p) { (void)p; }
+#ifndef static_assert
+#define static_assert(expr, ...) _Static_assert(expr, #expr)
+#endif
 /* ffs() is provided by libc <strings.h> with matching (1-indexed) semantics. */
 #ifndef BITS_PER_LONG
 #define BITS_PER_LONG 64
 #endif
+
+/* Config predicates: optional features off, x86-style capabilities on. */
+#ifndef IS_ENABLED
+#define IS_ENABLED(cfg) 0
+#endif
+#ifndef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS
+#define CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS 1
+#endif
+
+/* slab: heap allocation maps to libc so ASan tracks it. GFP flags ignored. */
+#define GFP_KERNEL 0
+#define GFP_ATOMIC 0
+#define __GFP_ZERO 0
+#include <stdlib.h>
+static inline void *kmalloc(size_t n, unsigned f)
+{
+	void *p = malloc(n ? n : 1);
+	if (p && (f & __GFP_ZERO))
+		memset(p, 0, n);
+	return p;
+}
+static inline void *kzalloc(size_t n, unsigned f) { (void)f; return calloc(1, n ? n : 1); }
+static inline void kfree(const void *p) { free((void *)p); }
+static inline void kfree_sensitive(const void *p) { free((void *)p); }
+/* linux/cleanup.h __free() scope guard, minimal form for the frees we use. */
+static inline void __free_kfree_sensitive(void *pp) { kfree_sensitive(*(void **)pp); }
+static inline void __free_kfree(void *pp) { kfree(*(void **)pp); }
+#define __free(f) __attribute__((__cleanup__(__free_##f)))
 static inline unsigned int hweight32(u32 w) { return __builtin_popcount(w); }
 static inline unsigned int hweight64(u64 w) { return __builtin_popcountll(w); }
 static inline unsigned long fls_long(unsigned long l)

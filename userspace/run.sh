@@ -44,8 +44,16 @@ for name in "${names[@]}"; do
 	if [ -f "${HERE}/harnesses/${name}.flags" ]; then
 		EXTRA="$(eval echo "$(cat "${HERE}/harnesses/${name}.flags")")"
 	fi
+	# Optional extra kernel .c files compiled as separate TUs and linked
+	# (for targets whose function depends on another source, e.g. mldsa+sha3).
+	SOURCES=""
+	if [ -f "${HERE}/harnesses/${name}.sources" ]; then
+		while IFS= read -r line; do
+			[ -n "${line}" ] && SOURCES="${SOURCES} $(eval echo "${line}")"
+		done < "${HERE}/harnesses/${name}.sources"
+	fi
 	if ! "${CC}" ${SANFLAGS} -I"${HERE}" -include "${HERE}/khost.h" ${EXTRA} \
-			"${src}" "${HERE}/fuzz_main.c" -o "${bin}" 2>"${BUILD}/${name}.cc.log"; then
+			"${src}" ${SOURCES} "${HERE}/fuzz_main.c" -o "${bin}" 2>"${BUILD}/${name}.cc.log"; then
 		echo "=== ${name}: BUILD FAILED ==="
 		cat "${BUILD}/${name}.cc.log"
 		fail=1
