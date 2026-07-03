@@ -8,6 +8,8 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 # All paths are overridable via environment variables so the pipeline runs
@@ -23,6 +25,81 @@ CLANG = os.environ.get("BPF_CLANG", "/usr/bin/clang-23")
 LLVM_OBJCOPY = os.environ.get("BPF_LLVM_OBJCOPY", "/usr/bin/llvm-objcopy-23")
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
+
+TARGET_SUITES = ("compat", "coverage", "proof")
+
+
+@dataclass(frozen=True)
+class Target:
+    name: str
+    src: Path
+    suite: str
+    harness_kind: str
+
+
+def parse_suite_selection(values):
+    if not values:
+        return set(TARGET_SUITES)
+
+    selected = set()
+    for value in values:
+        for raw_suite in value.split(","):
+            suite = raw_suite.strip()
+            if not suite:
+                continue
+            if suite == "all":
+                return set(TARGET_SUITES)
+            if suite not in TARGET_SUITES:
+                choices = ", ".join(("all",) + TARGET_SUITES)
+                raise ValueError(f"unknown suite '{suite}' (choose from {choices})")
+            selected.add(suite)
+
+    return selected or set(TARGET_SUITES)
+
+
+def classify_target(name, has_custom_harness, harness_body):
+    if name.endswith("_prove") or re.search(r"\bBPF_PROVE\s*\(", harness_body):
+        return "proof", "prove"
+    if has_custom_harness:
+        if "BPF_ASSERT" in harness_body:
+            return "coverage", "assert"
+        return "coverage", "exercise"
+    return "compat", "default"
+
+
+def build_targets(candidates):
+    targets = {}
+    for name, src in candidates.items():
+        has_custom_harness = name in HARNESS_BODIES
+        harness_body = HARNESS_BODIES.get(name, DEFAULT_HARNESS_BODY)
+        suite, harness_kind = classify_target(
+            name, has_custom_harness, harness_body
+        )
+        targets[name] = Target(name, src, suite, harness_kind)
+    return targets
+
+
+def format_suite_counts(targets):
+    counts = Counter(target.suite for target in targets.values())
+    return ", ".join(
+        f"{suite}: {counts.get(suite, 0)}" for suite in TARGET_SUITES
+    )
+
+
+def print_target_list(targets):
+    print("name\tsuite\tharness\tsource")
+    for target in targets.values():
+        print(
+            f"{target.name}\t{target.suite}\t"
+            f"{target.harness_kind}\t{target.src}"
+        )
+
+
+def first_existing(paths):
+    for path in paths:
+        if path.exists():
+            return path
+    return paths[0]
 
 # Common BPF compile flags
 BPF_CFLAGS = [
@@ -9670,8 +9747,8 @@ EXTRA_INCLUDES = {
     # mpi_mul: include shim mpi-internal.h FIRST so mpihelp_mul_karatsuba_case
     # is declared as static before mpih-mul.c defines it.
     "mpi_mul":   lambda: [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
-                  next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul1.c", KSRC/"lib/mpi/generic_mpih-mul1.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/crypto/mpi/mpih-mul.c", KSRC/"lib/mpi/mpih-mul.c"] if p.exists())],
+                  first_existing([KSRC/"lib/crypto/mpi/generic_mpih-mul1.c", KSRC/"lib/mpi/generic_mpih-mul1.c"]),
+                  first_existing([KSRC/"lib/crypto/mpi/mpih-mul.c", KSRC/"lib/mpi/mpih-mul.c"])],
 
     # crc32 and crc16 are self-contained (tables are included via crc32table.h)
 
@@ -9709,7 +9786,7 @@ EXTRA_INCLUDES = {
 
     # lib_poly1305 uses poly1305_core_setkey/blocks/emit.
     # BPF does not support 128-bit integers (u128), so we use donna32 instead of donna64.
-    "lib_poly1305": lambda: [next(p for p in [KSRC/"lib/crypto/poly1305-donna32.c", KSRC/"lib/crypto/poly1305-donna64.c"] if p.exists())],
+    "lib_poly1305": lambda: [first_existing([KSRC/"lib/crypto/poly1305-donna32.c", KSRC/"lib/crypto/poly1305-donna64.c"])],
 
     # lib_blake2s: blake2s-generic.c was merged into blake2s.c in newer kernels.
     "lib_blake2s": [],
@@ -9739,18 +9816,18 @@ EXTRA_INCLUDES = {
     # generic_mpih-add1/sub1 (mpihelp_add_n/sub_n), mpi-mod (mpi_mod),
     # mpi-bit (mpi_normalize).
     "mpi_add":   lambda: [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
-                  next(p for p in [KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-add1.c", KSRC/"lib/mpi/generic_mpih-add1.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-sub1.c", KSRC/"lib/mpi/generic_mpih-sub1.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/crypto/mpi/mpi-mod.c", KSRC/"lib/mpi/mpi-mod.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
+                  first_existing([KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"]),
+                  first_existing([KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"]),
+                  first_existing([KSRC/"lib/crypto/mpi/generic_mpih-add1.c", KSRC/"lib/mpi/generic_mpih-add1.c"]),
+                  first_existing([KSRC/"lib/crypto/mpi/generic_mpih-sub1.c", KSRC/"lib/mpi/generic_mpih-sub1.c"]),
+                  first_existing([KSRC/"lib/crypto/mpi/mpi-mod.c", KSRC/"lib/mpi/mpi-mod.c"]),
+                  first_existing([KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"])],
 
     # mpi_cmp needs mpiutil (mpi_normalize via mpi-bit.c), mpih-cmp (mpihelp_cmp).
     "mpi_cmp":   lambda: [str(SHIM / "lib/crypto/mpi/mpi-internal.h"),
-                  next(p for p in [KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"] if p.exists()),
-                  next(p for p in [KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"] if p.exists())],
+                  first_existing([KSRC/"lib/crypto/mpi/mpiutil.c", KSRC/"lib/mpi/mpiutil.c"]),
+                  first_existing([KSRC/"lib/crypto/mpi/mpih-cmp.c", KSRC/"lib/mpi/mpih-cmp.c"]),
+                  first_existing([KSRC/"lib/crypto/mpi/mpi-bit.c", KSRC/"lib/mpi/mpi-bit.c"])],
 }
 
 # Per-file extra compiler flags, keyed by src_name.
@@ -18857,7 +18934,22 @@ def main():
         "--compile-only", action="store_true",
         help="Only compile harnesses; skip the veristat verification step."
     )
+    parser.add_argument(
+        "--suite", action="append", metavar="SUITE",
+        help=(
+            "Target suite to run: all, compat, coverage, or proof. "
+            "May be repeated or comma-separated. Defaults to all."
+        ),
+    )
+    parser.add_argument(
+        "--list-targets", action="store_true",
+        help="List selected targets and exit without compiling."
+    )
     args = parser.parse_args()
+    try:
+        selected_suites = parse_suite_selection(args.suite)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     print("=" * 70)
     print("BPF Kernel Verification Pipeline")
@@ -18865,10 +18957,8 @@ def main():
     print(f"Output dir:    {OUTPUT}")
     print("=" * 70)
 
-    # Candidate files from lib/
-    # Organised into:
-    #   - Previously passing files (baseline)
-    #   - Files newly unblocked by Step 1 WARN_ON/printk suppression
+    # Candidate files. The suite metadata is derived after this table so the
+    # historical target ordering remains unchanged for default all-suite runs.
     candidates = {
         # --- Baseline: already passing before Step 1 ---
         "bcd":                   KSRC / "lib/bcd.c",
@@ -18896,11 +18986,11 @@ def main():
 
         # --- Step 2 targets: newly unblocked by shim extensions ---
         # crc files moved to lib/crc/ in kernel v7.0; fall back to lib/ for <=6.x
-        "crc7":                  next(p for p in [KSRC/"lib/crc/crc7.c",    KSRC/"lib/crc7.c"]    if p.exists()),
-        "crc8":                  next(p for p in [KSRC/"lib/crc/crc8.c",    KSRC/"lib/crc8.c"]    if p.exists()),
-        "crc16":                 next(p for p in [KSRC/"lib/crc/crc16.c",   KSRC/"lib/crc16.c"]   if p.exists()),
-        "crc-ccitt":             next(p for p in [KSRC/"lib/crc/crc-ccitt.c",KSRC/"lib/crc-ccitt.c"] if p.exists()),
-        "crc-itu-t":             next(p for p in [KSRC/"lib/crc/crc-itu-t.c",KSRC/"lib/crc-itu-t.c"] if p.exists()),
+        "crc7":                  first_existing([KSRC/"lib/crc/crc7.c",    KSRC/"lib/crc7.c"]),
+        "crc8":                  first_existing([KSRC/"lib/crc/crc8.c",    KSRC/"lib/crc8.c"]),
+        "crc16":                 first_existing([KSRC/"lib/crc/crc16.c",   KSRC/"lib/crc16.c"]),
+        "crc-ccitt":             first_existing([KSRC/"lib/crc/crc-ccitt.c",KSRC/"lib/crc-ccitt.c"]),
+        "crc-itu-t":             first_existing([KSRC/"lib/crc/crc-itu-t.c",KSRC/"lib/crc-itu-t.c"]),
         "hweight":               KSRC / "lib/hweight.c",
         "bitrev":                KSRC / "lib/bitrev.c",
         "cordic":                KSRC / "lib/math/cordic.c",
@@ -18909,10 +18999,10 @@ def main():
         "bsearch":               KSRC / "lib/bsearch.c",
         "checksum":              KSRC / "lib/checksum.c",
         "clz_ctz":               KSRC / "lib/clz_ctz.c",
-        "crc32":                 next(p for p in [KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"]  if p.exists()),
-        "crc4":                  next(p for p in [KSRC/"lib/crc/crc4.c",      KSRC/"lib/crc4.c"]   if p.exists()),
-        "crc64":                 next(p for p in [KSRC/"lib/crc/crc64-main.c",KSRC/"lib/crc64.c"]  if p.exists()),
-        "crc_t10dif":            next(p for p in [KSRC/"lib/crc/crc-t10dif-main.c", KSRC/"lib/crc-t10dif.c"] if p.exists()),
+        "crc32":                 first_existing([KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"]),
+        "crc4":                  first_existing([KSRC/"lib/crc/crc4.c",      KSRC/"lib/crc4.c"]),
+        "crc64":                 first_existing([KSRC/"lib/crc/crc64-main.c",KSRC/"lib/crc64.c"]),
+        "crc_t10dif":            first_existing([KSRC/"lib/crc/crc-t10dif-main.c", KSRC/"lib/crc-t10dif.c"]),
         "ctype":                 KSRC / "lib/ctype.c",
         "errname":               KSRC / "lib/errname.c",
         "glob":                  KSRC / "lib/glob.c",
@@ -18974,17 +19064,17 @@ def main():
         # lib/zlib_deflate/ subdirectory
         "zlib_deftree":          KSRC / "lib/zlib_deflate/deftree.c",
         # lib/crypto/mpi/ subdirectory (moved from lib/mpi/ in kernel v7.0)
-        "mpi_add":               next(p for p in [KSRC/"lib/crypto/mpi/mpi-add.c",  KSRC/"lib/mpi/mpi-add.c"]  if p.exists()),
-        "mpi_cmp":               next(p for p in [KSRC/"lib/crypto/mpi/mpi-cmp.c",  KSRC/"lib/mpi/mpi-cmp.c"]  if p.exists()),
-        "mpi_mul":               next(p for p in [KSRC/"lib/crypto/mpi/mpi-mul.c",  KSRC/"lib/mpi/mpi-mul.c"]  if p.exists()),
-        "mpih_cmp":              next(p for p in [KSRC/"lib/crypto/mpi/mpih-cmp.c",  KSRC/"lib/mpi/mpih-cmp.c"]  if p.exists()),
-        "mpih_add1":             next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-add1.c",  KSRC/"lib/mpi/generic_mpih-add1.c"]  if p.exists()),
-        "mpih_sub1":             next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-sub1.c",  KSRC/"lib/mpi/generic_mpih-sub1.c"]  if p.exists()),
-        "mpih_mul1":             next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul1.c",  KSRC/"lib/mpi/generic_mpih-mul1.c"]  if p.exists()),
-        "mpih_lshift":           next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-lshift.c",KSRC/"lib/mpi/generic_mpih-lshift.c"] if p.exists()),
-        "mpih_rshift":           next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-rshift.c",KSRC/"lib/mpi/generic_mpih-rshift.c"] if p.exists()),
-        "mpih_addmul1":          next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul2.c", KSRC/"lib/mpi/generic_mpih-mul2.c"]  if p.exists()),
-        "mpih_submul1":          next(p for p in [KSRC/"lib/crypto/mpi/generic_mpih-mul3.c", KSRC/"lib/mpi/generic_mpih-mul3.c"]  if p.exists()),
+        "mpi_add":               first_existing([KSRC/"lib/crypto/mpi/mpi-add.c",  KSRC/"lib/mpi/mpi-add.c"]),
+        "mpi_cmp":               first_existing([KSRC/"lib/crypto/mpi/mpi-cmp.c",  KSRC/"lib/mpi/mpi-cmp.c"]),
+        "mpi_mul":               first_existing([KSRC/"lib/crypto/mpi/mpi-mul.c",  KSRC/"lib/mpi/mpi-mul.c"]),
+        "mpih_cmp":              first_existing([KSRC/"lib/crypto/mpi/mpih-cmp.c",  KSRC/"lib/mpi/mpih-cmp.c"]),
+        "mpih_add1":             first_existing([KSRC/"lib/crypto/mpi/generic_mpih-add1.c",  KSRC/"lib/mpi/generic_mpih-add1.c"]),
+        "mpih_sub1":             first_existing([KSRC/"lib/crypto/mpi/generic_mpih-sub1.c",  KSRC/"lib/mpi/generic_mpih-sub1.c"]),
+        "mpih_mul1":             first_existing([KSRC/"lib/crypto/mpi/generic_mpih-mul1.c",  KSRC/"lib/mpi/generic_mpih-mul1.c"]),
+        "mpih_lshift":           first_existing([KSRC/"lib/crypto/mpi/generic_mpih-lshift.c",KSRC/"lib/mpi/generic_mpih-lshift.c"]),
+        "mpih_rshift":           first_existing([KSRC/"lib/crypto/mpi/generic_mpih-rshift.c",KSRC/"lib/mpi/generic_mpih-rshift.c"]),
+        "mpih_addmul1":          first_existing([KSRC/"lib/crypto/mpi/generic_mpih-mul2.c", KSRC/"lib/mpi/generic_mpih-mul2.c"]),
+        "mpih_submul1":          first_existing([KSRC/"lib/crypto/mpi/generic_mpih-mul3.c", KSRC/"lib/mpi/generic_mpih-mul3.c"]),
         # lib/dim/ subdirectory (dynamic interrupt moderation)
         "dim":                   KSRC / "lib/dim/dim.c",
         "net_dim":               KSRC / "lib/dim/net_dim.c",
@@ -19117,19 +19207,36 @@ def main():
         # Phase 3 targets
         "string_helpers":       SHIM / "lib/string_helpers.c",
         "refcount":             SHIM / "lib/refcount.c",
-        "crc32":                next(p for p in [KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"] if p.exists()),
-        "crc16":                next(p for p in [KSRC/"lib/crc/crc16.c",      KSRC/"lib/crc16.c"] if p.exists()),
+        "crc32":                first_existing([KSRC/"lib/crc/crc32-main.c", KSRC/"lib/crc32.c"]),
+        "crc16":                first_existing([KSRC/"lib/crc/crc16.c",      KSRC/"lib/crc16.c"]),
         "ratelimit":            SHIM / "lib/ratelimit.c",
         # "bitmap_str": dropped - include chain too deep (bitmap.c -> device.h -> sched.h -> rwlock_t)
         # "scatterlist": dropped - too many deep dependencies (kmalloc, dma-mapping)
         # "kfifo": dropped - too many deep dependencies (dma-mapping.h)
     }
 
+    targets = build_targets(candidates)
+    selected_targets = {
+        name: target for name, target in targets.items()
+        if target.suite in selected_suites
+    }
+
+    print(f"Selected suites: {', '.join(sorted(selected_suites))}")
+    print(f"Available targets: {format_suite_counts(targets)}")
+    print(f"Selected targets:  {format_suite_counts(selected_targets)}")
+
+    if args.list_targets:
+        print()
+        print_target_list(selected_targets)
+        return
+
     compiled_ok = []
     compiled_fail = []
 
     print("\n--- Phase 1: Compiling kernel files to BPF ---")
-    for name, src in candidates.items():
+    for target in selected_targets.values():
+        name = target.name
+        src = target.src
         if not src.exists():
             print(f"  [SKIP] {name}: source not found")
             continue
@@ -19139,11 +19246,11 @@ def main():
 
         ok, errors = compile_harness(name, src, harness_body, out)
         if ok:
-            compiled_ok.append((name, out))
+            compiled_ok.append((target, out))
             print(f"  [OK]   {name}")
         else:
             first_err = errors[0][:200] if errors else "unknown error"
-            compiled_fail.append((name, first_err))
+            compiled_fail.append((target, first_err))
             print(f"  [FAIL] {name}: {first_err}")
 
     print(f"\nCompiled: {len(compiled_ok)} OK, {len(compiled_fail)} FAIL")
@@ -19176,11 +19283,11 @@ def main():
         f.write("BPF Kernel Verification Pipeline Results\n")
         f.write("=" * 70 + "\n\n")
         f.write(f"Compiled OK ({len(compiled_ok)}):\n")
-        for name, _ in compiled_ok:
-            f.write(f"  {name}\n")
+        for target, _ in compiled_ok:
+            f.write(f"  {target.name}\n")
         f.write(f"\nCompiled FAIL ({len(compiled_fail)}):\n")
-        for name, err in compiled_fail:
-            f.write(f"  {name}: {err}\n")
+        for target, err in compiled_fail:
+            f.write(f"  {target.name}: {err}\n")
         f.write("\n" + "=" * 70 + "\n")
         f.write("Veristat Results:\n")
         f.write(stdout)
