@@ -46,7 +46,14 @@ def main():
     if not compute.exists():
         sys.exit(f"diff/{name}/compute.h not found")
 
-    cfg = pipeline.load_target(name)          # real BPF build config
+    # A diff target reuses the pipeline BPF build config of targets/<name>, or
+    # of a different target named in diff/<name>/base (e.g. several diff targets
+    # exercising different functions from one source file).
+    base = name
+    base_file = tdir / "base"
+    if base_file.exists():
+        base = base_file.read_text().strip()
+    cfg = pipeline.load_target(base)          # real BPF build config
     body = tdir / "harness.c"
     cfg["harness_body"] = body.read_text() if body.exists() else DEFAULT_DIFF_BODY
     # compute.h at file scope, after the kernel source include, so

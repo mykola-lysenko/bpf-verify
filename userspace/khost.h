@@ -26,7 +26,7 @@ typedef int8_t   s8;
 typedef int16_t  s16;
 typedef int32_t  s32;
 typedef int64_t  s64;
-typedef u16 __u16; typedef u32 __u32; typedef u64 __u64;
+typedef u8 __u8; typedef u16 __u16; typedef u32 __u32; typedef u64 __u64;
 typedef u16 __le16; typedef u32 __le32; typedef u64 __le64;
 typedef u16 __be16; typedef u32 __be32; typedef u64 __be64;
 

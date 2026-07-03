@@ -95,13 +95,25 @@ divergence would be a BPF-backend miscompilation of real kernel code.
 |---|---|---|---|
 | `bitrev` | `bitrev32` | 100,000 | native and BPF agree |
 | `div64` | `div64_u64` (64-bit division fallback, `-U__SIZEOF_INT128__`) | 100,000 | native and BPF agree |
+| `xxhash` | `xxh64` (64-bit multiply-by-prime) | 100,000 | native and BPF agree |
+| `crc16` | `crc16` (table lookup + shift/xor loop) | 100,000 | native and BPF agree |
 
 Detector validated by construction: injecting a one-off perturbation on the BPF
 side (`+1` on the result) is caught at every iteration with the exact
-reproducing inputs. The BPF backend correctly compiles these targets; 64-bit
-division (a historical BPF weak spot) matches native exactly. The leg is ready
-for gnarlier codegen targets (byte-swaps, multiply-heavy hashes, shifts) as
-they are added.
+reproducing inputs. The BPF backend correctly compiles these targets, including
+64-bit division and multiply — historical weak spots — matching native exactly.
+
+Two attempted targets could not be differentially tested because the BPF
+toolchain rejects them (real boundaries, consistent with the verifier
+characterization study):
+
+- `mul_u64_add_u64_div_u64` — the verifier rejects the `-U__SIZEOF_INT128__`
+  128-bit long-division fallback: *"infinite loop detected at insn 222"* (277
+  insns; termination is bit-count-based, not syntactic — same class as
+  `rational_best_approximation`).
+- `div64_s64` — the BPF backend refuses to compile it: *"unsupported signed
+  division, please convert to unsigned div/mod"* (`math64.h`). Signed 64-bit
+  division still isn't emitted here (clang 22.1.8).
 
 ## Confirmed findings
 
