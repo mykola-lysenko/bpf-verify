@@ -1,0 +1,1 @@
+-I${HERE}/shim -I${KSRC}/include -DKGLOB_SRC=\"${KSRC}/lib/glob.c\"

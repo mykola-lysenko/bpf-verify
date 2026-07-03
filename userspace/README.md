@@ -57,7 +57,8 @@ Good oracles, in rough order of bug-finding power:
 2. **Round-trip** — `decode(encode(x)) == x` (`lz4_roundtrip`).
 3. **Postcondition** — a documented invariant (`int_sqrt`: `y² ≤ x < (y+1)²`).
 4. **Safety under corruption** — feed a valid structure, mutate it, require no
-   OOB (`lz4_roundtrip` property 2, `lz4_decompress`).
+   OOB (`lz4_roundtrip` property 2, `lz4_decompress`), or feed adversarial
+   input directly to a parser and let ASan enforce bounds (`glob`).
 
 ## Current targets & results
 

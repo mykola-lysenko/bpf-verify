@@ -78,6 +78,9 @@ extern unsigned long khost_warn_count;
 
 #define likely(x)   __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
+#ifndef fallthrough
+#define fallthrough __attribute__((__fallthrough__))
+#endif
 #define BUILD_BUG_ON(cond) ((void)sizeof(char[1 - 2 * !!(cond)]))
 #define BUILD_BUG_ON_MSG(cond, msg) BUILD_BUG_ON(cond)
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
