@@ -1,0 +1,1 @@
+-I${REPO}/userspace/shim -I${KSRC}/include -DDIFF_KSRC=\"${KSRC}/lib/crc/crc-ccitt.c\"

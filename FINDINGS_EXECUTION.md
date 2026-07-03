@@ -60,6 +60,7 @@ legitimate result — they exercise and validate the framework:
 | `int_sqrt` | `y² ≤ x < (y+1)²` (exact floor(sqrt), full u64 range) | 20,000,000 | 0 failures |
 | `lz4_roundtrip` | `decompress(compress(x)) == x`, and mutated frames never OOB (ASan) | 3,000,000 | 0 failures |
 | `lz4_decompress` | random/corrupt input never OOB (ASan) | 2,000,000 | 0 failures |
+| `glob` | `glob_match(pat, str)` never reads past either NUL, adversarial metachar-heavy inputs (ASan) | 5,000,000 | 0 failures |
 
 The value of the leg is the capability plus the property/differential oracles;
 it is ready to point at less-travelled kernel code as targets are added.
@@ -97,6 +98,8 @@ divergence would be a BPF-backend miscompilation of real kernel code.
 | `div64` | `div64_u64` (64-bit division fallback, `-U__SIZEOF_INT128__`) | 100,000 | native and BPF agree |
 | `xxhash` | `xxh64` (64-bit multiply-by-prime) | 100,000 | native and BPF agree |
 | `crc16` | `crc16` (table lookup + shift/xor loop) | 100,000 | native and BPF agree |
+| `crc_ccitt` | `crc_ccitt` (CRC-CCITT table) | 100,000 | native and BPF agree |
+| `int_pow` | `int_pow` (64-bit multiply loop, bounded exp) | 100,000 | native and BPF agree |
 
 Detector validated by construction: injecting a one-off perturbation on the BPF
 side (`+1` on the result) is caught at every iteration with the exact

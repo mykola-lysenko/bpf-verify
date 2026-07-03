@@ -54,8 +54,10 @@ bash tools/diff.sh <name> --iters 200000
 | `div64`  | `div64_u64` | 64-bit division lowering (fallback path), a classic BPF-backend weak spot |
 | `xxhash` | `xxh64` | 64-bit multiply-by-prime lowering |
 | `crc16`  | `crc16` | table-lookup + shift/xor loop codegen |
+| `crc_ccitt` | `crc_ccitt` | CRC-CCITT table lookup |
+| `int_pow` | `int_pow` | 64-bit multiply loop (bounded exponent) |
 
-All four agree with native over 100k inputs each.
+All agree with native over 100k inputs each.
 
 ## Targets that can't be differentially tested (boundary findings)
 
