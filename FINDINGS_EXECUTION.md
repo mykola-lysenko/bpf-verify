@@ -61,6 +61,7 @@ legitimate result — they exercise and validate the framework:
 | `lz4_roundtrip` | `decompress(compress(x)) == x`, and mutated frames never OOB (ASan) | 3,000,000 | 0 failures |
 | `lz4_decompress` | random/corrupt input never OOB (ASan) | 2,000,000 | 0 failures |
 | `glob` | `glob_match(pat, str)` never reads past either NUL, adversarial metachar-heavy inputs (ASan) | 5,000,000 | 0 failures |
+| `cpio` | `find_cpio_data()` never reads past the archive buffer, structured+corrupt "newc" headers (ASan) | 3,000,000 | 0 failures |
 
 The value of the leg is the capability plus the property/differential oracles;
 it is ready to point at less-travelled kernel code as targets are added.
@@ -117,6 +118,11 @@ characterization study):
 - `div64_s64` — the BPF backend refuses to compile it: *"unsupported signed
   division, please convert to unsigned div/mod"* (`math64.h`). Signed 64-bit
   division still isn't emitted here (clang 22.1.8).
+- `aes_encrypt` (lib/crypto/aes.c) — exceeds the BPF 512-byte stack limit
+  (*"BPF stack limit is exceeded"*): the expanded `struct aes_key` round keys
+  plus the working state don't fit. A curation-scanner candidate the
+  heuristics can't reject (struct sizes aren't visible statically); AES is
+  BPF-stack-bound, not just complex.
 
 ## Confirmed findings
 

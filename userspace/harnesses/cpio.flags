@@ -1,0 +1,1 @@
+-I${HERE}/shim -I${KSRC}/include -DKCPIO_SRC=\"${KSRC}/lib/earlycpio.c\"

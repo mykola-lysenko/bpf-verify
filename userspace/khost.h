@@ -92,6 +92,29 @@ extern unsigned long khost_warn_count;
 #define max_t(t, a, b) ((t)(a) > (t)(b) ? (t)(a) : (t)(b))
 #define clamp(v, lo, hi) max((lo), min((v), (hi)))
 #define swap(a, b) do { typeof(a) __t = (a); (a) = (b); (b) = __t; } while (0)
+#define ALIGN(x, a)     (((x) + (a) - 1) & ~((typeof(x))(a) - 1))
+#define PTR_ALIGN(p, a) ((typeof(p))ALIGN((uintptr_t)(p), (a)))
+
+/* strscpy(): faithful to the kernel contract -- copy up to count-1 bytes,
+ * stopping at the source NUL, always NUL-terminate; returns the length copied
+ * or -E2BIG on truncation. Reads src exactly as the kernel does, so an
+ * out-of-bounds source read by a caller is reproduced (and caught by ASan). */
+#ifndef E2BIG
+#define E2BIG 7
+#endif
+static inline long strscpy(char *dst, const char *src, size_t count)
+{
+	size_t i;
+	if (count == 0)
+		return -E2BIG;
+	for (i = 0; i < count - 1; i++) {
+		dst[i] = src[i];
+		if (src[i] == '\0')
+			return (long)i;
+	}
+	dst[i] = '\0';
+	return src[i] == '\0' ? (long)i : -E2BIG;
+}
 
 /* bit scans (kernel semantics: fls(0)==0, fls of MSB-set == bit index+1) */
 static inline int fls(unsigned int x)  { return x ? 32 - __builtin_clz(x) : 0; }
