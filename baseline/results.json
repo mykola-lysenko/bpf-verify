@@ -318,8 +318,8 @@
     },
     "hexdump": {
       "verdict": "success",
-      "insns": 120,
-      "states": 4
+      "insns": 992,
+      "states": 18
     },
     "hweight": {
       "verdict": "success",

@@ -25,3 +25,20 @@
      * Pick a byte guaranteed to be outside [0-9a-fA-F]. */
     unsigned char non_hex = (unsigned char)('g' + (*v & 0x7)); /* 'g'..'n' */
     BPF_ASSERT(hex_to_bin(non_hex) < 0);
+
+    /* Property 4: bin2hex / hex2bin are exact inverses over a full buffer.
+     * Fixed length 8 keeps both loops verifier-bounded. */
+    __u32 key1 = 1;
+    __u64 *v2 = bpf_map_lookup_elem(&input_map, &key1);
+    __u64 bytes = v2 ? *v2 : *v;
+    u8 src8[8];
+    char hexbuf[16];
+    u8 back[8];
+    int i, r;
+    for (i = 0; i < 8; i++)
+        src8[i] = (u8)((bytes >> (i * 8)) & 0xff);
+    bin2hex(hexbuf, src8, 8);
+    r = hex2bin(back, hexbuf, 8);
+    BPF_ASSERT(r == 0);                 /* well-formed hex always parses */
+    for (i = 0; i < 8; i++)
+        BPF_ASSERT(back[i] == src8[i]); /* round-trip is the identity */
