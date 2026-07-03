@@ -79,6 +79,10 @@ extern unsigned long khost_warn_count;
 #define pr_info(...)         ((void)0)
 #define pr_warn(...)         ((void)0)
 #define pr_err(...)          ((void)0)
+#define pr_debug(...)        ((void)0)
+#define pr_cont(...)         ((void)0)
+#define pr_notice(...)       ((void)0)
+#define pr_devel(...)        ((void)0)
 
 #define likely(x)   __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)

@@ -63,6 +63,7 @@ legitimate result — they exercise and validate the framework:
 | `glob` | `glob_match(pat, str)` never reads past either NUL, adversarial metachar-heavy inputs (ASan) | 5,000,000 | 0 failures |
 | `cpio` | `find_cpio_data()` never reads past the archive buffer, structured+corrupt "newc" headers (ASan) | 3,000,000 | 0 failures |
 | `mldsa` | `mldsa_verify()` (ML-DSA/Dilithium post-quantum signature verify) never reads OOB while unpacking a malformed signature + public key (ASan) | 1,000,000 | 0 failures |
+| `asn1` | `asn1_ber_decoder()` never reads past the buffer parsing malformed BER/DER (real OOB CVE history: CVE-2016-2053); driven with the generated rsapubkey grammar (ASan) | 3,000,000 | 0 failures |
 
 The value of the leg is the capability plus the property/differential oracles;
 it is ready to point at less-travelled kernel code as targets are added.

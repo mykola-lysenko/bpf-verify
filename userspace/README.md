@@ -28,6 +28,7 @@ This complements the in-kernel leg rather than replacing it:
 | `harnesses/<name>.c` | One target: defines `fuzz_case()` + `fuzz_name`. Includes the real kernel source (preferred, tracks upstream) or copies a small function verbatim. |
 | `harnesses/<name>.flags` | Optional per-harness compiler flags (may reference `$KSRC`, `$HERE`, `$REPO`). |
 | `harnesses/<name>.sources` | Optional extra kernel `.c` files (one per line, may reference `$KSRC`) compiled as separate TUs and linked — for a target function whose implementation spans several files (e.g. `mldsa` links `sha3.c` + `utils.c`). |
+| `harnesses/<name>.prebuild` | Optional bash step run before compilation that generates sources into `$GEN` (e.g. `asn1` compiles an in-tree `.asn1` grammar to a decoder with the kernel's `asn1_compiler`). |
 | `run.sh` | Build each harness with ASan+UBSan and run it. |
 
 ## Running

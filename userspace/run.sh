@@ -31,6 +31,7 @@ fi
 
 BUILD="$(mktemp -d)"
 trap 'rm -rf "${BUILD}"' EXIT
+export GEN="${BUILD}"   # where a harness .prebuild step may generate sources
 export UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1"
 export ASAN_OPTIONS="abort_on_error=1:detect_leaks=0"
 
@@ -39,6 +40,14 @@ for name in "${names[@]}"; do
 	src="${HERE}/harnesses/${name}.c"
 	[ -f "${src}" ] || { echo "run.sh: no such harness ${name}"; fail=1; continue; }
 	bin="${BUILD}/${name}"
+	# Optional prebuild step: generate sources into $GEN (e.g. compile an
+	# ASN.1 grammar to a decoder). Runs before compilation.
+	if [ -f "${HERE}/harnesses/${name}.prebuild" ]; then
+		if ! bash "${HERE}/harnesses/${name}.prebuild" >"${BUILD}/${name}.pre.log" 2>&1; then
+			echo "=== ${name}: PREBUILD FAILED ==="; cat "${BUILD}/${name}.pre.log"
+			fail=1; continue
+		fi
+	fi
 	# Optional per-harness compiler flags (may reference $KSRC, $HERE, $REPO).
 	EXTRA=""
 	if [ -f "${HERE}/harnesses/${name}.flags" ]; then

@@ -1,0 +1,2 @@
+${KSRC}/lib/asn1_decoder.c
+${GEN}/rsapubkey.asn1.c
