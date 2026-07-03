@@ -18,6 +18,12 @@ inputs, so a failure here is a concrete, reproducible defect — and a
   limits, unbounded loops), the function body is compiled for the host and
   fuzzed directly. This sidesteps the verifier entirely and is the right tool
   for algorithmic properties on code that will never load as BPF.
+- **Native-vs-BPF differential** (`diff/`, `tools/diff.sh`). The same kernel
+  function is compiled to BPF (verified + run in UML) and to native host code,
+  fed identical inputs from one generator, and the outputs are diffed. A
+  divergence is a BPF-backend miscompilation or a verifier-accepted-incorrect
+  program — the on-thesis complement to the property leg, using native
+  execution as the oracle.
 
 ## Negative results (claims that did NOT reproduce)
 
@@ -78,6 +84,24 @@ Coverage note: the exhaustive check is complete only within the small-tnum
 regime (≤ 6 unknown bits per operand); it is a strong soundness check there but
 not a proof for arbitrary tnums. Runs continuously in CI, so it re-checks every
 kernel/LLVM bump.
+
+### Native-vs-BPF differential — agree (no miscompilation found)
+
+`diff/` compiles the same kernel function to BPF (verified + run in UML) and to
+native host code, feeds both identical inputs, and diffs the outputs. A
+divergence would be a BPF-backend miscompilation of real kernel code.
+
+| Target | Function | Iterations | Result |
+|---|---|---|---|
+| `bitrev` | `bitrev32` | 100,000 | native and BPF agree |
+| `div64` | `div64_u64` (64-bit division fallback, `-U__SIZEOF_INT128__`) | 100,000 | native and BPF agree |
+
+Detector validated by construction: injecting a one-off perturbation on the BPF
+side (`+1` on the result) is caught at every iteration with the exact
+reproducing inputs. The BPF backend correctly compiles these targets; 64-bit
+division (a historical BPF weak spot) matches native exactly. The leg is ready
+for gnarlier codegen targets (byte-swaps, multiply-heavy hashes, shifts) as
+they are added.
 
 ## Confirmed findings
 

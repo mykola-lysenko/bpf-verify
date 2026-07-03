@@ -218,14 +218,20 @@ def resolve_candidates(paths):
     return next((p for p in resolved if p.exists()), resolved[0])
 
 
-def compile_harness(src_name, src_path, cfg, out_path):
-    """Compile a kernel source file with a BPF harness wrapper."""
+def compile_harness(src_name, src_path, cfg, out_path, template_path=None):
+    """Compile a kernel source file with a BPF harness wrapper.
+
+    template_path overrides the harness skeleton (defaults to the shared
+    targets/harness_template.c); the differential build passes its own
+    template that additionally defines output_map.
+    """
     safe_name = src_name.replace('-', '_').replace('.', '_')
     extra_includes = [
         resolve_candidates(entry) for entry in cfg.get("extra_includes", [])
     ]
+    template = Path(template_path) if template_path else TARGETS_DIR / "harness_template.c"
     harness_content = (
-        (TARGETS_DIR / "harness_template.c").read_text()
+        template.read_text()
         .replace("@SRC_NAME@", src_name)
         .replace("@SRC_PATH@", str(src_path))
         .replace("@SAFE_NAME@", safe_name)

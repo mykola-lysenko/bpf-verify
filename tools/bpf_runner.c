@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include "diff_seed.h"
 
 #define INPUT_MAP_ENTRIES 4
 
@@ -151,11 +152,82 @@ static int run_object(const char *path, long iters, uint64_t seed, int max_repor
 	return failures ? 1 : 0;
 }
 
+/* Differential emit mode: seed input_map from the shared generator
+ * (diff_seed.h), run, and write one u64 output per iteration to `out`. The
+ * output is the 64-bit value in map "output_map" (key 0) if the object has one,
+ * otherwise the zero-extended 32-bit program return value. Both sides of a
+ * native-vs-BPF diff must use the same base seed. Returns 0 on success, 2 on
+ * infrastructure error. */
+static int emit_object(const char *path, long iters, uint64_t base, FILE *out)
+{
+	struct bpf_object *obj = bpf_object__open(path);
+	if (!obj || bpf_object__load(obj)) {
+		fprintf(stderr, "bpf_runner: emit: open/load failed for %s: %d\n",
+			path, errno);
+		if (obj)
+			bpf_object__close(obj);
+		return 2;
+	}
+	struct bpf_program *prog = NULL, *p;
+	bpf_object__for_each_program(p, obj) { prog = p; break; }
+	struct bpf_map *imap = bpf_object__find_map_by_name(obj, "input_map");
+	struct bpf_map *omap = bpf_object__find_map_by_name(obj, "output_map");
+	if (!prog || !imap) {
+		fprintf(stderr, "bpf_runner: emit: missing prog or input_map\n");
+		bpf_object__close(obj);
+		return 2;
+	}
+	int prog_fd = bpf_program__fd(prog);
+	int imap_fd = bpf_map__fd(imap);
+	int omap_fd = omap ? bpf_map__fd(omap) : -1;
+	unsigned char pkt_in[64] = {0}, pkt_out[64];
+
+	for (long it = 0; it < iters; it++) {
+		uint64_t seeds[DIFF_NINPUTS];
+		diff_gen_inputs(base, it, seeds);
+		for (uint32_t k = 0; k < INPUT_MAP_ENTRIES; k++) {
+			uint64_t v = (k < DIFF_NINPUTS) ? seeds[k] : 0;
+			if (bpf_map_update_elem(imap_fd, &k, &v, BPF_ANY)) {
+				fprintf(stderr, "bpf_runner: emit: map update failed\n");
+				bpf_object__close(obj);
+				return 2;
+			}
+		}
+		struct bpf_test_run_opts opts = {
+			.sz = sizeof(opts), .data_in = pkt_in,
+			.data_size_in = sizeof(pkt_in), .data_out = pkt_out,
+			.data_size_out = sizeof(pkt_out), .repeat = 1,
+		};
+		if (bpf_prog_test_run_opts(prog_fd, &opts)) {
+			fprintf(stderr, "bpf_runner: emit: test_run failed: %d\n", errno);
+			bpf_object__close(obj);
+			return 2;
+		}
+		uint64_t outv;
+		if (omap_fd >= 0) {
+			uint32_t zero = 0;
+			if (bpf_map_lookup_elem(omap_fd, &zero, &outv)) {
+				fprintf(stderr, "bpf_runner: emit: output_map lookup failed "
+					"(fd=%d errno=%d)\n", omap_fd, errno);
+				bpf_object__close(obj);
+				return 2;
+			}
+		} else {
+			outv = (uint64_t)opts.retval; /* zero-extend u32 */
+		}
+		fwrite(&outv, sizeof(outv), 1, out);
+	}
+	bpf_object__close(obj);
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	long iters = 10000;
 	uint64_t seed = 0x123456789abcdefULL;
 	int max_report = 8;
+	const char *emit_path = NULL;
+	uint64_t emit_base = 0x1234567;
 	const char *paths[4096];
 	int npaths = 0;
 
@@ -166,17 +238,34 @@ int main(int argc, char **argv)
 			seed = strtoull(argv[++i], NULL, 0);
 		else if (!strcmp(argv[i], "--max-report") && i + 1 < argc)
 			max_report = atoi(argv[++i]);
+		else if (!strcmp(argv[i], "--emit") && i + 1 < argc)
+			emit_path = argv[++i];
+		else if (!strcmp(argv[i], "--base") && i + 1 < argc)
+			emit_base = strtoull(argv[++i], NULL, 0);
 		else if (argv[i][0] != '-' && npaths < (int)(sizeof(paths) / sizeof(paths[0])))
 			paths[npaths++] = argv[i];
 	}
 	if (!npaths) {
-		fprintf(stderr, "usage: bpf_runner [--iters N] [--seed S] [--max-report M] <obj.bpf.o>...\n");
+		fprintf(stderr, "usage: bpf_runner [--iters N] [--seed S] [--max-report M] <obj.bpf.o>...\n"
+			"       bpf_runner --emit <file> [--base S] [--iters N] <obj.bpf.o>\n");
 		return 2;
 	}
 
 	libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
 	/* Silence libbpf's own logging; we report structured results ourselves. */
 	libbpf_set_print(NULL);
+
+	/* Differential emit mode: one object, write per-iteration outputs. */
+	if (emit_path) {
+		FILE *out = fopen(emit_path, "wb");
+		if (!out) {
+			fprintf(stderr, "bpf_runner: cannot open %s\n", emit_path);
+			return 2;
+		}
+		int rc = emit_object(paths[0], iters, emit_base, out);
+		fclose(out);
+		return rc;
+	}
 
 	int worst = 0; /* 0 ok < 1 failure < 2 infra error, but report failures over infra */
 	int any_infra = 0, any_fail = 0;

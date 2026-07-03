@@ -40,6 +40,13 @@ typedef u16 __be16; typedef u32 __be32; typedef u64 __be64;
 /* attributes / annotations that carry no meaning for a host build */
 #define __maybe_unused __attribute__((unused))
 #define __always_unused __attribute__((unused))
+#ifndef __always_inline
+#define __always_inline inline __attribute__((always_inline))
+#endif
+#ifndef __attribute_const__
+#define __attribute_const__ __attribute__((const))
+#endif
+#define __pure __attribute__((pure))
 #define __init
 #define __exit
 #define __user
@@ -94,6 +101,12 @@ static inline unsigned long __fls(unsigned long x) { return 63 - __builtin_clzl(
 #endif
 static inline unsigned int hweight32(u32 w) { return __builtin_popcount(w); }
 static inline unsigned int hweight64(u64 w) { return __builtin_popcountll(w); }
+static inline unsigned long fls_long(unsigned long l)
+{
+	return l ? (sizeof(l) == 4 ? (unsigned long)fls((unsigned int)l)
+				   : (unsigned long)fls64(l)) : 0;
+}
+#define OPTIMIZER_HIDE_VAR(var) __asm__ __volatile__("" : "+r"(var))
 
 /* do_div(n, base): set n = n / base, return the remainder. */
 #define do_div(n, base) ({                     \
