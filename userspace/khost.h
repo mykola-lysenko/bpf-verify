@@ -140,6 +140,16 @@ static inline u16 le16_to_cpu(u16 x) { return x; }
 static inline u64 cpu_to_le64(u64 x) { return x; }
 static inline u32 cpu_to_le32(u32 x) { return x; }
 static inline u16 cpu_to_le16(u16 x) { return x; }
+static inline u16 __swab16(u16 x) { return __builtin_bswap16(x); }
+static inline u32 __swab32(u32 x) { return __builtin_bswap32(x); }
+static inline u64 __swab64(u64 x) { return __builtin_bswap64(x); }
+/* Big-endian conversions: byte-swap on a little-endian host. */
+static inline u64 cpu_to_be64(u64 x) { return __builtin_bswap64(x); }
+static inline u32 cpu_to_be32(u32 x) { return __builtin_bswap32(x); }
+static inline u16 cpu_to_be16(u16 x) { return __builtin_bswap16(x); }
+static inline u64 be64_to_cpu(u64 x) { return __builtin_bswap64(x); }
+static inline u32 be32_to_cpu(u32 x) { return __builtin_bswap32(x); }
+static inline u16 be16_to_cpu(u16 x) { return __builtin_bswap16(x); }
 static inline void memzero_explicit(void *s, size_t n)
 {
 	memset(s, 0, n);
@@ -186,8 +196,15 @@ static inline void *kmalloc(size_t n, unsigned f)
 	return p;
 }
 static inline void *kzalloc(size_t n, unsigned f) { (void)f; return calloc(1, n ? n : 1); }
+static inline void *kmalloc_array(size_t n, size_t sz, unsigned f) { (void)f; return calloc(n, sz); }
+static inline void *kcalloc(size_t n, size_t sz, unsigned f) { (void)f; return calloc(n, sz); }
 static inline void kfree(const void *p) { free((void *)p); }
 static inline void kfree_sensitive(const void *p) { free((void *)p); }
+#define kzalloc_obj(x)  kzalloc(sizeof(x), GFP_KERNEL)
+#define kmalloc_obj(x)  kmalloc(sizeof(x), GFP_KERNEL)
+#ifndef DIV_ROUND_UP
+#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+#endif
 /* linux/cleanup.h __free() scope guard, minimal form for the frees we use. */
 static inline void __free_kfree_sensitive(void *pp) { kfree_sensitive(*(void **)pp); }
 static inline void __free_kfree(void *pp) { kfree(*(void **)pp); }

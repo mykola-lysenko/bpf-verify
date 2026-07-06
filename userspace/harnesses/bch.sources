@@ -1,0 +1,2 @@
+${KSRC}/lib/bch.c
+${KSRC}/lib/bitrev.c
