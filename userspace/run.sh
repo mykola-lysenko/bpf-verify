@@ -11,7 +11,14 @@ REPO="$(dirname "${HERE}")"
 CC="${CC:-cc}"
 ITERS="5000000"
 SEED="0x1234567"
-SANFLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -g -O1"
+# Sanitizers matched to the kernel's own build semantics: the kernel compiles
+# with -fno-strict-overflow (signed wraparound is defined), so UBSan's
+# signed-integer-overflow and shift-base (shifted-value-overflow) checks are
+# noise on intentional kernel arithmetic -- disable them while keeping ASan
+# (memory safety) and the meaningful UBSan checks (bounds, alignment,
+# shift-exponent, divide-by-zero, ...).
+SANFLAGS="-fsanitize=address,undefined -fno-sanitize=signed-integer-overflow,shift-base \
+	-fno-strict-overflow -fno-sanitize-recover=all -g -O1"
 # Kernel source tree targets include real .c files from (override with BPF_KSRC).
 export KSRC="${BPF_KSRC:-${REPO}/deps/bpf-uml-selftests/uml-veristat/.build/bpf-next}"
 

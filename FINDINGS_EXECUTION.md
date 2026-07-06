@@ -25,6 +25,31 @@ inputs, so a failure here is a concrete, reproducible defect — and a
   program — the on-thesis complement to the property leg, using native
   execution as the oracle.
 
+## Triage: found-but-not-a-bug (threat-model mismatch)
+
+### `unlzma` OOB read on corrupt input — NOT a bug (trusted-input decompressor)
+
+Fuzzing the LZMA boot decompressor (`lib/decompress_unlzma.c`) with corrupt
+input trivially produces an ASan heap-buffer-overflow read in `peek_old_byte()`:
+the single-shot (no-flush) branch computes `pos = buffer_pos - offs` without
+clamping, so a corrupt match distance `offs > buffer_pos` reads one or more
+bytes *before* the output buffer. (The streaming branch, by contrast, wraps
+`pos` into `[0, dict_size)`.)
+
+This is **not reported as a bug**: the boot decompressors are trusted-input by
+design — there is no `unlzma_safe()` counterpart to `LZ4_decompress_safe()`, and
+a valid LZMA stream never references before the output start. Fuzzing it with
+adversarial input tests a threat model the code does not claim to satisfy.
+Recorded here as a methodology point: **match the fuzzer's input model to the
+target's threat model**, and triage OOBs against it before reporting. The
+harness was dropped for this reason.
+
+A real framework improvement did come out of it: the userspace sanitizer flags
+now match the kernel's own build (`-fno-strict-overflow`, and UBSan's
+`signed-integer-overflow`/`shift-base` checks disabled) so intentional kernel
+wraparound (e.g. `read_int()`'s `ret = (ret << 8) | ...`) is not flagged as a
+false positive, while ASan and the meaningful UBSan checks stay on.
+
 ## Negative results (claims that did NOT reproduce)
 
 ### `rational_best_approximation` bound overshoot — NOT REPRODUCED
