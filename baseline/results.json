@@ -158,8 +158,8 @@
     },
     "bpf_verification_stubs": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 58,
+      "states": 6
     },
     "bsearch": {
       "verdict": "success",

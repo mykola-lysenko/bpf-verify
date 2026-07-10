@@ -12,6 +12,11 @@
 #define __LINUX_SPINLOCK_H
 #define __LINUX_RCUPDATE_TRACE_H
 #define _LINUX_BPF_LSM_H
+/* bpf_lsm.h is blocked above, so provide the bpf_lsm_initialized flag the
+ * kernel now checks in inode_storage_map_alloc(). Define it as 1 (LSM
+ * initialized) to keep the allocation path live, matching pre-guard
+ * behavior. */
+#define bpf_lsm_initialized 1
 #define _SOCK_H
 #define _UAPI__SOCK_DIAG_H__
 #define __rcu

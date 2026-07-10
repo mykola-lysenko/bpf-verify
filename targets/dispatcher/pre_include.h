@@ -83,9 +83,13 @@ static inline void bpf_prog_put(struct bpf_prog *prog)
     prog->refs--;
     __bpf_dispatcher_prog_puts++;
 }
-static inline void *bpf_prog_pack_alloc(unsigned int size, void *fill)
+/* The kernel signature gained a third parameter (bool was_classic);
+ * mirror it so the dispatcher.c call sites match. */
+static inline void *bpf_prog_pack_alloc(unsigned int size, void *fill,
+                                        _Bool was_classic)
 {
     (void)fill;
+    (void)was_classic;
     if (size != PAGE_SIZE || __bpf_dispatcher_pack_allocated)
         return NULL;
     __bpf_dispatcher_pack_allocated = 1;
