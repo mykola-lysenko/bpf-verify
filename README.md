@@ -10,7 +10,7 @@ This project systematically compiles kernel library functions (CRC, MPI, string 
 
 | File | Description |
 |------|-------------|
-| `pipeline.py` | Main pipeline: compiles 86+ kernel lib targets to BPF `.o` files, then runs `veristat` |
+| `pipeline.py` | Main pipeline: compiles 214 kernel targets (lib/, crypto/, fs/, net/, drivers/, kernel/) to BPF `.o` files, then runs `veristat` |
 | `BPF_Verification_Findings.md` | Detailed findings from each phase of the verification campaign |
 | `test_compile.py` | Helper script for testing individual target compilation |
 
@@ -47,10 +47,11 @@ To use a custom veristat binary instead of uml-veristat:
 BPF_VERISTAT=/path/to/veristat BPF_VERISTAT_SUDO=1 python3 pipeline.py
 ```
 
-## Current Status (as of Phase 4)
+## Current Status
 
-- **77 OK** / 18 FAIL out of 95 targets
-- All 18 remaining failures are due to known BPF backend limitations (stack size, memcpy on stack buffers, global function pointers)
+- **214 OK** / 0 FAIL out of 214 targets (all compile and pass the BPF verifier)
+- Targets are grouped into three suites: `compat` (55), `coverage` (118), and `proof` (41)
+- Select a subset with `--suite {compat,coverage,proof}` (repeatable/comma-separated); see `--list-targets`
 
 ## Findings Summary
 
