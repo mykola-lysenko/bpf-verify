@@ -11,36 +11,136 @@
 #include <linux/list.h>
 #include <linux/spinlock_types.h>
 #include <linux/atomic.h>
+#include <linux/rwsem.h>
 #include <asm/pgtable_types.h>
 
 /*
  * Minimal page/folio shapes used by current shimmed header paths. These are
  * not intended to mirror the full kernel layout.
  */
+typedef struct {
+	unsigned long f;
+} memdesc_flags_t;
+
+typedef struct {
+	unsigned long val;
+} swp_entry_t;
+
+struct address_space;
+struct dev_pagemap;
+
 struct page {
-	unsigned long flags;
+	memdesc_flags_t flags;
 	union {
+		unsigned long compound_info;
 		struct list_head lru;
+		struct dev_pagemap *pgmap;
 		struct {
 			void *s_mem;
 			unsigned int active;
 			int units;
 		};
 	};
+	struct address_space *mapping;
+	union {
+		pgoff_t index;
+		unsigned long share;
+	};
+	void *zone_device_data;
+	union {
+		void *private;
+		swp_entry_t swap;
+	};
+	union {
+		unsigned int page_type;
+		atomic_t _mapcount;
+	};
 	atomic_t _refcount;
 };
 
 struct folio {
 	union {
+		struct {
+			memdesc_flags_t flags;
+			union {
+				unsigned long compound_info;
+				struct list_head lru;
+				struct dev_pagemap *pgmap;
+			};
+			struct address_space *mapping;
+			union {
+				pgoff_t index;
+				unsigned long share;
+			};
+			void *zone_device_data;
+			union {
+				void *private;
+				swp_entry_t swap;
+			};
+			union {
+				unsigned int page_type;
+				atomic_t _mapcount;
+			};
+			atomic_t _refcount;
+		};
 		struct page page;
 	};
 };
 
 /* Forward declarations */
-struct vm_area_struct;
+struct mm_struct;
 struct anon_vma;
-struct address_space;
 struct mmu_notifier_mm;
+
+typedef unsigned long vm_flags_t;
+typedef unsigned int vm_fault_t;
+#define NUM_MM_FLAG_BITS	64
+typedef struct {
+	unsigned long __mm_flags[1];
+} mm_flags_t;
+
+enum {
+	VM_FAULT_OOM		= 0x000001,
+	VM_FAULT_SIGBUS		= 0x000002,
+	VM_FAULT_MAJOR		= 0x000004,
+	VM_FAULT_HWPOISON	= 0x000010,
+	VM_FAULT_SIGSEGV	= 0x000040,
+	VM_FAULT_NOPAGE		= 0x000100,
+	VM_FAULT_LOCKED		= 0x000200,
+	VM_FAULT_RETRY		= 0x000400,
+	VM_FAULT_FALLBACK	= 0x000800,
+	VM_FAULT_DONE_COW	= 0x001000,
+	VM_FAULT_NEEDDSYNC	= 0x002000,
+	VM_FAULT_COMPLETED	= 0x004000,
+};
+
+enum fault_flag {
+	FAULT_FLAG_WRITE		= 1 << 0,
+	FAULT_FLAG_MKWRITE		= 1 << 1,
+	FAULT_FLAG_ALLOW_RETRY		= 1 << 2,
+	FAULT_FLAG_RETRY_NOWAIT		= 1 << 3,
+	FAULT_FLAG_KILLABLE		= 1 << 4,
+	FAULT_FLAG_TRIED		= 1 << 5,
+	FAULT_FLAG_USER			= 1 << 6,
+	FAULT_FLAG_REMOTE		= 1 << 7,
+	FAULT_FLAG_INSTRUCTION		= 1 << 8,
+	FAULT_FLAG_INTERRUPTIBLE	= 1 << 9,
+	FAULT_FLAG_UNSHARE		= 1 << 10,
+	FAULT_FLAG_ORIG_PTE_VALID	= 1 << 11,
+	FAULT_FLAG_VMA_LOCK		= 1 << 12,
+};
+
+struct vm_fault;
+
+struct vm_area_struct {
+	unsigned long vm_start;
+	unsigned long vm_end;
+	unsigned long vm_pgoff;
+	struct mm_struct *vm_mm;
+	vm_flags_t vm_flags;
+	unsigned int vm_lock_seq;
+	struct list_head anon_vma_chain;
+};
 
 /* Minimal mm_struct fields accessed by BPF-relevant header chains. */
 struct mm_struct {
@@ -64,8 +164,9 @@ struct mm_struct {
 		unsigned long start_brk, brk, start_stack;
 		unsigned long arg_start, arg_end, env_start, env_end;
 	};
+	struct rw_semaphore mmap_lock;
 	spinlock_t page_table_lock;
-	unsigned long flags;
+	mm_flags_t flags;
 };
 
 /* pgtable_t is defined in asm/pgtable_types.h as struct page * */

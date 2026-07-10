@@ -153,7 +153,7 @@
 #define DEFINE_GUARD_COND(args...)				\
 	__bpf_cleanup_pick_cond(args, DEFINE_GUARD_COND_4,	\
 				DEFINE_GUARD_COND_3)(args)
-#define guard				__bpf_cleanup_action
+#define guard(_name)			__bpf_cleanup_noop
 
 #define ACQUIRE(_name, _var)		CLASS(_name, _var)
 #define ACQUIRE_ERR(_name, _var)	__guard_err(_name)(_var)

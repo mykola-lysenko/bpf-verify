@@ -25,6 +25,7 @@
 
 /* ── Page / cache geometry ──────────────────────────────────────────── */
 #define CONFIG_PAGE_SHIFT 12
+#define CONFIG_PGTABLE_LEVELS 4
 #define CONFIG_X86_L1_CACHE_SHIFT 6
 #define CONFIG_ARCH_DMA_MINALIGN 1
 
@@ -81,6 +82,7 @@
 /* ── RCU ────────────────────────────────────────────────────────────── */
 #define CONFIG_TREE_RCU 1
 #define CONFIG_SRCU 1
+#define CONFIG_TREE_SRCU 1
 
 /* ── Locking (avoid CONFIG_LOCKDEP/CONFIG_PROVE_LOCKING — they pull
  *    in heavy debugging infrastructure incompatible with BPF) ────── */
