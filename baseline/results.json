@@ -6,6 +6,11 @@
       "insns": 2,
       "states": 0
     },
+    "arraymap_prove": {
+      "verdict": "success",
+      "insns": 207,
+      "states": 19
+    },
     "ashldi3": {
       "verdict": "success",
       "insns": 2,
@@ -16,10 +21,25 @@
       "insns": 2,
       "states": 0
     },
+    "backtrack": {
+      "verdict": "success",
+      "insns": 887,
+      "states": 56
+    },
+    "backtrack_insn_prove": {
+      "verdict": "success",
+      "insns": 51,
+      "states": 5
+    },
+    "backtrack_prove": {
+      "verdict": "success",
+      "insns": 12,
+      "states": 1
+    },
     "base64": {
       "verdict": "success",
-      "insns": 246,
-      "states": 14
+      "insns": 169,
+      "states": 8
     },
     "bcd": {
       "verdict": "success",
@@ -33,48 +53,113 @@
     },
     "bitrev": {
       "verdict": "success",
-      "insns": 111,
-      "states": 3
+      "insns": 88,
+      "states": 2
     },
     "bloom_filter": {
       "verdict": "success",
       "insns": 2547,
       "states": 81
     },
+    "bloom_filter_prove": {
+      "verdict": "success",
+      "insns": 348,
+      "states": 6
+    },
     "bpf_cgrp_storage": {
       "verdict": "success",
       "insns": 289,
       "states": 13
+    },
+    "bpf_cgrp_storage_prove": {
+      "verdict": "success",
+      "insns": 44,
+      "states": 1
+    },
+    "bpf_crypto": {
+      "verdict": "success",
+      "insns": 38,
+      "states": 1
     },
     "bpf_inode_storage": {
       "verdict": "success",
       "insns": 160,
       "states": 6
     },
+    "bpf_inode_storage_prove": {
+      "verdict": "success",
+      "insns": 63,
+      "states": 1
+    },
     "bpf_insn_array": {
       "verdict": "success",
       "insns": 211,
       "states": 11
+    },
+    "bpf_insn_array_prove": {
+      "verdict": "success",
+      "insns": 19,
+      "states": 1
     },
     "bpf_iter": {
       "verdict": "success",
       "insns": 101,
       "states": 5
     },
+    "bpf_iter_core_prove": {
+      "verdict": "success",
+      "insns": 64,
+      "states": 3
+    },
+    "bpf_local_storage_flags_prove": {
+      "verdict": "success",
+      "insns": 323,
+      "states": 25
+    },
+    "bpf_local_storage_prove": {
+      "verdict": "success",
+      "insns": 237,
+      "states": 21
+    },
     "bpf_lru_list": {
       "verdict": "success",
-      "insns": 2599,
-      "states": 134
+      "insns": 2638,
+      "states": 169
+    },
+    "bpf_lru_list_prove": {
+      "verdict": "success",
+      "insns": 81,
+      "states": 3
     },
     "bpf_lsm_proto": {
       "verdict": "success",
       "insns": 2,
       "states": 0
     },
+    "bpf_struct_ops_lifecycle_prove": {
+      "verdict": "success",
+      "insns": 41,
+      "states": 4
+    },
+    "bpf_struct_ops_prove": {
+      "verdict": "success",
+      "insns": 138,
+      "states": 15
+    },
     "bpf_task_storage": {
       "verdict": "success",
       "insns": 266,
       "states": 12
+    },
+    "bpf_task_storage_prove": {
+      "verdict": "success",
+      "insns": 43,
+      "states": 1
+    },
+    "bpf_verification_stubs": {
+      "verdict": "success",
+      "insns": 2,
+      "states": 0
     },
     "bsearch": {
       "verdict": "success",
@@ -86,6 +171,11 @@
       "insns": 40,
       "states": 1
     },
+    "cfg": {
+      "verdict": "success",
+      "insns": 517,
+      "states": 34
+    },
     "cgroup_iter": {
       "verdict": "success",
       "insns": 311,
@@ -95,6 +185,11 @@
       "verdict": "success",
       "insns": 3444,
       "states": 17
+    },
+    "check_btf": {
+      "verdict": "success",
+      "insns": 3700,
+      "states": 251
     },
     "checksum": {
       "verdict": "success",
@@ -121,10 +216,20 @@
       "insns": 37,
       "states": 3
     },
+    "const_fold": {
+      "verdict": "success",
+      "insns": 4507,
+      "states": 314
+    },
     "cordic": {
       "verdict": "success",
       "insns": 260,
       "states": 7
+    },
+    "cpumask": {
+      "verdict": "success",
+      "insns": 966,
+      "states": 88
     },
     "crc-ccitt": {
       "verdict": "success",
@@ -138,8 +243,8 @@
     },
     "crc16": {
       "verdict": "success",
-      "insns": 359,
-      "states": 21
+      "insns": 92,
+      "states": 4
     },
     "crc32": {
       "verdict": "success",
@@ -176,6 +281,11 @@
       "insns": 7788,
       "states": 82
     },
+    "crypto_blowfish_generic": {
+      "verdict": "success",
+      "insns": 283871,
+      "states": 578
+    },
     "crypto_sm4_generic": {
       "verdict": "success",
       "insns": 6309,
@@ -205,6 +315,11 @@
       "verdict": "success",
       "insns": 2,
       "states": 0
+    },
+    "disasm_prove": {
+      "verdict": "success",
+      "insns": 38,
+      "states": 2
     },
     "dispatcher": {
       "verdict": "success",
@@ -286,6 +401,11 @@
       "insns": 31,
       "states": 2
     },
+    "fixups_prove": {
+      "verdict": "success",
+      "insns": 280,
+      "states": 31
+    },
     "fs_ntfs3_bitfunc": {
       "verdict": "success",
       "insns": 18,
@@ -316,10 +436,20 @@
       "insns": 2,
       "states": 0
     },
+    "hashtab_prove": {
+      "verdict": "success",
+      "insns": 320,
+      "states": 31
+    },
+    "helpers_prove": {
+      "verdict": "success",
+      "insns": 265,
+      "states": 31
+    },
     "hexdump": {
       "verdict": "success",
-      "insns": 992,
-      "states": 18
+      "insns": 87,
+      "states": 1
     },
     "hweight": {
       "verdict": "success",
@@ -416,15 +546,60 @@
       "insns": 2,
       "states": 0
     },
+    "liveness": {
+      "verdict": "success",
+      "insns": 2060,
+      "states": 34
+    },
+    "liveness_arg_track": {
+      "verdict": "success",
+      "insns": 1662,
+      "states": 121
+    },
+    "liveness_call_summary": {
+      "verdict": "success",
+      "insns": 640,
+      "states": 28
+    },
+    "liveness_live_registers": {
+      "verdict": "success",
+      "insns": 4291,
+      "states": 128
+    },
+    "liveness_stack_access_bytes": {
+      "verdict": "success",
+      "insns": 90,
+      "states": 4
+    },
+    "liveness_stack_access_unknown": {
+      "verdict": "success",
+      "insns": 106,
+      "states": 6
+    },
+    "liveness_successors": {
+      "verdict": "success",
+      "insns": 203,
+      "states": 13
+    },
     "llist": {
       "verdict": "success",
       "insns": 22,
       "states": 1
     },
+    "log": {
+      "verdict": "success",
+      "insns": 194,
+      "states": 15
+    },
     "lpm_trie": {
       "verdict": "success",
       "insns": 45445,
       "states": 2659
+    },
+    "lpm_trie_prove": {
+      "verdict": "success",
+      "insns": 76,
+      "states": 3
     },
     "lshrdi3": {
       "verdict": "success",
@@ -456,10 +631,15 @@
       "insns": 83,
       "states": 3
     },
+    "map_in_map_prove": {
+      "verdict": "success",
+      "insns": 28,
+      "states": 1
+    },
     "map_iter": {
       "verdict": "success",
-      "insns": 547,
-      "states": 33
+      "insns": 341,
+      "states": 11
     },
     "memneq": {
       "verdict": "success",
@@ -536,6 +716,11 @@
       "insns": 247305,
       "states": 13004
     },
+    "mprog_prove": {
+      "verdict": "success",
+      "insns": 116,
+      "states": 4
+    },
     "muldi3": {
       "verdict": "success",
       "insns": 13,
@@ -581,6 +766,11 @@
       "insns": 167,
       "states": 12
     },
+    "percpu_freelist_prove": {
+      "verdict": "success",
+      "insns": 78,
+      "states": 7
+    },
     "plist": {
       "verdict": "success",
       "insns": 10,
@@ -601,10 +791,25 @@
       "insns": 64,
       "states": 6
     },
+    "queue_stack_maps_prove": {
+      "verdict": "success",
+      "insns": 105,
+      "states": 5
+    },
     "range_tree": {
       "verdict": "success",
-      "insns": 358,
-      "states": 29
+      "insns": 736,
+      "states": 63
+    },
+    "range_tree_find_prove": {
+      "verdict": "success",
+      "insns": 33,
+      "states": 3
+    },
+    "range_tree_prove": {
+      "verdict": "success",
+      "insns": 12,
+      "states": 1
     },
     "ratelimit": {
       "verdict": "success",
@@ -641,6 +846,21 @@
       "insns": 310,
       "states": 21
     },
+    "reuseport_array_prove": {
+      "verdict": "success",
+      "insns": 28,
+      "states": 2
+    },
+    "ringbuf_lifecycle_prove": {
+      "verdict": "success",
+      "insns": 111,
+      "states": 5
+    },
+    "ringbuf_prove": {
+      "verdict": "success",
+      "insns": 152,
+      "states": 17
+    },
     "seq_buf": {
       "verdict": "success",
       "insns": 537,
@@ -656,6 +876,21 @@
       "insns": 168,
       "states": 8
     },
+    "states": {
+      "verdict": "success",
+      "insns": 4579,
+      "states": 74
+    },
+    "states_prove": {
+      "verdict": "success",
+      "insns": 19839,
+      "states": 746
+    },
+    "stream": {
+      "verdict": "success",
+      "insns": 964,
+      "states": 38
+    },
     "string": {
       "verdict": "success",
       "insns": 2,
@@ -666,6 +901,16 @@
       "insns": 714,
       "states": 57
     },
+    "syscall_attach_link_prove": {
+      "verdict": "success",
+      "insns": 112,
+      "states": 13
+    },
+    "syscall_prove": {
+      "verdict": "success",
+      "insns": 684,
+      "states": 49
+    },
     "sysfs_btf": {
       "verdict": "success",
       "insns": 6,
@@ -673,13 +918,18 @@
     },
     "task_iter": {
       "verdict": "success",
-      "insns": 1233,
-      "states": 62
+      "insns": 1692,
+      "states": 106
     },
     "tcx": {
       "verdict": "success",
       "insns": 1063,
       "states": 20
+    },
+    "tcx_prove": {
+      "verdict": "success",
+      "insns": 669,
+      "states": 4
     },
     "timeconv": {
       "verdict": "success",
@@ -700,6 +950,26 @@
       "verdict": "success",
       "insns": 131,
       "states": 12
+    },
+    "tnum_prove": {
+      "verdict": "success",
+      "insns": 31,
+      "states": 2
+    },
+    "token_create_prove": {
+      "verdict": "success",
+      "insns": 1190,
+      "states": 30
+    },
+    "token_lifecycle_prove": {
+      "verdict": "success",
+      "insns": 458,
+      "states": 10
+    },
+    "token_prove": {
+      "verdict": "success",
+      "insns": 32,
+      "states": 3
     },
     "ts_fsm": {
       "verdict": "success",
@@ -735,6 +1005,11 @@
       "verdict": "success",
       "insns": 2,
       "states": 0
+    },
+    "verifier_prove": {
+      "verdict": "success",
+      "insns": 385,
+      "states": 45
     },
     "win_minmax": {
       "verdict": "success",
