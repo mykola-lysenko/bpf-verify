@@ -189,6 +189,47 @@ BPF_CFLAGS = [
 
 DEFAULT_HARNESS_BODY = "    return 0;"
 
+# Targets are grouped into three suites, selectable with --suite:
+#   compat   - verifies with the default (no-op) harness
+#   coverage - exercised by a custom harness (some with BPF_ASSERT checks)
+#   proof    - BPF verifier internals proven via BPF_PROVE(...)
+TARGET_SUITES = ("compat", "coverage", "proof")
+import re as _re
+
+
+def classify_suite(name, harness_body):
+    """Derive a target's suite from its name and harness body.
+
+    Mirrors the historical classification: a *_prove target or one whose body
+    uses BPF_PROVE(...) is a proof; any other custom (non-default) harness is
+    coverage; a default harness is compat. Used as a fallback when target.json
+    does not pin an explicit "suite".
+    """
+    if name.endswith("_prove") or _re.search(r"\bBPF_PROVE\s*\(", harness_body):
+        return "proof"
+    if harness_body.strip() and harness_body.strip() != DEFAULT_HARNESS_BODY.strip():
+        return "coverage"
+    return "compat"
+
+
+def parse_suite_selection(values):
+    """Turn repeated/comma-separated --suite values into a set of suites."""
+    if not values:
+        return set(TARGET_SUITES)
+    selected = set()
+    for value in values:
+        for raw in value.split(","):
+            suite = raw.strip()
+            if not suite:
+                continue
+            if suite == "all":
+                return set(TARGET_SUITES)
+            if suite not in TARGET_SUITES:
+                choices = ", ".join(("all",) + TARGET_SUITES)
+                raise SystemExit(f"unknown suite '{suite}' (choose from {choices})")
+            selected.add(suite)
+    return selected or set(TARGET_SUITES)
+
 
 def subst_paths(s):
     """Replace {ksrc}/{shim} placeholders with the configured paths."""
@@ -220,6 +261,9 @@ def load_target(name):
 
     preamble_path = tdir / "preamble.h"
     cfg["preamble"] = preamble_path.read_text() if preamble_path.exists() else ""
+
+    # Explicit "suite" in target.json wins; otherwise derive it.
+    cfg["suite"] = cfg.get("suite") or classify_suite(name, cfg["harness_body"])
     return cfg
 
 
@@ -527,15 +571,39 @@ def main():
         "--compile-only", action="store_true",
         help="Only compile harnesses; skip the veristat verification step."
     )
+    parser.add_argument(
+        "--suite", action="append", metavar="SUITE",
+        help=("Target suite to run: all, compat, coverage, or proof. "
+              "May be repeated or comma-separated. Defaults to all."),
+    )
+    parser.add_argument(
+        "--list-targets", action="store_true",
+        help="List selected targets (name, suite, source) and exit."
+    )
     args = parser.parse_args()
+    selected_suites = parse_suite_selection(args.suite)
+
+    targets = load_targets()
+    if selected_suites != set(TARGET_SUITES):
+        targets = {n: c for n, c in targets.items()
+                   if c["suite"] in selected_suites}
+
+    if args.list_targets:
+        print("name\tsuite\tsource")
+        for name, cfg in targets.items():
+            src = resolve_candidates(cfg["src"]) if "src" in cfg else "(none)"
+            print(f"{name}\t{cfg['suite']}\t{src}")
+        return
 
     print("=" * 70)
     print("BPF Kernel Verification Pipeline")
     print(f"Kernel source: {KSRC}")
     print(f"Output dir:    {OUTPUT}")
+    counts = {s: sum(1 for c in targets.values() if c["suite"] == s)
+              for s in TARGET_SUITES}
+    print("Suites:        " + ", ".join(f"{s}: {counts[s]}" for s in TARGET_SUITES)
+          + f"  (selected: {', '.join(sorted(selected_suites))})")
     print("=" * 70)
-
-    targets = load_targets()
 
     compiled_ok = []
     compiled_fail = []
