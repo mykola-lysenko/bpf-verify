@@ -1,8 +1,23 @@
 # BPF Verify Pipeline Progress
 
-**Current status:** 156 compiled, 156 verified, 0 skipped.
+**Current status:** 212 targets in `targets/ORDER` compile on the pinned
+toolchain (upstream's 214-target suite minus the two `cnum` toolchain-boundary
+targets), grouped as compat 55 / coverage 118 / proof 41. Verdict parity is
+confirmed by the uml-veristat run and recorded in `baseline/results.json`.
 
-## Recent baseline
+## Merge + port (upstream suites → targets/ layout)
+
+- Merged the upstream "big push" (proof + coverage suites, per-target shim
+  subtrees) into this branch's differential/userspace/execution/curation work.
+  The upstream monolithic `pipeline.py` was projected into this branch's
+  `targets/<name>/` layout via `tools/extract_origin_targets.py`; suites match
+  upstream exactly (55/118/41). The differential (`diff/`), userspace
+  (`userspace/`), execution, and curation legs are unchanged and orthogonal.
+- Two pinned-toolchain adaptations (clang 22.1.8, bpf-next `abef15c5`), see
+  `FINDINGS_EXECUTION.md`: `zlib_inflate` needs `always_inline` on its 6-arg
+  helper; `cnum`/`cnum_prove` are parked (aggregate-return BPF boundary).
+
+## Recent baseline (pre-merge, monolithic pipeline)
 
 - Full local pipeline after adding the best-next utility batch (`dp_utils.c`, `open_alliance_helpers.c`, `ghes_helpers.c`, `cudbg_common.c`, `vidtv_common.c`, `net/ceph` hash helpers, `fs/proc/util.c`, `fs/ntfs3/bitfunc.c`, and `kernel/range.c`): 156 compiled, 156 verified, 0 skipped.
 - Previous full local pipeline after tightening legacy constant-folded harnesses (`bcd`, `gcd`, CRC16 variants, `sort`, `seq_buf`, `timeconv`, and `refcount`): 146 compiled, 146 verified, 0 skipped.
