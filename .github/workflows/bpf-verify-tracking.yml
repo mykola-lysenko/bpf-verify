@@ -1,0 +1,115 @@
+name: BPF Verification Pipeline (tracking)
+
+# Non-gating drift detector. Builds against the CURRENT bpf-next tip (not the
+# pin) and runs the full pipeline. It is allowed to fail: a failure here means
+# bpf-next (or the toolchain) drifted in a way that affects our targets -- a
+# *finding*, not a regression we introduced. Triage the failing targets, adapt
+# or park them, then bump KERNEL_PIN to a new validated commit so the gating job
+# (bpf-verify.yml) advances. See docs/CI_KERNEL_PINNING.md.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"     # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  tracking:
+    name: Verify against bpf-next tip
+    runs-on: ubuntu-24.04
+
+    env:
+      UML_VERISTAT_DIR: ${{ github.workspace }}/bpf-verify/deps/bpf-uml-selftests/uml-veristat
+      BPF_OUTPUT:       ${{ github.workspace }}/bpf-verify/output
+
+    steps:
+      - name: Checkout bpf-verify
+        uses: actions/checkout@v4
+        with:
+          path: bpf-verify
+          submodules: recursive
+
+      # Cache only the LLVM/pahole toolchain (keyed on build.sh), NOT bpf-next --
+      # the whole point is to fetch a fresh tip every run.
+      - name: Cache toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install
+            ${{ env.UML_VERISTAT_DIR }}/.build/pahole-install
+          key: uml-veristat-toolchain-${{ hashFiles('bpf-verify/deps/bpf-uml-selftests/uml-veristat/build.sh') }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            build-essential git bc flex bison \
+            libelf-dev libssl-dev libdw-dev libdwarf-dev \
+            pkg-config cmake ninja-build python3 \
+            libcap-dev curl wget rsync zlib1g-dev
+
+      - name: Build uml-veristat against bpf-next tip
+        working-directory: bpf-verify/deps/bpf-uml-selftests/uml-veristat
+        run: |
+          export PATH="${PWD}/.build/llvm-install/bin:${PATH}"
+          # --update fetches the current bpf-next tip; --reuse-llvm keeps the
+          # cached toolchain instead of re-downloading it.
+          ./build.sh --update --reuse-llvm || true
+          for f in ~/.local/share/uml-veristat/linux \
+                   ~/.local/share/uml-veristat/veristat \
+                   .build/bpf-next/Kconfig; do
+            [ -e "$f" ] || { echo "::error::Missing artifact: $f (tip build failed -- finding)"; exit 1; }
+          done
+        timeout-minutes: 60
+
+      - name: Record tip commit
+        working-directory: bpf-verify
+        run: |
+          echo "bpf-next tip: $(git -C "${UML_VERISTAT_DIR}/.build/bpf-next" rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "pinned base: $(cat KERNEL_PIN)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate kernel build artifacts
+        working-directory: bpf-verify
+        run: |
+          KSRC="${UML_VERISTAT_DIR}/.build/bpf-next"
+          CRC32_GEN=$(find "$KSRC/lib" -name "gen_crc32table.c" 2>/dev/null | head -1)
+          if [ -n "$CRC32_GEN" ] && [ ! -f "$(dirname "$CRC32_GEN")/crc32table.h" ]; then
+            ( cd "$(dirname "$CRC32_GEN")" && cc -o /tmp/gen_crc32 gen_crc32table.c && /tmp/gen_crc32 > crc32table.h ) || true
+          fi
+
+      # Non-gating: run the pipeline against the tip and surface failures as
+      # findings without failing the job.
+      - name: Run pipeline against tip (findings)
+        id: pipeline
+        continue-on-error: true
+        working-directory: bpf-verify
+        env:
+          BPF_KSRC:         ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
+          BPF_CLANG:        ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/clang
+          BPF_LLVM_OBJCOPY: ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/llvm-objcopy
+          BPF_VERISTAT:     ${{ env.UML_VERISTAT_DIR }}/uml-veristat
+        run: |
+          set -o pipefail
+          python3 pipeline.py 2>&1 | tee pipeline.log
+
+      - name: Summarize drift
+        if: always()
+        working-directory: bpf-verify
+        run: |
+          echo "## Tracking run (bpf-next tip)" >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/summarize_drift.py output/results.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload tracking results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracking-results
+          path: |
+            bpf-verify/pipeline.log
+            bpf-verify/output/results.json
+            bpf-verify/output/results.txt
+          if-no-files-found: ignore

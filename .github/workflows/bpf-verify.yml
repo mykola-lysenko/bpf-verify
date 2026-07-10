@@ -1,4 +1,11 @@
-name: BPF Verification Pipeline
+name: BPF Verification Pipeline (pinned)
+
+# Push-gating job: builds against the bpf-next commit pinned in KERNEL_PIN, so
+# the result is reproducible. A red run here means *we* changed something that
+# broke verification -- not that bpf-next drifted. Drift is caught separately by
+# the non-gating tracking job (.github/workflows/bpf-verify-tracking.yml), whose
+# failures are triaged as findings and drive KERNEL_PIN bumps (see
+# docs/CI_KERNEL_PINNING.md).
 
 on:
   push:
@@ -47,7 +54,9 @@ jobs:
             ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install
             ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
             ${{ env.UML_VERISTAT_DIR }}/.build/pahole-install
-          key: uml-veristat-build-${{ hashFiles('bpf-verify/deps/bpf-uml-selftests/uml-veristat/build.sh', 'bpf-verify/deps/bpf-uml-selftests/uml-veristat/patches/*') }}
+          # KERNEL_PIN is in the key: bumping the pin invalidates the cache and
+          # forces a rebuild against the new pinned kernel.
+          key: uml-veristat-pinned-${{ hashFiles('bpf-verify/deps/bpf-uml-selftests/uml-veristat/build.sh', 'bpf-verify/deps/bpf-uml-selftests/uml-veristat/patches/**', 'bpf-verify/KERNEL_PIN') }}
 
       - name: Install build dependencies
         if: steps.cache-uml-veristat.outputs.cache-hit != 'true'
@@ -59,11 +68,36 @@ jobs:
             pkg-config cmake ninja-build python3 \
             libcap-dev curl wget rsync zlib1g-dev
 
+      # Pre-seed .build/bpf-next at the pinned commit from a kernel.org cgit
+      # snapshot tarball, as a git repo (so build.sh's `git am` patch stack
+      # applies). The fresh repo has no origin/<branch> ref, so build.sh's
+      # UPSTREAM_REF falls back to HEAD and never resets to the moving tip --
+      # locking the base without any submodule change. build.sh then runs
+      # WITHOUT --update, applying its patch stack on top of the pin.
+      - name: Pin bpf-next to KERNEL_PIN
+        if: steps.cache-uml-veristat.outputs.cache-hit != 'true'
+        working-directory: bpf-verify/deps/bpf-uml-selftests/uml-veristat
+        run: |
+          PIN="$(tr -d '[:space:]' < "${{ github.workspace }}/bpf-verify/KERNEL_PIN")"
+          echo "Pinning bpf-next to ${PIN}"
+          mkdir -p .build
+          rm -rf .build/bpf-next
+          URL="https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/snapshot/bpf-next-${PIN}.tar.gz"
+          curl -fL --retry 3 --retry-delay 5 -o /tmp/bpf-next-pin.tar.gz "${URL}"
+          mkdir -p .build/bpf-next
+          tar -xzf /tmp/bpf-next-pin.tar.gz -C .build/bpf-next --strip-components=1
+          rm -f /tmp/bpf-next-pin.tar.gz
+          git -C .build/bpf-next init -q
+          git -C .build/bpf-next -c user.email=ci@pin -c user.name=ci add -A
+          git -C .build/bpf-next -c user.email=ci@pin -c user.name=ci commit -q -m "pinned bpf-next ${PIN}"
+          echo "Pinned tree ready (tree of ${PIN}, no origin ref so build.sh won't reset)"
+
       - name: Build uml-veristat
         if: steps.cache-uml-veristat.outputs.cache-hit != 'true'
         working-directory: bpf-verify/deps/bpf-uml-selftests/uml-veristat
         run: |
           export PATH="${PWD}/.build/llvm-install/bin:${PATH}"
+          # No --update: build.sh keeps the pinned bpf-next tree pre-seeded above.
           ./build.sh || true
           # Verify the essential artifacts were produced
           for f in ~/.local/share/uml-veristat/linux \
