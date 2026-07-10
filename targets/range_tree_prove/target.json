@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/range_tree.c"
+  ],
+  "suite": "proof"
+}

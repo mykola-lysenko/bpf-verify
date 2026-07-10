@@ -152,6 +152,30 @@ characterization study):
   heuristics can't reject (struct sizes aren't visible statically); AES is
   BPF-stack-bound, not just complex.
 
+## Toolchain boundaries (verifier suite)
+
+Targets that are faithful to the upstream configuration but do not compile to
+BPF on the pinned toolchain (clang 22.1.8 from the uml-veristat submodule) and
+current bpf-next (`abef15c5`). Their target directories are kept but they are
+left out of `targets/ORDER`, so re-enabling them is a one-line change once the
+BPF backend or the pinned LLVM gains the missing support.
+
+- `cnum`, `cnum_prove` (`kernel/bpf/cnum_defs.h`) — the brand-new (2026) cnum
+  abstract domain defines its constructors as *non-static, out-of-line*
+  functions that return `struct cnum_t` by value (`struct cnum_t
+  FN(from_urange)(...)`). The BPF backend rejects aggregate returns
+  (*"aggregate returns are not supported"*), and the header exposes no inline
+  hook, so the only fixes are a newer LLVM (which supports it — this is how the
+  upstream suite verified them) or editing the kernel source (out of scope).
+  Same class of finding as the `aes`/`div64_s64` boundaries above: real kernel
+  code the current BPF toolchain cannot lower, not a defect.
+
+- `zlib_inflate` compiles only with `__attribute__((always_inline))` forced on
+  the renamed 6-argument `zlib_inflate_table` helper (see
+  `targets/zlib_inflate/pre_include.h`): the pinned backend does not support
+  passing >5 arguments to a BPF static subprogram via the stack. With the
+  helper inlined it verifies normally.
+
 ## Confirmed findings
 
 _None yet._

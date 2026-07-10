@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/kernel/range.c"
-  ]
+  ],
+  "suite": "coverage"
 }

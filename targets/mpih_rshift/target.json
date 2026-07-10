@@ -3,6 +3,7 @@
     "{ksrc}/lib/crypto/mpi/generic_mpih-rshift.c",
     "{ksrc}/lib/mpi/generic_mpih-rshift.c"
   ],
+  "suite": "compat",
   "extra_cflags": [
     "-D_LINUX_MM_H",
     "-D_LINUX_SCATTERLIST_H",

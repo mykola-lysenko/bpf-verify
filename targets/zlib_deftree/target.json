@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/zlib_deflate/deftree.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{ksrc}/lib/bitrev.c"

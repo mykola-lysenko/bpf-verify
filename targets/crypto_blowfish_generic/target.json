@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/crypto/blowfish_generic.c"
+  ],
+  "suite": "coverage"
+}

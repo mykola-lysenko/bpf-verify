@@ -2,7 +2,5 @@
   "src": [
     "{ksrc}/kernel/bpf/kmem_cache_iter.c"
   ],
-  "pre_include_shared": [
-    "bpf_iter_pre.h"
-  ]
+  "suite": "coverage"
 }

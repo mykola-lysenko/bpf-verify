@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/list_sort.c"
-  ]
+  ],
+  "suite": "coverage"
 }

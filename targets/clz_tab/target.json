@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/clz_tab.c"
-  ]
+  ],
+  "suite": "compat"
 }

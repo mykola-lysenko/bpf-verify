@@ -35,6 +35,17 @@
 
     errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EBADF;
     linfo.map.map_fd = 1;
+    __bpf_iter_map0.excl_prog_sha = (char *)1;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EPERM;
+    __bpf_iter_map0.excl_prog_sha = NULL;
+
+    aux_cfg.max_rdonly_access = 5;
+    aux_cfg.max_rdwr_access = 8;
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_HASH;
+    __bpf_iter_map0.key_size = 4;
+    __bpf_iter_map0.value_size = 8;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EACCES;
+
     __bpf_iter_map0.map_type = (seed & 2) ? BPF_MAP_TYPE_PERCPU_ARRAY :
                                            BPF_MAP_TYPE_HASH;
     __bpf_iter_map0.key_size = 4 + (seed & 3);
@@ -58,12 +69,42 @@
     __bpf_iter_map0.value_size = 8;
     errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EACCES;
     aux_cfg.max_rdwr_access = 8;
+    aux_cfg.max_rdonly_access = 4;
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_ARRAY;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
+    bpf_iter_detach_map(&aux);
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_LRU_HASH;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
+    bpf_iter_detach_map(&aux);
+    __bpf_iter_map0.map_type = BPF_MAP_TYPE_RHASH;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
+    bpf_iter_detach_map(&aux);
     __bpf_iter_map0.map_type = BPF_MAP_TYPE_PERCPU_ARRAY;
     __bpf_iter_map0.value_size = 4;
     errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != 0;
     bpf_iter_detach_map(&aux);
+    aux_cfg.max_rdwr_access = 17;
+    errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EACCES;
+    aux_cfg.max_rdwr_access = 8;
     __bpf_iter_map0.map_type = 999;
     errors |= bpf_iter_attach_map(&prog, &linfo, &aux) != -EINVAL;
+
+    errors |= bpf_map_seq_info.seq_priv_size !=
+              sizeof(struct bpf_iter_seq_map_info);
+    errors |= bpf_map_reg_info.ctx_arg_info_size != 1;
+    errors |= bpf_map_reg_info.ctx_arg_info[0].offset !=
+              offsetof(struct bpf_iter__bpf_map, map);
+    errors |= bpf_map_reg_info.ctx_arg_info[0].reg_type !=
+              (PTR_TO_BTF_ID_OR_NULL | PTR_TRUSTED);
+    errors |= bpf_map_elem_reg_info.ctx_arg_info_size != 2;
+    errors |= bpf_map_elem_reg_info.ctx_arg_info[0].offset !=
+              offsetof(struct bpf_iter__bpf_map_elem, key);
+    errors |= bpf_map_elem_reg_info.ctx_arg_info[0].reg_type !=
+              (PTR_TO_BUF | PTR_MAYBE_NULL | MEM_RDONLY);
+    errors |= bpf_map_elem_reg_info.ctx_arg_info[1].offset !=
+              offsetof(struct bpf_iter__bpf_map_elem, value);
+    errors |= bpf_map_elem_reg_info.ctx_arg_info[1].reg_type !=
+              (PTR_TO_BUF | PTR_MAYBE_NULL);
 
     __bpf_iter_map0.elem_count = __bpf_iter_elem_counts;
     __bpf_iter_elem_counts[0] = (s64)(1 + (seed & 7));

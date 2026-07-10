@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/lzo/lzo1x_compress.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{shim}/lib/lzo/lzo-shim.h"

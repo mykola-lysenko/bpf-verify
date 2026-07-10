@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/crypto/chacha.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{ksrc}/lib/crypto/chacha-block-generic.c"

@@ -22,12 +22,3 @@ static inline void *memset(void *dst, int c, __kernel_size_t n)
     return dst;
 }
 #define memzero_explicit(p, n) memset((p), 0, (n))
-/* clang 22's BPF backend leaves the out-pointer argument in r0 when this
- * static void helper stays out-of-line; the verifier then rejects the
- * (dead) return value with "cannot return stack pointer to the caller".
- * Force it inline. The attribute on this forward declaration merges into
- * the definition in gf128hash.c. */
-struct polyval_elem;
-static void polyval_mul_generic(struct polyval_elem *a,
-                                const struct polyval_elem *b)
-    __attribute__((always_inline));

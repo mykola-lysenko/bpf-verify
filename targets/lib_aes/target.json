@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/crypto/aes.c"
   ],
+  "suite": "compat",
   "extra_cflags": [
     "-D_LINUX_SCHED_H",
     "-D_CRYPTO_ALGAPI_H",

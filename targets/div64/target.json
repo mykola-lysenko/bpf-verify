@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/math/div64.c"
   ],
+  "suite": "compat",
   "extra_cflags": [
     "-U__SIZEOF_INT128__"
   ]

@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/checksum.c"
-  ]
+  ],
+  "suite": "compat"
 }

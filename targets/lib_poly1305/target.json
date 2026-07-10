@@ -2,10 +2,10 @@
   "src": [
     "{ksrc}/lib/crypto/poly1305.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
-      "{ksrc}/lib/crypto/poly1305-donna32.c",
-      "{ksrc}/lib/crypto/poly1305-donna64.c"
+      "{ksrc}/lib/crypto/poly1305-donna32.c"
     ]
   ],
   "extra_cflags": [

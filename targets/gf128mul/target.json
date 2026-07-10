@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/crypto/gf128mul.c"
-  ]
+  ],
+  "suite": "coverage"
 }

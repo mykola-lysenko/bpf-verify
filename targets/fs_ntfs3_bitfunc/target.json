@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/fs/ntfs3/bitfunc.c"
-  ]
+  ],
+  "suite": "coverage"
 }

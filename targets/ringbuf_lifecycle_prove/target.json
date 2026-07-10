@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/ringbuf.c"
+  ],
+  "suite": "proof"
+}

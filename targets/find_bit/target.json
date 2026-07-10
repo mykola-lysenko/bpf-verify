@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/find_bit.c"
   ],
+  "suite": "coverage",
   "extra_includes": [
     [
       "{ksrc}/lib/hweight.c"

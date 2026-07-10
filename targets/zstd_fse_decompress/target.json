@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/zstd/common/fse_decompress.c"
-  ]
+  ],
+  "suite": "compat"
 }

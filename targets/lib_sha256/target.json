@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/crypto/sha256.c"
   ],
+  "suite": "coverage",
   "extra_cflags": [
     "-std=gnu11"
   ]

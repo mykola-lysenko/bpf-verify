@@ -3,6 +3,7 @@
     "{ksrc}/lib/crypto/mpi/generic_mpih-mul3.c",
     "{ksrc}/lib/mpi/generic_mpih-mul3.c"
   ],
+  "suite": "coverage",
   "extra_cflags": [
     "-D_LINUX_MM_H",
     "-D_LINUX_SCATTERLIST_H",

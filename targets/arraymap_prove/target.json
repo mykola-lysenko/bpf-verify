@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/arraymap.c"
+  ],
+  "suite": "proof"
+}

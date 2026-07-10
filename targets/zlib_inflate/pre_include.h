@@ -7,8 +7,8 @@
  * definition and inflate.c call sites). */
 #define zlib_inflate_table __bpf_zit_impl
 /* The helper takes 6 arguments. Recent clang tips lowered 6-arg calls to
- * static subprograms via stack arguments, but released BPF backends (e.g.
- * clang 22.x: "stack arguments are not supported") reject them, so force
+ * static subprograms via stack arguments, but the pinned BPF backend
+ * (clang 22.x: "stack arguments are not supported") rejects them, so force
  * the helper inline at all call sites instead. */
 static __attribute__((always_inline)) int __bpf_zit_impl(
     codetype type, unsigned short *lens, unsigned codes,

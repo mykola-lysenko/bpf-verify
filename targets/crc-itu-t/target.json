@@ -2,5 +2,6 @@
   "src": [
     "{ksrc}/lib/crc/crc-itu-t.c",
     "{ksrc}/lib/crc-itu-t.c"
-  ]
+  ],
+  "suite": "coverage"
 }

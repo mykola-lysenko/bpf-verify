@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/cnum.c"
+  ],
+  "suite": "proof"
+}

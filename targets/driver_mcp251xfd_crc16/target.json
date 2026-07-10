@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/drivers/net/can/spi/mcp251xfd/mcp251xfd-crc16.c"
-  ]
+  ],
+  "suite": "coverage"
 }

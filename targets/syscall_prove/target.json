@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/syscall.c"
+  ],
+  "suite": "proof"
+}

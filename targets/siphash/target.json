@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/siphash.c"
-  ]
+  ],
+  "suite": "compat"
 }

@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/interval_tree.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{ksrc}/lib/rbtree.c"

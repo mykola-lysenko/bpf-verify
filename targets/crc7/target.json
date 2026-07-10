@@ -2,5 +2,6 @@
   "src": [
     "{ksrc}/lib/crc/crc7.c",
     "{ksrc}/lib/crc7.c"
-  ]
+  ],
+  "suite": "coverage"
 }

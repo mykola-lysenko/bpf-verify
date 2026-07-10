@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/dynamic_queue_limits.c"
   ],
+  "suite": "coverage",
   "extra_cflags": [
     "-D_TRACE_NAPI_H"
   ]

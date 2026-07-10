@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/clz_ctz.c"
-  ]
+  ],
+  "suite": "coverage"
 }

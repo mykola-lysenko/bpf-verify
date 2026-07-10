@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/hweight.c"
-  ]
+  ],
+  "suite": "coverage"
 }

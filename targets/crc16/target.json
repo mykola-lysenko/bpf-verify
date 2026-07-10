@@ -3,5 +3,5 @@
     "{ksrc}/lib/crc/crc16.c",
     "{ksrc}/lib/crc16.c"
   ],
-  "execute": true
+  "suite": "coverage"
 }

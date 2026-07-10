@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/dim/net_dim.c"
   ],
+  "suite": "compat",
   "extra_cflags": [
     "-D_LINUX_SCHED_H",
     "-D_LINUX_WORKQUEUE_H",

@@ -2,6 +2,7 @@
   "src": [
     "{shim}/lib/bitmap.c"
   ],
+  "suite": "coverage",
   "extra_includes": [
     [
       "{ksrc}/lib/hweight.c"

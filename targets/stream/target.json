@@ -1,0 +1,9 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/stream.c"
+  ],
+  "suite": "coverage",
+  "extra_early_cflags": [
+    "-I{shim}/stream/include"
+  ]
+}

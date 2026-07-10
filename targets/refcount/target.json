@@ -1,5 +1,6 @@
 {
   "src": [
     "{shim}/lib/refcount.c"
-  ]
+  ],
+  "suite": "coverage"
 }

@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/ucs2_string.c"
-  ]
+  ],
+  "suite": "compat"
 }

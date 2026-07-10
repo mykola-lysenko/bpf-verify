@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/verifier.c"
+  ],
+  "suite": "proof"
+}

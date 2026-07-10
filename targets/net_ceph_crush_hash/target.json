@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/net/ceph/crush/hash.c"
-  ]
+  ],
+  "suite": "coverage"
 }

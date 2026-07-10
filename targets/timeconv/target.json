@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/kernel/time/timeconv.c"
-  ]
+  ],
+  "suite": "proof"
 }

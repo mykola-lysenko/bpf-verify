@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/kernel/bpf/sysfs_btf.c"
-  ]
+  ],
+  "suite": "coverage"
 }

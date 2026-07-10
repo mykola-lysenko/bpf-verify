@@ -2,7 +2,5 @@
   "src": [
     "{ksrc}/kernel/bpf/bpf_inode_storage.c"
   ],
-  "pre_include_shared": [
-    "bpf_storage_pre.h"
-  ]
+  "suite": "coverage"
 }

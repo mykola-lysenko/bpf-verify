@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/mprog.c"
+  ],
+  "suite": "proof"
+}

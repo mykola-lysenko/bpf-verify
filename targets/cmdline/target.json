@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/cmdline.c"
   ],
+  "suite": "coverage",
   "extra_includes": [
     [
       "{ksrc}/lib/ctype.c"

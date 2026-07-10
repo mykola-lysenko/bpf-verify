@@ -1,0 +1,9 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/cfg.c"
+  ],
+  "suite": "coverage",
+  "extra_early_cflags": [
+    "-I{shim}/cfg/include"
+  ]
+}

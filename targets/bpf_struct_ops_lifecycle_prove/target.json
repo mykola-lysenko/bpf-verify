@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/bpf_struct_ops.c"
+  ],
+  "suite": "proof"
+}

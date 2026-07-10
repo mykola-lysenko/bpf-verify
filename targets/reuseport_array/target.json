@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/kernel/bpf/reuseport_array.c"
-  ]
+  ],
+  "suite": "coverage"
 }

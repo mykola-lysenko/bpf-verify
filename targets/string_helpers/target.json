@@ -2,14 +2,15 @@
   "src": [
     "{shim}/lib/string_helpers.c"
   ],
-  "extra_early_cflags": [
-    "-I{ksrc}"
-  ],
+  "suite": "coverage",
   "extra_cflags": [
     "-DUNESCAPE_SPACE=1",
     "-DUNESCAPE_OCTAL=2",
     "-DUNESCAPE_HEX=4",
     "-DUNESCAPE_SPECIAL=8",
     "-DUNESCAPE_ANY=0xf"
+  ],
+  "extra_early_cflags": [
+    "-I{ksrc}"
   ]
 }

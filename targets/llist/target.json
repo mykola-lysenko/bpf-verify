@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/llist.c"
   ],
+  "suite": "coverage",
   "extra_cflags": [
     "-Wno-int-conversion"
   ]

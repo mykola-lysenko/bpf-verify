@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/zstd/common/entropy_common.c"
-  ]
+  ],
+  "suite": "compat"
 }

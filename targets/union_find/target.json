@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/union_find.c"
-  ]
+  ],
+  "suite": "coverage"
 }

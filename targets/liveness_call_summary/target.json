@@ -1,0 +1,12 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/liveness.c"
+  ],
+  "suite": "coverage",
+  "extra_cflags": [
+    "-std=gnu11"
+  ],
+  "extra_early_cflags": [
+    "-I{shim}/liveness/include"
+  ]
+}

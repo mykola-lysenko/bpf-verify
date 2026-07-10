@@ -1,5 +1,0 @@
-{
-  "extra_cflags": [
-    "-D__KERNEL__"
-  ]
-}

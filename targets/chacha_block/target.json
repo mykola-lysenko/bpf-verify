@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/crypto/chacha-block-generic.c"
-  ]
+  ],
+  "suite": "coverage"
 }

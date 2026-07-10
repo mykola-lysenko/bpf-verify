@@ -1,0 +1,9 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/states.c"
+  ],
+  "suite": "proof",
+  "extra_early_cflags": [
+    "-I{shim}/states/include"
+  ]
+}

@@ -2,12 +2,10 @@
   "src": [
     "{ksrc}/crypto/arc4.c"
   ],
+  "suite": "coverage",
   "extra_includes": [
     [
       "{ksrc}/lib/crypto/arc4.c"
     ]
-  ],
-  "pre_include_shared": [
-    "crypto_cipher_pre.h"
   ]
 }

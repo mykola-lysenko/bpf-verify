@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/zlib_inflate/inftrees.c"
   ],
+  "suite": "compat",
   "extra_cflags": [
     "-I{ksrc}/lib/zlib_inflate"
   ]

@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/math/gcd.c"
-  ]
+  ],
+  "suite": "coverage"
 }

@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/string.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{ksrc}/lib/ctype.c"

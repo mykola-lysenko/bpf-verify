@@ -2,5 +2,6 @@
   "src": [
     "{ksrc}/lib/crc/crc64-main.c",
     "{ksrc}/lib/crc64.c"
-  ]
+  ],
+  "suite": "compat"
 }

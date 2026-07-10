@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/zlib_inflate/inffast.c"
-  ]
+  ],
+  "suite": "compat"
 }

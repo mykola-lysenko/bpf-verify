@@ -2,5 +2,5 @@
   "src": [
     "{shim}/lib/hexdump.c"
   ],
-  "execute": true
+  "suite": "coverage"
 }

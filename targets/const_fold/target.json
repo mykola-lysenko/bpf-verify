@@ -1,0 +1,9 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/const_fold.c"
+  ],
+  "suite": "coverage",
+  "extra_early_cflags": [
+    "-I{shim}/const_fold/include"
+  ]
+}

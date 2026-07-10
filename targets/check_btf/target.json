@@ -1,0 +1,9 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/check_btf.c"
+  ],
+  "suite": "coverage",
+  "extra_early_cflags": [
+    "-I{shim}/check_btf/include"
+  ]
+}

@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/ashrdi3.c"
-  ]
+  ],
+  "suite": "coverage"
 }

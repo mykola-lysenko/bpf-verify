@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/drivers/net/phy/open_alliance_helpers.c"
-  ]
+  ],
+  "suite": "coverage"
 }

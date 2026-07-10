@@ -3,6 +3,7 @@
     "{ksrc}/lib/crypto/mpi/mpih-cmp.c",
     "{ksrc}/lib/mpi/mpih-cmp.c"
   ],
+  "suite": "compat",
   "extra_cflags": [
     "-D_LINUX_MM_H",
     "-D_LINUX_SCATTERLIST_H",

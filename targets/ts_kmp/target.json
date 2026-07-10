@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/ts_kmp.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{ksrc}/lib/ctype.c"

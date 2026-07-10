@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/bpf_local_storage.c"
+  ],
+  "suite": "proof"
+}

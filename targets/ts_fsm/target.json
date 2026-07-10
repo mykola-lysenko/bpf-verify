@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/ts_fsm.c"
   ],
+  "suite": "compat",
   "extra_cflags": [
     "-D__exit=",
     "-D__init=",

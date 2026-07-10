@@ -3,17 +3,16 @@
     "{ksrc}/lib/crypto/mpi/mpi-mul.c",
     "{ksrc}/lib/mpi/mpi-mul.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{shim}/lib/crypto/mpi/mpi-internal.h"
     ],
     [
-      "{ksrc}/lib/crypto/mpi/generic_mpih-mul1.c",
-      "{ksrc}/lib/mpi/generic_mpih-mul1.c"
+      "{ksrc}/lib/crypto/mpi/generic_mpih-mul1.c"
     ],
     [
-      "{ksrc}/lib/crypto/mpi/mpih-mul.c",
-      "{ksrc}/lib/mpi/mpih-mul.c"
+      "{ksrc}/lib/crypto/mpi/mpih-mul.c"
     ]
   ],
   "extra_cflags": [

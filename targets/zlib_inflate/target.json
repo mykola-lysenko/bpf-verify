@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/zlib_inflate/inflate.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{ksrc}/lib/zlib_inflate/inffast.c"

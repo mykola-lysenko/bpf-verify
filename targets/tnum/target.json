@@ -2,6 +2,7 @@
   "src": [
     "{shim}/kernel/bpf/tnum.c"
   ],
+  "suite": "coverage",
   "extra_early_cflags": [
     "-I{ksrc}"
   ]

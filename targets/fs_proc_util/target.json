@@ -1,5 +1,6 @@
 {
   "src": [
     "{shim}/fs/proc/util.c"
-  ]
+  ],
+  "suite": "coverage"
 }

@@ -2,7 +2,5 @@
   "src": [
     "{ksrc}/kernel/bpf/mprog.c"
   ],
-  "pre_include_shared": [
-    "bpf_mprog_common_pre.h"
-  ]
+  "suite": "coverage"
 }

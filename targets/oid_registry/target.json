@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/oid_registry.c"
   ],
+  "suite": "compat",
   "extra_cflags": [
     "-I{ksrc}/lib"
   ]

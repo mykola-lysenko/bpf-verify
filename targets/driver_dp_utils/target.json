@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/drivers/gpu/drm/msm/dp/dp_utils.c"
-  ]
+  ],
+  "suite": "coverage"
 }

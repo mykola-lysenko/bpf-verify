@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/kernel/bpf/map_in_map.c"
-  ]
+  ],
+  "suite": "coverage"
 }

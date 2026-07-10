@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/helpers.c"
+  ],
+  "suite": "proof"
+}

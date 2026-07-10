@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/bpf_iter.c"
+  ],
+  "suite": "proof"
+}

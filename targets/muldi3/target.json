@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/muldi3.c"
-  ]
+  ],
+  "suite": "coverage"
 }

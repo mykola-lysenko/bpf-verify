@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/errseq.c"
-  ]
+  ],
+  "suite": "coverage"
 }

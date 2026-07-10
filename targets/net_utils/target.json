@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/net_utils.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{ksrc}/lib/ctype.c"

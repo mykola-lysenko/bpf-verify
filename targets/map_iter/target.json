@@ -2,7 +2,5 @@
   "src": [
     "{ksrc}/kernel/bpf/map_iter.c"
   ],
-  "pre_include_shared": [
-    "bpf_iter_pre.h"
-  ]
+  "suite": "coverage"
 }

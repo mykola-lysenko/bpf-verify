@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/drivers/acpi/apei/ghes_helpers.c"
-  ]
+  ],
+  "suite": "coverage"
 }

@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/crypto/blake2s.c"
-  ]
+  ],
+  "suite": "compat"
 }

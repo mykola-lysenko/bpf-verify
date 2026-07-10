@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/token.c"
+  ],
+  "suite": "proof"
+}

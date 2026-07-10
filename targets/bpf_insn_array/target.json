@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/kernel/bpf/bpf_insn_array.c"
-  ]
+  ],
+  "suite": "coverage"
 }

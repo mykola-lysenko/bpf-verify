@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/sort.c"
   ],
+  "suite": "coverage",
   "extra_cflags": [
     "-D_LINUX_SCHED_H"
   ]

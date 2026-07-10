@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{shim}/kernel/bpf/hashtab.c"
+  ],
+  "suite": "proof"
+}

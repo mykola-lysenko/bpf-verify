@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/bpf_task_storage.c"
+  ],
+  "suite": "proof"
+}

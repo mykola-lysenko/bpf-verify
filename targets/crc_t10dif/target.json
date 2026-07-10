@@ -2,5 +2,6 @@
   "src": [
     "{ksrc}/lib/crc/crc-t10dif-main.c",
     "{ksrc}/lib/crc-t10dif.c"
-  ]
+  ],
+  "suite": "coverage"
 }

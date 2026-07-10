@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/math/rational.c"
-  ]
+  ],
+  "suite": "coverage"
 }

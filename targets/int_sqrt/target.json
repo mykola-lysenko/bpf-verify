@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/math/int_sqrt.c"
-  ]
+  ],
+  "suite": "coverage"
 }

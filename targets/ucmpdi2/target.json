@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/ucmpdi2.c"
-  ]
+  ],
+  "suite": "compat"
 }

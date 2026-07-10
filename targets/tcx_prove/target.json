@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/kernel/bpf/tcx.c"
+  ],
+  "suite": "proof"
+}

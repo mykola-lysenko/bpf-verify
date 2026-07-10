@@ -1,5 +1,6 @@
 {
   "src": [
     "{ksrc}/lib/math/cordic.c"
-  ]
+  ],
+  "suite": "coverage"
 }

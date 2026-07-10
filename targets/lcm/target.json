@@ -2,6 +2,7 @@
   "src": [
     "{ksrc}/lib/math/lcm.c"
   ],
+  "suite": "coverage",
   "extra_includes": [
     [
       "{ksrc}/lib/math/gcd.c"

@@ -3,33 +3,28 @@
     "{ksrc}/lib/crypto/mpi/mpi-add.c",
     "{ksrc}/lib/mpi/mpi-add.c"
   ],
+  "suite": "compat",
   "extra_includes": [
     [
       "{shim}/lib/crypto/mpi/mpi-internal.h"
     ],
     [
-      "{ksrc}/lib/crypto/mpi/mpiutil.c",
-      "{ksrc}/lib/mpi/mpiutil.c"
+      "{ksrc}/lib/crypto/mpi/mpiutil.c"
     ],
     [
-      "{ksrc}/lib/crypto/mpi/mpih-cmp.c",
-      "{ksrc}/lib/mpi/mpih-cmp.c"
+      "{ksrc}/lib/crypto/mpi/mpih-cmp.c"
     ],
     [
-      "{ksrc}/lib/crypto/mpi/generic_mpih-add1.c",
-      "{ksrc}/lib/mpi/generic_mpih-add1.c"
+      "{ksrc}/lib/crypto/mpi/generic_mpih-add1.c"
     ],
     [
-      "{ksrc}/lib/crypto/mpi/generic_mpih-sub1.c",
-      "{ksrc}/lib/mpi/generic_mpih-sub1.c"
+      "{ksrc}/lib/crypto/mpi/generic_mpih-sub1.c"
     ],
     [
-      "{ksrc}/lib/crypto/mpi/mpi-mod.c",
-      "{ksrc}/lib/mpi/mpi-mod.c"
+      "{ksrc}/lib/crypto/mpi/mpi-mod.c"
     ],
     [
-      "{ksrc}/lib/crypto/mpi/mpi-bit.c",
-      "{ksrc}/lib/mpi/mpi-bit.c"
+      "{ksrc}/lib/crypto/mpi/mpi-bit.c"
     ]
   ],
   "extra_cflags": [
