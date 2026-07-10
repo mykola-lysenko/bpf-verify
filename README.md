@@ -80,10 +80,13 @@ BPF_VERISTAT=/path/to/veristat BPF_VERISTAT_SUDO=1 python3 pipeline.py
 
 ## Current Status
 
-- **214 targets** compile and pass the BPF verifier, 0 FAIL, grouped as
-  `compat` (55), `coverage` (118), and `proof` (41). The authoritative
-  per-target numbers are `baseline/results.json` and the latest CI run's
-  `veristat-results` artifact.
+- **212 targets** in `targets/ORDER` compile and pass the BPF verifier on the
+  pinned toolchain, 0 FAIL: `compat` (55), `coverage` (117), `proof` (40).
+  This is upstream's 214-target suite minus `cnum`/`cnum_prove`, which are
+  parked (dirs kept, out of `ORDER`) as a documented aggregate-return BPF
+  boundary — see [`FINDINGS_EXECUTION.md`](FINDINGS_EXECUTION.md). The
+  authoritative per-target numbers are `baseline/results.json` and the latest
+  CI run's `veristat-results` artifact.
 - The differential (`diff/`) and userspace (`userspace/`) legs run the same
   kernel sources through native-execution and sanitizer oracles; findings are
   recorded in [`FINDINGS_EXECUTION.md`](FINDINGS_EXECUTION.md).
