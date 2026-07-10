@@ -27,14 +27,45 @@ from pathlib import Path
 # All paths are overridable via environment variables so the pipeline runs
 # on any host (local sandbox, GitHub Actions runner, etc.).
 _HOME = Path(os.environ.get("HOME", "/home/ubuntu"))
-KSRC = Path(os.environ.get("BPF_KSRC", str(_HOME / "bpf-next-0aa637869")))
+_SUBMODULE_KSRC = (Path(__file__).parent / "deps" / "bpf-uml-selftests" /
+                   "uml-veristat" / ".build" / "bpf-next")
+
+
+def _default_ksrc():
+    if "BPF_KSRC" in os.environ:
+        return os.environ["BPF_KSRC"]
+    home_ksrc = _HOME / "bpf-next-0aa637869"
+    if not home_ksrc.exists() and _SUBMODULE_KSRC.exists():
+        return str(_SUBMODULE_KSRC)
+    return str(home_ksrc)
+
+
+KSRC = Path(_default_ksrc())
 SHIM = Path(__file__).parent / "shims"
 OUTPUT = Path(os.environ.get("BPF_OUTPUT", str(Path(__file__).parent / "output2")))
 VERISTAT = os.environ.get("BPF_VERISTAT", str(
     Path(__file__).parent / "deps" / "bpf-uml-selftests" / "uml-veristat" / "uml-veristat"
 ))
-CLANG = os.environ.get("BPF_CLANG", "/usr/bin/clang-23")
-LLVM_OBJCOPY = os.environ.get("BPF_LLVM_OBJCOPY", "/usr/bin/llvm-objcopy-23")
+# Toolchain. Prefer an explicit override, then a system clang-23, then the
+# LLVM the uml-veristat submodule builds under deps/. The submodule toolchain
+# is what CI (and this repo's verification) uses, so `python3 pipeline.py`
+# works out of the box after `./setup.sh` without any extra install.
+_LLVM_INSTALL = (Path(__file__).parent / "deps" / "bpf-uml-selftests" /
+                 "uml-veristat" / ".build" / "llvm-install" / "bin")
+
+
+def _first_tool(env_var, system_name, submodule_name):
+    val = os.environ.get(env_var)
+    if val:
+        return val
+    submodule = _LLVM_INSTALL / submodule_name
+    if not Path(f"/usr/bin/{system_name}").exists() and submodule.exists():
+        return str(submodule)
+    return f"/usr/bin/{system_name}"
+
+
+CLANG = _first_tool("BPF_CLANG", "clang-23", "clang")
+LLVM_OBJCOPY = _first_tool("BPF_LLVM_OBJCOPY", "llvm-objcopy-23", "llvm-objcopy")
 TARGETS_DIR = Path(__file__).parent / "targets"
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
