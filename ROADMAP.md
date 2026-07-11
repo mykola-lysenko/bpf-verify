@@ -73,6 +73,36 @@ stack-hostile (curve25519, AES) — userspace-only.
 - Add a few per session from the differential worklist; wire the diff leg into
   CI so it runs continuously (currently local-only).
 
+### 5. Compiler-correctness & coverage breadth (deliberately benign; current focus)
+
+Grow the corpus of real kernel code that reaches the LLVM BPF backend and the
+verifier. This is toolchain/coverage work: it exposes **BPF-backend
+miscompilations, ICEs, and backend limitations** (compiler-correctness), not
+attacker-relevant defects — the right thread when we want to steer clear of the
+security-adjacent framing. A probe found the bottleneck is **shim completeness**,
+not BPF limits: of untargeted `lib/` candidate files, ~5/6 fail to compile only
+because our shim tree lacks kernel infrastructure types (`freeptr_t`,
+`ARCH_KMALLOC_MINALIGN`, `pgprot_t`, `irq_work`, `completion`, …).
+
+- **Shim completeness (force multiplier, cross-cutting).** Add the missing
+  types/macros; each unlock cascades to many files and helps *every* leg
+  (coverage, differential, userspace, proof). Re-probe the buildable/total ratio
+  after each batch to measure progress.
+- **Differential breadth** (Workstream 3) rides the newly-buildable files — the
+  sharpest miscompilation detector; prioritize codegen-diverse ops.
+- **Coverage breadth.** Map-seeded harnesses for buildable functions that can't
+  fold to a scalar, so the verifier walks real code.
+- **Widen the scanner** to more roots (`crypto/`, `kernel/`, more of `lib/`).
+- **Characterize true boundaries:** split "won't build" into shim-gap (fixable),
+  infra-that-can't-be-BPF (irq_work/completion), and real LLVM BPF-backend limits
+  (aggregate returns, >5 stack args, signed div, CTTZ) — the last a clean set of
+  benign compiler-completeness findings for LLVM/BPF maintainers.
+- **Scale the mechanics:** a small harness generator for the common
+  "scalar in → scalar out" case to add many targets per session.
+
+Metrics: coverage-target count, differential-target count, buildable/total file
+ratio, documented backend boundaries.
+
 ### 4. Coverage & harness quality (integrity, not bug-EV)
 
 - Strengthen remaining thin coverage; keep the born-trivial guard green.
@@ -104,7 +134,9 @@ stack-hostile (curve25519, AES) — userspace-only.
 
 ## Immediate next pick
 
-**Workstream 1 (continued): deepen the soundness legs.** `cnum_soundness` is
-landed and clean. Next highest-EV: extend both `tnum` and `cnum` soundness
-beyond the small regime (structured large operands; the mixed `cnum32_from_cnum64`
-and 32/64 helpers), then start on untrusted-input parsers (Workstream 2).
+**Workstream 5: shim completeness.** The force-multiplier for coverage breadth
+and every other leg. Add the missing kernel infrastructure types the buildability
+probe surfaced, re-probe, and ride the newly-unlocked files into differential /
+coverage targets. (Soundness legs — `tnum`/`cnum` beyond the small regime — and
+Workstream 2 remain queued for when we return to them; shim completeness helps
+those too.)
