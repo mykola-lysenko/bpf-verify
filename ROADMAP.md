@@ -104,13 +104,16 @@ because our shim tree lacks kernel infrastructure types (`freeptr_t`,
   kernel function* is a workaround for global functions being disabled here (the
   pipeline strips `.BTF.ext`, degrading every non-static fn to a static
   subprogram) — use it only when the function truly needs it (returns a
-  caller-stack pointer, >5 stack args, end-pointer bounds); otherwise a plain
-  static subprogram suffices. The real win is **enabling global functions**:
-  keep `.BTF.ext`, solve the ctx-type lookup, and route scalar / typed-pointer
-  kernel functions through independent (all-inputs) global-function
-  verification. Measured limits: scalars verify; unsized pointers are rejected
+  caller-stack pointer or end-pointer bounds). The **>5-args** case is no longer
+  a hard reason: verified that clang 23 + kernel `520d7d794` verify a 6-param
+  static subprogram with `.BTF.ext` kept (fail with it stripped). The real win is
+  **keeping `.BTF.ext`** (solve the ctx-type lookup): it enables BOTH global
+  functions AND >5-arg static subprograms, then route scalar / typed-pointer
+  kernel functions through independent (all-inputs) global-function verification.
+  Measured global-fn limits: scalars verify; unsized pointers are rejected
   (`mem_or_null`); the `void*,u32 __sz` convention is fragile in our BTF setup;
-  real kernel `ptr+end` / un-annotated-`len` signatures don't fit.
+  real kernel `ptr+end` / un-annotated-`len` signatures don't fit. Needs clang
+  23+ (our pinned 22.1.8 rejects >5-arg static subprograms at compile).
 
 Metrics: coverage-target count, differential-target count, buildable/total file
 ratio, documented backend boundaries.

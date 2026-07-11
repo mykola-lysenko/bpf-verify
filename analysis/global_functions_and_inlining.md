@@ -80,12 +80,39 @@ workaround for global functions being disabled plus real signatures not fitting.
 It is, however, *coarse*: it bloats the verified program and loses the
 independent, all-inputs guarantee a global function gives.
 
+## Update: `>5 args` to a static subprogram now works (and it's the same `.BTF.ext` story)
+
+The ">5 stack args" limitation I cited is **no longer absolute** — it's
+toolchain-version- and `.BTF.ext`-dependent. Verified end to end:
+
+- **LLVM.** clang 22.1.8 (our pinned prebuilt) rejects a 6-param static
+  subprogram at compile: `stack arguments are not supported`. **clang 23.0.0git**
+  (built from `main`) **compiles it** — the backend feature landed post-22.1.8.
+- **Kernel.** The verifier support is already in bpf-next `520d7d794`
+  (`check_stack_arg_read`, `bpf_in_stack_arg_cnt`, outgoing/incoming stack-arg
+  areas). No kernel bump was needed beyond our current pin.
+- **`.BTF.ext` is required.** The verifier reads the subprogram's arg count from
+  func-info. Measured (clang 23 + kernel `520d7d794`):
+
+  | `.BTF.ext` | 6-param static subprogram |
+  |------------|---------------------------|
+  | stripped (pipeline default) | **failure** — `invalid read from stack arg off 8 depth 0` (`bpf_in_stack_arg_cnt` == 0) |
+  | kept | **success** |
+
+So the same `.BTF.ext` strip that disables global functions also disables >5-arg
+static subprograms. Enabling one enables both. To *use* the feature in this
+pipeline we need clang 23+ **and** to stop stripping `.BTF.ext` (and solve the
+ctx-type lookup that motivated the strip — note the 6-param `.BTF.ext`-kept
+program above verified fine, so that lookup is not universally fatal).
+
 ## Policy (be precise with `always_inline`)
 
 - Reach for `always_inline` on a **target kernel function** only when it
-  genuinely needs it: it returns a pointer into caller memory, takes >5 stack
-  args, or bounds a buffer via an end-pointer. Otherwise prefer a **plain static
-  subprogram** (no annotation) — it verifies with the harness's concrete args.
+  genuinely needs it: it returns a pointer into caller memory, or bounds a buffer
+  via an end-pointer. The **>5-args** case is no longer a hard reason — it works
+  with clang 23+ and `.BTF.ext` kept (see the update above). Otherwise prefer a
+  **plain static subprogram** (no annotation) — it verifies with the harness's
+  concrete args.
 - `__always_inline` on **shim helpers** (memcpy-family) is fine and expected.
 - Note *why* in the target's `pre_include.h`, so the choice is auditable.
 
