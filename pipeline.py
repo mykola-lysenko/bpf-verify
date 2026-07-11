@@ -679,7 +679,7 @@ def main():
     # Per-target machine-readable results (consumed by scripts/check_results.py)
     results = {"schema": 1, "meta": collect_meta(), "veristat_ran": ran, "targets": {}}
     for name, _ in compiled_ok:
-        entry = {"compiled": True}
+        entry = {"compiled": True, "suite": targets[name]["suite"]}
         entry.update(rows.get(f"{name}.bpf.o", {"verdict": None}))
         if name in exec_results:
             entry["execution"] = exec_results[name]

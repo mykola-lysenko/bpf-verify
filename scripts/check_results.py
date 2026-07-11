@@ -128,6 +128,22 @@ def main():
             for line in drift:
                 print(f"  {line}")
 
+    # Born-trivial coverage: a 'coverage' target carries a custom harness that is
+    # meant to exercise the function, but if it verifies <= 4 insns the call was
+    # constant-folded / dead-stripped, so it covers nothing. Non-fatal, but
+    # surfaced every run so hollow coverage does not masquerade as real coverage.
+    # (compat targets are expected to be trivial -- they only prove the file
+    # compiles + loads -- so they are excluded.)
+    hollow = sorted(
+        name for name, t in targets.items()
+        if t.get("suite") == "coverage" and t.get("verdict") == "success"
+        and (t.get("insns") or 0) <= 4
+    )
+    if hollow:
+        warn(f"{len(hollow)} coverage target(s) verify <=4 insns (hollow "
+             f"coverage -- the harness does not keep the function live): "
+             f"{', '.join(hollow)}")
+
     n_ok = sum(1 for t in targets.values()
                if t.get("compiled") and t.get("verdict") == "success")
     print(f"\n{n_ok}/{len(targets)} targets verified; "
