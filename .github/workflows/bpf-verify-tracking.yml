@@ -56,9 +56,15 @@ jobs:
         working-directory: bpf-verify/deps/bpf-uml-selftests/uml-veristat
         run: |
           export PATH="${PWD}/.build/llvm-install/bin:${PATH}"
-          # --update fetches the current bpf-next tip; --reuse-llvm keeps the
-          # cached toolchain instead of re-downloading it.
-          ./build.sh --update --reuse-llvm || true
+          # --update fetches the current bpf-next tip. Only add --reuse-llvm when
+          # the toolchain cache actually restored an LLVM install; on a cache
+          # miss (e.g. the first run) there is nothing to reuse and build.sh
+          # refuses, so let it download a fresh prebuilt LLVM instead.
+          FLAGS="--update"
+          if [ "${{ steps.cache-toolchain.outputs.cache-hit }}" = "true" ]; then
+            FLAGS="--update --reuse-llvm"
+          fi
+          ./build.sh ${FLAGS} || true
           for f in ~/.local/share/uml-veristat/linux \
                    ~/.local/share/uml-veristat/veristat \
                    .build/bpf-next/Kconfig; do
