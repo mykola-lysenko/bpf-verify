@@ -97,3 +97,9 @@ See [`BPF_Verification_Findings.md`](BPF_Verification_Findings.md) for detailed
 per-target analysis across all phases, and
 [`FINDINGS_EXECUTION.md`](FINDINGS_EXECUTION.md) for the execution/differential
 and sanitizer legs.
+
+## Roadmap
+
+[`ROADMAP.md`](ROADMAP.md) is the living plan — workstreams ranked by bug
+expected-value (verifier soundness first), the operating rhythm for pin bumps
+and drift, and the immediate next pick.
