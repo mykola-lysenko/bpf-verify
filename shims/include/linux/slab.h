@@ -22,6 +22,17 @@
 #define ZERO_SIZE_PTR		((void *)16)
 #define ZERO_OR_NULL_PTR(x)	((unsigned long)(x) <= (unsigned long)ZERO_SIZE_PTR)
 
+/* The real slab.h defines these; this shim shadows it, so provide them for the
+ * many headers that reference them (fs.h uses freeptr_t; crypto.h and others
+ * use ARCH_KMALLOC_MINALIGN). */
+typedef struct { unsigned long v; } freeptr_t;
+#ifndef ARCH_KMALLOC_MINALIGN
+#define ARCH_KMALLOC_MINALIGN	__alignof__(unsigned long long)
+#endif
+#ifndef ARCH_SLAB_MINALIGN
+#define ARCH_SLAB_MINALIGN	__alignof__(unsigned long long)
+#endif
+
 struct kmem_cache {
 	unsigned int object_size;
 	const char *name;
