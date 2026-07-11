@@ -56,6 +56,7 @@ bash tools/diff.sh <name> --iters 200000
 | `crc16`  | `crc16` | table-lookup + shift/xor loop codegen |
 | `crc_ccitt` | `crc_ccitt` | CRC-CCITT table lookup |
 | `int_pow` | `int_pow` | 64-bit multiply loop (bounded exponent) |
+| `siphash` | `siphash_2u64` | keyed ARX PRF: 64-bit add / rotate / xor lowering |
 
 All agree with native over 100k inputs each.
 

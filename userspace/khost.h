@@ -102,6 +102,7 @@ extern unsigned long khost_warn_count;
 #define swap(a, b) do { typeof(a) __t = (a); (a) = (b); (b) = __t; } while (0)
 #define ALIGN(x, a)     (((x) + (a) - 1) & ~((typeof(x))(a) - 1))
 #define PTR_ALIGN(p, a) ((typeof(p))ALIGN((uintptr_t)(p), (a)))
+#define IS_ALIGNED(x, a) (((x) & ((typeof(x))(a) - 1)) == 0)
 
 /* strscpy(): faithful to the kernel contract -- copy up to count-1 bytes,
  * stopping at the source NUL, always NUL-terminate; returns the length copied
@@ -140,6 +141,13 @@ static inline u16 le16_to_cpu(u16 x) { return x; }
 static inline u64 cpu_to_le64(u64 x) { return x; }
 static inline u32 cpu_to_le32(u32 x) { return x; }
 static inline u16 cpu_to_le16(u16 x) { return x; }
+/* Pointer forms: load then convert. Identity on a little-endian host, but
+ * declared with the correct u32/u64 return so callers (e.g. siphash.h's
+ * string-hash path) do not fall back to an implicit int return that would
+ * truncate the value. */
+static inline u16 le16_to_cpup(const u16 *p) { return *p; }
+static inline u32 le32_to_cpup(const u32 *p) { return *p; }
+static inline u64 le64_to_cpup(const u64 *p) { return *p; }
 static inline u16 __swab16(u16 x) { return __builtin_bswap16(x); }
 static inline u32 __swab32(u32 x) { return __builtin_bswap32(x); }
 static inline u64 __swab64(u64 x) { return __builtin_bswap64(x); }
