@@ -132,6 +132,10 @@ enum fault_flag {
 
 struct vm_fault;
 
+/* fs.h/mm.h reference these; forward-declared so their inline helpers type-check. */
+struct file;
+struct vm_area_desc;
+struct vm_operations_struct;
 struct vm_area_struct {
 	unsigned long vm_start;
 	unsigned long vm_end;
@@ -140,6 +144,8 @@ struct vm_area_struct {
 	vm_flags_t vm_flags;
 	unsigned int vm_lock_seq;
 	struct list_head anon_vma_chain;
+	struct file *vm_file;
+	const struct vm_operations_struct *vm_ops;
 };
 
 /* Minimal mm_struct fields accessed by BPF-relevant header chains. */
