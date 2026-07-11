@@ -35,6 +35,51 @@ Net: **9 -> 18** buildable, untargeted `lib/` files. No regression: the existing
 | `mm.h` `vma->flags` | 3 | recent `struct vma_flags` MM refactor (moving target) |
 | `msr.h` / `skcipher.h` / `hash.h` / `vmalloc.h` | 1 each | singletons |
 
+### A second mining pass (attempted, then reverted): these are deep chains, not one-liners
+
+Unlike the first batch (single missing struct members / trivial header stubs),
+every remaining blocker turned out to be a deep multi-header chain or genuinely
+unshimmable. Documented here so the next attempt knows the terrain:
+
+- **`srcutree.h` `irq_work` (5 files) — fixable, but not a clean win.** srcutree.h
+  embeds `struct irq_work` by value without including its header. The fix (a shim
+  `irq_work_types.h` with the real `_LINUX_IRQ_WORK_TYPES_H` guard, force-included
+  early so the type is always complete) *works* for compilation, but:
+  1. It **regresses 3 existing targets** (`task_iter`, `ringbuf_prove`,
+     `ringbuf_lifecycle_prove`) that define *and use* their own `struct irq_work`
+     with specific members (`.func`, `.queued`, `.busy`). A global `irq_work` is
+     fundamentally incompatible with per-target custom definitions — guarding
+     their local defs just swaps in the opaque shim struct, which lacks the
+     members their code reads. A *targeted* shim of `srcutree.h` (via
+     `#include_next`) would avoid the global conflict, but see (2).
+  2. It **unlocks nothing on its own.** The 5 srcutree files immediately hit the
+     next wall: `mm.h`, which is a chain of its own —
+     `vma_flags` refactor → `struct vm_area_desc` (embeds `struct mmap_action`) →
+     `struct vma_iterator` (embeds `struct ma_state`, i.e. the **maple tree**) →
+     … Each level is individually shimmable (the `vma_flags` mini-API is ~8
+     primitive inlines over a one-long bitmap; `vm_area_desc`/`mmap_action` are
+     plain structs), but the chain bottoms out in the maple-tree API (declare
+     `mas_find`/`mas_next_range`/… + an opaque `ma_state`). Completing all of it
+     is a large surface for an uncertain payoff.
+- **`smp.h` `cpu_llc_shared_map` (5 files)** — x86 per-CPU machinery
+  (`DECLARE_PER_CPU_READ_MOSTLY` + `per_cpu(...)` in an inline). Needs the
+  per-CPU infrastructure, not a one-liner.
+- **`vmalloc.h` `pgprot_t` (generic-radix-tree.c)** — `vmalloc.h` expects
+  `pgprot_t` from `asm/page.h`, but some shimmed header in that transitive chain
+  breaks the path. Another include-chain investigation.
+- **`io.h` `=a` inline-asm constraint (iomap_copy.c)** — genuine x86 inline
+  assembly; **not shimmable** (BPF has no inline asm target for it).
+- **`string_64.h` conflicting `memset` (group_cpus.c)** — a `memset` declaration
+  clash between the arch header and our harness stubs.
+
+**Conclusion of the second pass:** the high-leverage shim wins (struct members,
+trivial header stubs) are exhausted at 9→18. What remains is deep kernel
+infrastructure (maple tree, per-CPU, the `pgprot_t` include chain) or
+unshimmable x86 asm — and the files behind these mostly hit BPF verifier
+boundaries when exercised anyway (see below). The second-pass edits were reverted
+to keep the suite green; this section records the terrain so the effort isn't
+repeated blind.
+
 ## Buildable != verifiable: the boundaries the new files hit
 
 Making a file *compile* does not make it *verify*. Sampling the newly-buildable
