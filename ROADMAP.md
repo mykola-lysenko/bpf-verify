@@ -99,6 +99,18 @@ because our shim tree lacks kernel infrastructure types (`freeptr_t`,
   benign compiler-completeness findings for LLVM/BPF maintainers.
 - **Scale the mechanics:** a small harness generator for the common
   "scalar in → scalar out" case to add many targets per session.
+- **Be precise with `always_inline`; enable global functions.** See
+  `analysis/global_functions_and_inlining.md`. `always_inline` on a *target
+  kernel function* is a workaround for global functions being disabled here (the
+  pipeline strips `.BTF.ext`, degrading every non-static fn to a static
+  subprogram) — use it only when the function truly needs it (returns a
+  caller-stack pointer, >5 stack args, end-pointer bounds); otherwise a plain
+  static subprogram suffices. The real win is **enabling global functions**:
+  keep `.BTF.ext`, solve the ctx-type lookup, and route scalar / typed-pointer
+  kernel functions through independent (all-inputs) global-function
+  verification. Measured limits: scalars verify; unsized pointers are rejected
+  (`mem_or_null`); the `void*,u32 __sz` convention is fragile in our BTF setup;
+  real kernel `ptr+end` / un-annotated-`len` signatures don't fit.
 
 Metrics: coverage-target count, differential-target count, buildable/total file
 ratio, documented backend boundaries.
