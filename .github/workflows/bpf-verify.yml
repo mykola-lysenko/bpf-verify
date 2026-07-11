@@ -54,9 +54,15 @@ jobs:
             ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install
             ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
             ${{ env.UML_VERISTAT_DIR }}/.build/pahole-install
+            # bpftool-output holds the libbpf.a + headers that build_runner.sh
+            # links tools/bpf_runner against. Without it, cache-hit runs (which
+            # skip build.sh) fail to build the runner ("bpf/libbpf.h: No such
+            # file or directory").
+            ${{ env.UML_VERISTAT_DIR }}/.build/bpftool-output
           # KERNEL_PIN is in the key: bumping the pin invalidates the cache and
-          # forces a rebuild against the new pinned kernel.
-          key: uml-veristat-pinned-${{ hashFiles('bpf-verify/deps/bpf-uml-selftests/uml-veristat/build.sh', 'bpf-verify/deps/bpf-uml-selftests/uml-veristat/patches/**', 'bpf-verify/KERNEL_PIN') }}
+          # forces a rebuild against the new pinned kernel. The -v2 tag forces a
+          # one-time rebuild to repopulate the cache with bpftool-output.
+          key: uml-veristat-pinned-v2-${{ hashFiles('bpf-verify/deps/bpf-uml-selftests/uml-veristat/build.sh', 'bpf-verify/deps/bpf-uml-selftests/uml-veristat/patches/**', 'bpf-verify/KERNEL_PIN') }}
 
       - name: Install build dependencies
         if: steps.cache-uml-veristat.outputs.cache-hit != 'true'
