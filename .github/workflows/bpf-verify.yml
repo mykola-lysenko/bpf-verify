@@ -215,6 +215,25 @@ jobs:
         run: bash tools/build_runner.sh
 
       # -----------------------------------------------------------------------
+      # 3d. Install clang-23 for the pipeline's BPF compilation. The uml-veristat
+      #     build above keeps its own (prebuilt 22.1.8) LLVM for building the UML
+      #     kernel + veristat -- those are unaffected. Only the target objects are
+      #     compiled with clang-23, which is needed for global functions and >5-arg
+      #     static subprograms (see analysis/global_functions_and_inlining.md).
+      #     apt.llvm.org ships clang-23 as a nightly snapshot of LLVM main.
+      # -----------------------------------------------------------------------
+      - name: Install clang-23 (apt.llvm.org)
+        run: |
+          . /etc/os-release
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          echo "deb https://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-23.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y clang-23 llvm-23
+          clang-23 --version | head -1
+
+      # -----------------------------------------------------------------------
       # 4. Run the full pipeline (compile + verify via uml-veristat, then
       #    fuzz-execute the execute:true targets in the UML guest)
       # -----------------------------------------------------------------------
@@ -222,8 +241,8 @@ jobs:
         working-directory: bpf-verify
         env:
           BPF_KSRC:         ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
-          BPF_CLANG:        ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/clang
-          BPF_LLVM_OBJCOPY: ${{ env.UML_VERISTAT_DIR }}/.build/llvm-install/bin/llvm-objcopy
+          BPF_CLANG:        /usr/bin/clang-23
+          BPF_LLVM_OBJCOPY: /usr/bin/llvm-objcopy-23
           BPF_VERISTAT:     ${{ env.UML_VERISTAT_DIR }}/uml-veristat
           # capture full verifier logs as a debugging artifact (extra veristat pass)
           BPF_VERISTAT_VERBOSE: "1"

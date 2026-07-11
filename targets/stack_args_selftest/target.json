@@ -1,0 +1,7 @@
+{
+  "src": [
+    "{ksrc}/lib/cmpdi2.c"
+  ],
+  "suite": "coverage",
+  "keep_btf_ext": true
+}

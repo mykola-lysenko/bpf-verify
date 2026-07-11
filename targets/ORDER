@@ -211,3 +211,4 @@ string_helpers
 refcount
 ratelimit
 asn1_encode
+stack_args_selftest
