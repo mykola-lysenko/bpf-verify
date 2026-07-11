@@ -21,6 +21,11 @@
       "insns": 47,
       "states": 4
     },
+    "asn1_encode": {
+      "verdict": "success",
+      "insns": 1283,
+      "states": 100
+    },
     "backtrack": {
       "verdict": "success",
       "insns": 887,

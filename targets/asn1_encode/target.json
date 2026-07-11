@@ -1,0 +1,6 @@
+{
+  "src": [
+    "{ksrc}/lib/asn1_encoder.c"
+  ],
+  "suite": "coverage"
+}
