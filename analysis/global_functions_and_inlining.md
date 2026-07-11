@@ -134,6 +134,29 @@ degenerated to a trivial program — the harness was built around the inlined
 path). The flag is inert by default, so it is committed ahead of the toolchain
 bump with zero CI impact.
 
+## Outcome after the clang-23 CI bump
+
+With CI on clang 23 (apt.llvm.org), two follow-ups were measured:
+
+- **`always_inline` audit — 17 of 42 uses are obviated.** Stripping
+  `always_inline` and re-verifying on clang 23: 17 targets still pass (they were
+  clang-22.1.8 *compile*-workarounds, chiefly the >5-arg static-subprogram case).
+  The clean, robust retirement is the >5-arg kind (genuine backend support now) —
+  `zlib_inflate`'s 6-arg `__bpf_zit_impl` is retired here. The remaining 25 are
+  load-bearing: mostly `__always_inline` on shim `memcpy`-family helpers (removing
+  it forces an unresolved `memcpy` extern), plus the pointer-return case
+  (`asn1_encode`). Note the shim-helper ones *could* rely on `-O2` inlining
+  instead, but that trades a guarantee for a heuristic — keep them.
+
+- **Global functions rarely fit real kernel code (confirmed, not just argued).**
+  A clean global-fn candidate is a *scalar, out-of-line* function. Real kernel
+  functions don't offer many: `int_sqrt` fails on all-inputs loop complexity;
+  `reciprocal_divide` is `static inline` *in the header* (always inlined, never a
+  global fn); `crc16`/`base64`/`sm4`/`memneq` are out-of-line but take unsized
+  pointers (`mem_or_null` ABI failure). So global-function verification is a
+  narrow tool here — valuable to characterize, but not a broad `always_inline`
+  replacement.
+
 ## Policy (be precise with `always_inline`)
 
 - Reach for `always_inline` on a **target kernel function** only when it
