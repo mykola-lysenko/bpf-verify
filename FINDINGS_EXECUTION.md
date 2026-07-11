@@ -115,6 +115,38 @@ regime (≤ 6 unknown bits per operand); it is a strong soundness check there bu
 not a proof for arbitrary tnums. Runs continuously in CI, so it re-checks every
 kernel/LLVM bump.
 
+### BPF verifier abstract-domain soundness (`cnum`) — sound (no violation found)
+
+`userspace/harnesses/cnum_soundness.c` fuzzes the **brand-new (2026)**
+circular-number domain (`kernel/bpf/cnum.c`), the verifier's unified
+signed/unsigned range tracker — far less battle-tested than `tnum`, so a higher
+a-priori bug probability. A `cnum{32,64}` is an arc on the mod-2^N circle,
+`gamma(c) = {base, base+1, …, base+size}`. For random **small arcs** (size ≤ 16,
+`base` biased toward the `0 / U*_MAX / S*_MAX / S*_MIN` boundaries where the wrap
+logic is subtlest) it enumerates `gamma` exhaustively and checks, for both 32-
+and 64-bit:
+
+- **`contains` self-consistency** — every enumerated member is contained.
+- **`add`** — `∀ x∈γ(a), y∈γ(b): contains(cnum_add(a,b), x+y)`.
+- **`negate`** — `∀ x∈γ(a): contains(cnum_negate(a), -x)`.
+- **`intersect`** — `γ(a) ∩ γ(b) ⊆ γ(cnum_intersect(a,b))`.
+- **`is_subset`** — both directions vs enumeration (sound *and* precise).
+- **`umin/umax/smin/smax`** — every member lies within the claimed projections.
+
+- 1,000,000 iterations (each a complete soundness proof for its `(a,b)` pair in
+  the small-arc regime): **0 violations**, 32- and 64-bit.
+- Detector validated: shrinking the `cnum32_add` result by one element is caught
+  at **iteration 0** with a concrete witness `(a, b, x+y, r)`.
+
+Coverage note: complete only for small arcs (≤ 16 wide); a strong soundness
+check there, not a proof for arbitrary cnums. An unsound op here would be a
+real, reportable verifier bug (the verifier could conclude a register cannot
+hold a value it can). Compiling `cnum.c` for the host needed minor shim
+additions (`U64_MAX`/`S*_MAX`/`S*_MIN`, `__PASTE`, a simple `min/max/swap`, a
+minimal `bits.h`); the aggregate-return shape that keeps `cnum` out of the BPF
+`proof` suite (see the toolchain boundaries above) is a non-issue for the host
+build.
+
 ### Native-vs-BPF differential — agree (no miscompilation found)
 
 `diff/` compiles the same kernel function to BPF (verified + run in UML) and to

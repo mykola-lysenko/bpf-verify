@@ -35,13 +35,13 @@ A violation here is a **CVE-class verifier bug**: the verifier concluding a
 register cannot hold a value it actually can. This is the most novel and
 defensible thing the project does, and it is under-invested relative to its EV.
 
-- **`cnum` soundness (do first).** `cnum` is the brand-new (2026) signed-range
-  abstract domain — far less battle-tested than `tnum`. Build a `cnum_soundness`
-  harness mirroring `userspace/harnesses/tnum_soundness.c`: for random small
-  `cnum`s, enumerate γ(a), γ(b) exhaustively and check every concrete `OP(x,y)`
-  is contained in `cnum_OP(a,b)` for all ops. Validate the detector by planting
-  an unsound op. **This is the single highest-probability place to find a real
-  bug right now.**
+- **`cnum` soundness — DONE (sound, no violation).**
+  `userspace/harnesses/cnum_soundness.c` checks the brand-new (2026) circular
+  domain (`add`/`negate`/`intersect`/`is_subset`/`contains`/`umin..smax`, 32- &
+  64-bit) over small arcs; 1M iters clean, detector validated (planted `add`
+  shrink caught at iter 0). See `FINDINGS_EXECUTION.md`. Next on this thread:
+  extend beyond the small-arc regime, and add the remaining cnum ops
+  (`from_srange` corner cases, `cnum32_from_cnum64`, the mixed 32/64 helpers).
 - Extend `tnum_soundness` beyond the ≤6-unknown-bit regime (structured/large
   tnums; targeted adversarial pairs).
 - Cross-domain: check `tnum`↔`cnum` consistency where the verifier uses both.
@@ -104,5 +104,7 @@ stack-hostile (curve25519, AES) — userspace-only.
 
 ## Immediate next pick
 
-**Workstream 1: build `cnum_soundness`.** New 2026 domain, exhaustive-enumeration
-oracle already proven for `tnum`, highest bug-probability per hour.
+**Workstream 1 (continued): deepen the soundness legs.** `cnum_soundness` is
+landed and clean. Next highest-EV: extend both `tnum` and `cnum` soundness
+beyond the small regime (structured large operands; the mixed `cnum32_from_cnum64`
+and 32/64 helpers), then start on untrusted-input parsers (Workstream 2).
