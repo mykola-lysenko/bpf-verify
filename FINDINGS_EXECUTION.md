@@ -132,11 +132,22 @@ and 64-bit:
 - **`intersect`** — `γ(a) ∩ γ(b) ⊆ γ(cnum_intersect(a,b))`.
 - **`is_subset`** — both directions vs enumeration (sound *and* precise).
 - **`umin/umax/smin/smax`** — every member lies within the claimed projections.
+- **`from_srange`** — every signed value in `[lo,hi]` is contained.
+- **`intersect_with_urange` / `intersect_with_srange`** — no member of
+  `γ(dst) ∩ [lo,hi]` is dropped (the branch-derived bounds refinement).
+- **32/64-bit reconciliation (highest-EV — historically the buggiest corner of
+  verifier value tracking):**
+  - **`cnum32_from_cnum64`** (narrowing) — every low-32-bits of a 64-bit member
+    is contained in the 32-bit result (an over-narrow result would drop a valid
+    subregister value).
+  - **`cnum64_cnum32_intersect`** (subreg refinement) — every 64-bit member
+    whose low 32 bits satisfy the constraint survives.
 
-- 1,000,000 iterations (each a complete soundness proof for its `(a,b)` pair in
-  the small-arc regime): **0 violations**, 32- and 64-bit.
-- Detector validated: shrinking the `cnum32_add` result by one element is caught
-  at **iteration 0** with a concrete witness `(a, b, x+y, r)`.
+- 1,000,000 iterations (each a complete soundness proof for its operands in the
+  small-arc regime): **0 violations**, 32-, 64-bit, and mixed.
+- Detectors validated: shrinking the result of `cnum32_add`, `cnum32_from_cnum64`,
+  `cnum64_cnum32_intersect`, or `intersect_with_urange` by one element is caught
+  within the first ~100 iterations with a concrete witness.
 
 Coverage note: complete only for small arcs (≤ 16 wide); a strong soundness
 check there, not a proof for arbitrary cnums. An unsound op here would be a
