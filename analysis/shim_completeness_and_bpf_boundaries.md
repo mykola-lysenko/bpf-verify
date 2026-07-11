@@ -80,6 +80,69 @@ boundaries when exercised anyway (see below). The second-pass edits were reverte
 to keep the suite green; this section records the terrain so the effort isn't
 repeated blind.
 
+### Third pass: deliberately completing the mm.h chain (mapped in full, then reverted)
+
+A focused attempt to finish the srcutree → mm.h chain and land `bitmap-str.c`
+(`bitmap_parselist`) as a coverage target. It got all the way to the verifier,
+which is the useful result: it maps the true depth and shows where it bottoms
+out. Reverted to keep the suite green; recorded here so the next attempt is
+informed.
+
+**The srcutree/irq_work blocker is cleanly solvable (targeted, no regression).**
+A `srcutree.h` shim (`#include <linux/irq_work.h>` then `#include_next`) plus an
+`irq_work_types.h` split (opaque `struct irq_work` under the real
+`_LINUX_IRQ_WORK_TYPES_H` guard) completes the type *only* for TUs that pull
+srcu — so, unlike the global force-include, it does NOT regress the 3 targets
+that define their own `irq_work`. This part works and is worth reviving if the
+rest is ever pursued.
+
+**Completing mm.h standalone is a large surface, but each level is mechanical.**
+Reaching a compilable `mm.h` required, in order:
+- the `vma_flags` mini-API (8 primitive inlines over a one-long bitmap +
+  `EMPTY_VMA_FLAGS`/`NUM_VMA_FLAG_BITS`) and a `flags` member on `vm_area_struct`;
+- complete `struct vm_area_desc` + `struct mmap_action` + `enum mmap_action_type`;
+- `struct vma_iterator` — just include the **real** `linux/maple_tree.h` (it
+  compiles here; shadowing it minimally instead *regresses* 8 fs.h files that
+  embed `struct maple_tree` by value);
+- three large-folio union arms on `struct folio` (`_flags_1/_2/_3`,
+  `_large_mapcount`, `_entire_mapcount`, `_pincount`, `_nr_pages`, `_mm_ids`,
+  `_last_cpupid`);
+- `-DZERO_PAGE(vaddr)=((struct page *)0)` (huge_mm.h uses it behind blocked
+  pgtable.h);
+- guarding gfp.h's `folio_put`/`folio_alloc` stubs with `#ifndef _LINUX_MM_H`
+  (mm.h owns them) — but this is **include-order-fragile**: 5 files that pull
+  gfp.h *before* mm.h still clash;
+- `mm_struct` members `mm_mt` (maple_tree), `write_protect_seq` (seqcount),
+  `pgtables_bytes` (atomic_long), `rss_stat` (`percpu_counter[NR_MM_COUNTERS]`) …
+  and the chain kept going. **It does not bottom out quickly** — mm.h is one of
+  the deepest headers in the tree.
+
+**The lighter shortcut — block mm.h for parser files — works to compile, but
+the target then bottoms out in BPF boundaries.** `bitmap-str.c` pulls mm.h only
+for `kasprintf` in an unexercised sysfs helper, so `#define _LINUX_MM_H` (block
+it) compiles far more cheaply. But making `bitmap_parselist` *load and verify*
+required reimplementing its lib dependency web — `_ctype` (via `lib/ctype.c`),
+`_parse_integer` (hand-written 64-bit; the real `lib/kstrtox.c` needs `__multi3`
+128-bit multiply, **unavailable on BPF**), `__bitmap_set`/`__bitmap_clear`/
+`_find_next_bit`, `strnchrnul`/`strncasecmp`/`strlen`/`memset`, plus `min` and a
+variadic-swallowing `kasprintf` macro (~11 symbols). And after all that it still
+fails the verifier two ways:
+- minimal build → **`cannot return stack pointer to the caller`** (the static
+  helpers `bitmap_find_region`/`bitmap_getnum`/`bitmap_parse_region` return a
+  `const char*` cursor into the caller's stack buffer; `always_inline`/`flatten`
+  on forward-decls were silently ignored by clang here);
+- force-inlined (`-inline-threshold=100000`) → **"sequence of 8193 jumps is too
+  complex"** (verifier jump-complexity limit).
+
+**Conclusion of the third pass.** The srcutree/irq_work fix is clean; the mm.h
+chain is completable but is a large, partly include-order-fragile surface that
+doesn't converge quickly; and the one genuinely promising parser behind it
+(`bitmap_parselist`) needs ~11 lib reimplementations and *still* hits BPF
+boundaries (stack-pointer return, then jump complexity). So "complete the mm.h
+chain to land these files" is not a good ROI: the destination files are boundary
+-bound even once compiled. The high-value work remains elsewhere (the existing
+214 targets; pure scalar/bounded-array compute).
+
 ## Buildable != verifiable: the boundaries the new files hit
 
 Making a file *compile* does not make it *verify*. Sampling the newly-buildable
