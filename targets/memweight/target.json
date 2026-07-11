@@ -2,7 +2,7 @@
   "src": [
     "{ksrc}/lib/memweight.c"
   ],
-  "suite": "coverage",
+  "suite": "compat",
   "extra_includes": [
     [
       "{ksrc}/lib/hweight.c"

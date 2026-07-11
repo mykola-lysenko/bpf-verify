@@ -2,5 +2,5 @@
   "src": [
     "{ksrc}/lib/crypto/nh.c"
   ],
-  "suite": "coverage"
+  "suite": "compat"
 }

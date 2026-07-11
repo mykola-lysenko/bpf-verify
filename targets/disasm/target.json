@@ -2,7 +2,7 @@
   "src": [
     "{shim}/kernel/bpf/disasm.c"
   ],
-  "suite": "coverage",
+  "suite": "compat",
   "extra_early_cflags": [
     "-I{ksrc}"
   ]

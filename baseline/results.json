@@ -13,13 +13,13 @@
     },
     "ashldi3": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 39,
+      "states": 3
     },
     "ashrdi3": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 47,
+      "states": 4
     },
     "backtrack": {
       "verdict": "success",
@@ -133,8 +133,8 @@
     },
     "bpf_lsm_proto": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 18,
+      "states": 1
     },
     "bpf_struct_ops_lifecycle_prove": {
       "verdict": "success",
@@ -248,8 +248,8 @@
     },
     "crc32": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 273,
+      "states": 3
     },
     "crc4": {
       "verdict": "success",
@@ -263,8 +263,8 @@
     },
     "crc7": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 100,
+      "states": 3
     },
     "crc8": {
       "verdict": "success",
@@ -273,8 +273,8 @@
     },
     "crc_t10dif": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 162,
+      "states": 3
     },
     "crypto_arc4": {
       "verdict": "success",
@@ -383,13 +383,13 @@
     },
     "dynamic_queue_limits": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 13,
+      "states": 1
     },
     "errname": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 185,
+      "states": 13
     },
     "errseq": {
       "verdict": "success",
@@ -458,8 +458,8 @@
     },
     "int_log": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 1369,
+      "states": 47
     },
     "int_pow": {
       "verdict": "success",
@@ -678,8 +678,8 @@
     },
     "mpih_addmul1": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 104,
+      "states": 6
     },
     "mpih_cmp": {
       "verdict": "success",
@@ -708,8 +708,8 @@
     },
     "mpih_submul1": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 154,
+      "states": 7
     },
     "mprog": {
       "verdict": "success",
@@ -1013,8 +1013,8 @@
     },
     "win_minmax": {
       "verdict": "success",
-      "insns": 2,
-      "states": 0
+      "insns": 125,
+      "states": 11
     },
     "xxhash": {
       "verdict": "success",

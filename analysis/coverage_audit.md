@@ -20,31 +20,34 @@ This complements the existing `DEGENERATION_RATIO` gate, which catches a target
 that *regresses* from non-trivial to trivial; the born-trivial check catches
 targets that were never live to begin with.
 
-## Snapshot (bpf-next `77f02c99`, pinned)
+## Resolution (bpf-next `77f02c99`, pinned)
 
-19 hollow `coverage` targets (all 2 insns):
+The initial audit found **19 hollow `coverage` targets** (all 2 insns). All 19
+were triaged:
+
+**12 strengthened** — seeded from `input_map` so the call stays live; they now
+verify real instruction counts:
 
 ```
-arc4  ashldi3  ashrdi3  bpf_lsm_proto  crc32  crc7  crc_t10dif  disasm
-dynamic_queue_limits  errname  int_log  lcm  list_sort  memweight
-mpih_addmul1  mpih_submul1  nh  rational_v2  win_minmax
+ashldi3(39)  ashrdi3(47)  crc32(273)  crc7(100)  crc_t10dif(162)
+int_log(1369)  dynamic_queue_limits(13)  win_minmax(125)
+mpih_addmul1(104)  mpih_submul1(154)  bpf_lsm_proto(18)  errname(185)
 ```
 
-Distribution across the suite (for context):
+**7 reclassified to `compat`** — genuinely cannot be kept live under the
+verifier / BPF, so they are compile-and-load checks, not coverage:
 
-| Suite | n | trivial (≤4 insns) | median insns |
-|-------|---|--------------------|--------------|
-| compat | 55 | 55 (by design) | 2 |
-| coverage | 117 | 19 (hollow) | 130 |
-| proof | 40 | 0 | 105 |
+| Target | Why it can't be live coverage |
+|--------|-------------------------------|
+| `lcm` | calls `gcd()`'s unbounded `for(;;)` loop — back-edge rejected |
+| `memweight` | pointer→integer cast for alignment — rejected on stack pointers |
+| `arc4` | 1 KB S-box (`u32 S[256]`) exceeds the 512-byte BPF stack |
+| `list_sort` | indirect comparator callback — not valid BPF |
+| `nh` | 1088-byte key array exceeds the BPF stack once live |
+| `rational_v2` | continued-fraction loop doesn't verify with symbolic inputs (fuzzed in userspace instead) |
+| `disasm` | `func_id_name()` bounds-checks the id on a different register than the computed index → the bound doesn't propagate for a symbolic id (verifier precision) |
 
-## What to do with them
-
-These are not failures — they compile and verify — but they should be either
-**strengthened** (make the harness consume the function's result via
-`input_map`-seeded inputs, mark the source helper `noinline`, or assert a real
-postcondition, as the CRC / `seq_buf` harnesses already do) or, if the function
-genuinely cannot be kept live under the verifier, **reclassified** to `compat`
-so the coverage count reflects only targets that actually exercise code.
-Strengthening is tracked as follow-up work; the warning keeps the list honest
-in the meantime.
+After this pass the born-trivial check reports **0 hollow coverage targets**;
+suite counts are compat 62 / coverage 110 / proof 40. The check stays in
+`check_results.py` as a standing guard so newly-added coverage targets can't
+silently regress to no-ops.
