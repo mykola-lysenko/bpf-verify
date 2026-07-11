@@ -105,6 +105,35 @@ pipeline we need clang 23+ **and** to stop stripping `.BTF.ext` (and solve the
 ctx-type lookup that motivated the strip — note the 6-param `.BTF.ext`-kept
 program above verified fine, so that lookup is not universally fatal).
 
+## Prototype: per-target `keep_btf_ext` (not a global switch)
+
+`compile_harness` gained a toggle (`BPF_KEEP_BTF_EXT=1` env, or `"keep_btf_ext":
+true` per target) to *keep* `.BTF.ext`. Ran the full suite with it forced on
+(clang 23):
+
+- **200 / 213 verify; 13 regress.** Every regression is an `EXPORT_SYMBOL`
+  function with a pointer arg (`crc16`, `base64`, `const_fold`, `sm4`, `memneq`,
+  `gf128hash`, …): keeping `.BTF.ext` makes it a **global function**, and its
+  unsized buffer fails the ABI (`R2 invalid mem access 'mem_or_null'` /
+  `Caller passes invalid args`). `int_sqrt` regresses on all-inputs complexity.
+
+So **keeping `.BTF.ext` globally is not viable** — it breaks the common
+`EXPORT_SYMBOL`+pointer shape. It is therefore a **per-target opt-in**, correct
+for:
+- targets with a **static >5-arg** subprogram — proven with a synthetic 6-param
+  static function (clang 23 + `.BTF.ext` kept → verifies, 36 insns), which lets
+  such targets drop `always_inline`;
+- functions whose signature fits the global-fn ABI (scalar / typed-struct ptr),
+  to gain independent all-inputs verification.
+
+**To land it for real targets** two things are needed together: (1) bump the
+pipeline toolchain to **clang 23+** (our pinned prebuilt is 22.1.8, which can't
+even compile a >5-arg static subprogram), and (2) set `keep_btf_ext` on the
+specific target and adjust its harness (a naive flip on `zlib_inflate`
+degenerated to a trivial program — the harness was built around the inlined
+path). The flag is inert by default, so it is committed ahead of the toolchain
+bump with zero CI impact.
+
 ## Policy (be precise with `always_inline`)
 
 - Reach for `always_inline` on a **target kernel function** only when it

@@ -343,13 +343,23 @@ def compile_harness(src_name, src_path, cfg, out_path, template_path=None):
     # in btf_vmlinux, which is absent on this kernel (no /sys/kernel/btf/).
     # Without .BTF.ext the verifier skips that check entirely while the
     # .BTF section (needed for map key/value types) is preserved.
-    strip_result = subprocess.run(
-        [LLVM_OBJCOPY, "--remove-section=.BTF.ext", str(out_path)],
-        capture_output=True, text=True
-    )
-    if strip_result.returncode != 0:
-        # Non-fatal: log but don't fail the compile step
-        errors.append(f"[warn] llvm-objcopy strip .BTF.ext failed: {strip_result.stderr.strip()}")
+    #
+    # HOWEVER .BTF.ext also carries the func-info the verifier needs for global
+    # functions and for >5-arg static subprograms (bpf_in_stack_arg_cnt). Keeping
+    # it enables those (needs clang 23+), but it also makes every non-static
+    # (EXPORT_SYMBOL) kernel function be verified as a *global function* -- which
+    # fails for the common unsized-pointer signatures. So it is opt-in per target
+    # ("keep_btf_ext": true in target.json), used for targets with static >5-arg
+    # subprograms or global-fn-compatible signatures. BPF_KEEP_BTF_EXT=1 forces
+    # it globally (experiments only). See analysis/global_functions_and_inlining.md.
+    if not (os.environ.get("BPF_KEEP_BTF_EXT") or cfg.get("keep_btf_ext")):
+        strip_result = subprocess.run(
+            [LLVM_OBJCOPY, "--remove-section=.BTF.ext", str(out_path)],
+            capture_output=True, text=True
+        )
+        if strip_result.returncode != 0:
+            # Non-fatal: log but don't fail the compile step
+            errors.append(f"[warn] llvm-objcopy strip .BTF.ext failed: {strip_result.stderr.strip()}")
 
     return True, errors
 
