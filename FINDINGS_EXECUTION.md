@@ -130,6 +130,8 @@ divergence would be a BPF-backend miscompilation of real kernel code.
 | `crc_ccitt` | `crc_ccitt` (CRC-CCITT table) | 100,000 | native and BPF agree |
 | `int_pow` | `int_pow` (64-bit multiply loop, bounded exp) | 100,000 | native and BPF agree |
 | `siphash` | `siphash_2u64` (keyed ARX PRF: 64-bit add/rotate/xor) | 100,000 | native and BPF agree |
+| `hsiphash` | `hsiphash_2u32` (32-bit-output keyed ARX PRF) | 100,000 | native and BPF agree |
+| `xxh32` | `xxh32` (32-bit xxHash: 32-bit multiply-by-prime + rotate) | 100,000 | native and BPF agree |
 
 Detector validated by construction: injecting a one-off perturbation on the BPF
 side (`+1` on the result) is caught at every iteration with the exact

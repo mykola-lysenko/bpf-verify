@@ -57,6 +57,8 @@ bash tools/diff.sh <name> --iters 200000
 | `crc_ccitt` | `crc_ccitt` | CRC-CCITT table lookup |
 | `int_pow` | `int_pow` | 64-bit multiply loop (bounded exponent) |
 | `siphash` | `siphash_2u64` | keyed ARX PRF: 64-bit add / rotate / xor lowering |
+| `hsiphash` | `hsiphash_2u32` | 32-bit-output keyed ARX PRF (reuses the `siphash` base) |
+| `xxh32` | `xxh32` | 32-bit multiply-by-prime + rotate (reuses the `xxhash` base) |
 
 All agree with native over 100k inputs each.
 
