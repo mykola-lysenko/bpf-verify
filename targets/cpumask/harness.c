@@ -80,12 +80,12 @@
     BPF_ASSERT(bpf_cpumask_first((struct cpumask *)&out) ==
                BPF_CPUMASK_NR_CPUS);
 
-    BPF_ASSERT(bpf_cpumask_populate((struct cpumask *)&out, &raw,
-                                    sizeof(raw)) == 0);
+    /* bpf_cpumask_populate() takes a struct bpf_cpumask * (the "owned cpumask"
+     * requirement, bpf-next 520d7d794); out is already one, so no cast. */
+    BPF_ASSERT(bpf_cpumask_populate(&out, &raw, sizeof(raw)) == 0);
     BPF_ASSERT(bpf_cpumask_test_cpu(0, (struct cpumask *)&out));
     BPF_ASSERT(bpf_cpumask_test_cpu(3, (struct cpumask *)&out));
-    BPF_ASSERT(bpf_cpumask_populate((struct cpumask *)&out, &raw, 1) ==
-               -EACCES);
+    BPF_ASSERT(bpf_cpumask_populate(&out, &raw, 1) == -EACCES);
 
     return (int)(bpf_cpumask_weight((struct cpumask *)&out) +
                  __bpf_cpumask_allocs + __bpf_cpumask_frees);
