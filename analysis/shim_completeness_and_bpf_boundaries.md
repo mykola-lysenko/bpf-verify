@@ -179,7 +179,37 @@ verifier boundary in unmodified kernel source, not a pipeline gap.
   boundary*: the pipeline captures the verifier log (`capture_verifier_log`)
   and `check_results.py` requires the target to fail *with that diagnostic* —
   verifying successfully (boundary lifted upstream) or failing with a different
-  message are both hard CI errors. Both boundaries from this document are
-  pinned as live targets: `find_cpio_data` (`bitwise operator &= on pointer
-  prohibited`) and `bitmap_parselist` (`cannot return stack pointer to the
-  caller`).
+  message are both hard CI errors.
+
+## The boundary catalog (documented-boundary targets)
+
+Four distinct verifier-boundary classes hit by unmodified kernel source, each
+pinned as a live `expect_failure` target:
+
+| Target | Kernel idiom | Verifier diagnostic |
+|--------|--------------|---------------------|
+| `find_cpio_data` | `PTR_ALIGN(p + off, 4)` — pointer alignment via bitwise AND | `bitwise operator &= on pointer prohibited` |
+| `bitmap_parselist` | parse helper returns a `const char*` cursor into the caller's buffer | `cannot return stack pointer to the caller` (force-inlined instead: 8192-jump complexity limit) |
+| `bm_find` (ts_bm) | callback through a struct function pointer (`conf->get_next_block(...)`) — the standard kernel ops-table idiom | `unknown opcode 8d` (clang emits the indirect-call `callx` insn; the verifier rejects the opcode outright) |
+| `int_sqrt_global` | `EXPORT_SYMBOL` scalar function verified as a **global function** (`.BTF.ext` kept) — all-inputs verification of its bit loop | `BPF program is too large. Processed 1000001 insn` (the same function verifies easily as a static subprogram — see the plain `int_sqrt` target) |
+
+Findings that fell out of building these:
+
+- **clang devirtualizes single-candidate callbacks.** With one statically-known
+  `get_next_block`, clang constant-propagates the callee, inlines it, and the
+  ts_bm program *verifies* (10 insns). The `callx` boundary only manifests when
+  the callback is genuinely runtime-selected (the target picks between two
+  candidates via a map value). So "kernel code with callbacks" is not uniformly
+  outside BPF — monomorphic callback sites compile away.
+- **Taking a function's address needs func-info.** With `.BTF.ext` stripped
+  (pipeline default), `&func` fails earlier with `missing btf func_info` — an
+  artifact of our strip, not an intrinsic boundary; the `bm_find` target keeps
+  `.BTF.ext` to pin the real one.
+- **`decompress_method` is NOT pinnable as a distinct boundary.** With our
+  autoconf, `decompress.c` `#define`s every absent `CONFIG_DECOMPRESS_*`
+  decompressor to `NULL`, so `compressed_formats[]` holds no function pointers
+  at all; and calling through a table-loaded pointer would hit the same `callx`
+  class `bm_find` already pins.
+- The `int_sqrt` / `int_sqrt_global` pair turns the global-function
+  all-inputs-vs-concrete-context trade (analysis/global_functions_and_inlining
+  .md) into a CI-checked artifact.

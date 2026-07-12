@@ -1,0 +1,8 @@
+{
+  "src": [
+    "{ksrc}/lib/ts_bm.c"
+  ],
+  "suite": "coverage",
+  "keep_btf_ext": true,
+  "expect_failure": "unknown opcode 8d"
+}

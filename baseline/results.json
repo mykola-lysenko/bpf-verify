@@ -76,6 +76,11 @@
       "insns": 139,
       "states": 1
     },
+    "bm_find": {
+      "verdict": "failure",
+      "insns": 0,
+      "states": 0
+    },
     "bpf_cgrp_storage": {
       "verdict": "success",
       "insns": 290,
@@ -485,6 +490,11 @@
       "verdict": "success",
       "insns": 119,
       "states": 11
+    },
+    "int_sqrt_global": {
+      "verdict": "failure",
+      "insns": 1000001,
+      "states": 18642
     },
     "interval_tree": {
       "verdict": "success",
