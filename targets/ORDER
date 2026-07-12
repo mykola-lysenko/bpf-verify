@@ -212,3 +212,5 @@ refcount
 ratelimit
 asn1_encode
 stack_args_selftest
+find_cpio_data
+bitmap_parselist

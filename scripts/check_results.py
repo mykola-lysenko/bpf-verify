@@ -9,7 +9,10 @@ Hard failures (exit 1):
   - any target failed to compile
   - veristat ran but produced no verdict for a compiled target
     (object could not be opened / program skipped)
-  - any program got a "failure" verdict
+  - any program got a "failure" verdict -- EXCEPT targets with an
+    "expect_failure" pattern in target.json (documented verifier boundaries):
+    those must fail WITH the expected diagnostic; verifying successfully
+    (boundary lifted) or failing differently (mode changed) is the error
   - a baseline target is missing from the results, or its verdict regressed
   - a target's instruction count collapsed below DEGENERATION_RATIO of the
     baseline (suspected constant-folding: the harness no longer exercises
@@ -57,10 +60,25 @@ def main():
 
     # --- Absolute gates (no baseline needed) ---------------------------------
     for name, t in sorted(targets.items()):
+        expect = t.get("expect_failure")
         if not t.get("compiled"):
             error(f"{name}: compile failed: {t.get('error', 'unknown error')}")
         elif veristat_ran and t.get("verdict") is None:
             error(f"{name}: no veristat verdict (object skipped or failed to open)")
+        elif expect:
+            # Documented-boundary target: a matching failure is the expected,
+            # regression-guarded state. Anything else is news.
+            if t.get("verdict") == "success":
+                error(f"{name}: documented verifier boundary no longer trips -- "
+                      f"the program now VERIFIES. The boundary may have been "
+                      f"lifted upstream; promote this to a real coverage target "
+                      f"(drop expect_failure, refresh baseline) or investigate. "
+                      f"Expected: {expect!r}")
+            elif veristat_ran and not t.get("expect_failure_matched"):
+                error(f"{name}: verifier still fails but WITHOUT the expected "
+                      f"boundary message {expect!r} (got: "
+                      f"{t.get('failure_line') or 'no matching line'}) -- the "
+                      f"failure mode changed; re-characterize the boundary")
         elif veristat_ran and t.get("verdict") != "success":
             error(f"{name}: verifier verdict is {t.get('verdict')!r}")
 
@@ -146,7 +164,11 @@ def main():
 
     n_ok = sum(1 for t in targets.values()
                if t.get("compiled") and t.get("verdict") == "success")
-    print(f"\n{n_ok}/{len(targets)} targets verified; "
+    n_boundary = sum(1 for t in targets.values()
+                     if t.get("expect_failure") and t.get("verdict") == "failure"
+                     and t.get("expect_failure_matched"))
+    boundary_note = f" (+{n_boundary} documented boundaries)" if n_boundary else ""
+    print(f"\n{n_ok}/{len(targets)} targets verified{boundary_note}; "
           f"{len(errors)} error(s), {len(warnings)} warning(s)")
     return 1 if errors else 0
 

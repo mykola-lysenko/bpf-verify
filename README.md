@@ -11,7 +11,7 @@ This project systematically compiles kernel library functions (CRC, MPI, string 
 | Path | Description |
 |------|-------------|
 | `pipeline.py` | Pipeline driver: compiles each target in `targets/ORDER` to a BPF `.o`, then runs `veristat`. Targets are grouped into three suites — `compat`, `coverage`, and `proof` — selectable with `--suite` |
-| `targets/` | Per-target configuration: `targets/<name>/target.json` (source paths, suite, flags), `harness.c` (harness body), optional `pre_include.h`/`preamble.h`. `targets/harness_template.c` is the shared harness skeleton; `targets/_shared/` holds pre-include snippets used by several targets |
+| `targets/` | Per-target configuration: `targets/<name>/target.json` (source paths, suite, flags), `harness.c` (harness body), optional `pre_include.h`/`preamble.h`. `targets/harness_template.c` is the shared harness skeleton; `targets/_shared/` holds pre-include snippets used by several targets. A target with `"expect_failure": "<verifier message>"` is a **documented verifier boundary**: it must be *rejected* with that diagnostic — verifying successfully (boundary lifted upstream) or failing differently both fail CI |
 | `shims/` | Shadow kernel-header tree that stubs out infrastructure (atomics, spinlocks, printk, per-CPU, MM) the BPF backend cannot compile, plus per-target shim subtrees (`backtrack/`, `cpumask/`, `check_btf/`, …) for the deeper verifier-internal `proof` targets |
 | `diff/` | Native-vs-BPF differential targets (compile a function both ways, diff the results — catches BPF-backend miscompilation); see `diff/README.md` |
 | `userspace/` | Host-compiled ASan/UBSan property & differential fuzzing for code the verifier can't load; see `userspace/README.md` |

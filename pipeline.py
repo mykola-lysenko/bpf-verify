@@ -475,6 +475,26 @@ def run_veristat(obj_files):
     return ran, rc, rows, "".join(stderr_parts)
 
 
+def capture_verifier_log(obj_path):
+    """Run veristat -v on a single object and return the verifier log text.
+
+    Used for expect_failure targets: the CSV pass carries no rejection message,
+    so the documented-boundary check re-runs the one object verbosely to match
+    the expected diagnostic. One extra UML boot per expect_failure target.
+    """
+    if not os.path.isfile(VERISTAT):
+        return ""
+    cmd = [VERISTAT]
+    if os.environ.get("BPF_VERISTAT_SUDO", ""):
+        cmd = ["sudo"] + cmd
+    try:
+        result = subprocess.run(cmd + ["-v", str(obj_path)],
+                                capture_output=True, timeout=600)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return ""
+    return result.stdout.decode("utf-8", errors="replace")
+
+
 # Execution leg (BPF_PROG_TEST_RUN via the UML guest). Enabled when both a
 # runner binary and the UML-run wrapper are configured; see tools/bpf_runner.c
 # and tools/uml-run.sh. BPF_EXECUTE_ITERS controls fuzz iterations per target.
@@ -691,6 +711,19 @@ def main():
     for name, _ in compiled_ok:
         entry = {"compiled": True, "suite": targets[name]["suite"]}
         entry.update(rows.get(f"{name}.bpf.o", {"verdict": None}))
+        # Documented-boundary (expect_failure) targets: the failure verdict is
+        # the point -- the target pins a known BPF verifier boundary hit by
+        # unmodified kernel source. Capture the verifier log and record whether
+        # the expected diagnostic still matches, so check_results can flag both
+        # a lifted boundary (program now verifies) and a changed failure mode.
+        pattern = targets[name].get("expect_failure")
+        if pattern:
+            entry["expect_failure"] = pattern
+            if ran and entry.get("verdict") == "failure":
+                log = capture_verifier_log(OUTPUT / f"{name}.bpf.o")
+                entry["expect_failure_matched"] = pattern in log
+                entry["failure_line"] = next(
+                    (l.strip() for l in log.splitlines() if pattern in l), None)
         if name in exec_results:
             entry["execution"] = exec_results[name]
         results["targets"][name] = entry

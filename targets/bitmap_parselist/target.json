@@ -1,0 +1,7 @@
+{
+  "src": [
+    "{ksrc}/lib/bitmap-str.c"
+  ],
+  "suite": "coverage",
+  "expect_failure": "cannot return stack pointer to the caller"
+}

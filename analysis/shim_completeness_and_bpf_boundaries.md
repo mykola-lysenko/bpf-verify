@@ -174,9 +174,12 @@ verifier boundary in unmodified kernel source, not a pipeline gap.
   callbacks, function-pointer tables), which no shim can remove. The clean
   coverage-target candidates are pure scalar / bounded-array compute functions,
   not pointer-aligning parsers.
-- **Idea (future):** an `xfail`/expected-boundary annotation would let a file
-  like `earlycpio.c` live in the suite as a *regression-guarded documented
-  boundary* (assert it still fails with `&= on pointer prohibited`), turning a
-  negative result into a durable characterization. The suite currently treats
-  any non-`success` verdict as a hard error, so this needs a small mechanism
-  in `scripts/check_results.py` + `target.json`.
+- **Update — this mechanism now exists.** `"expect_failure": "<verifier
+  message>"` in `target.json` makes a target a *regression-guarded documented
+  boundary*: the pipeline captures the verifier log (`capture_verifier_log`)
+  and `check_results.py` requires the target to fail *with that diagnostic* —
+  verifying successfully (boundary lifted upstream) or failing with a different
+  message are both hard CI errors. Both boundaries from this document are
+  pinned as live targets: `find_cpio_data` (`bitwise operator &= on pointer
+  prohibited`) and `bitmap_parselist` (`cannot return stack pointer to the
+  caller`).

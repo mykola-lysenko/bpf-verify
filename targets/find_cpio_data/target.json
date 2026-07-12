@@ -1,0 +1,7 @@
+{
+  "src": [
+    "{ksrc}/lib/earlycpio.c"
+  ],
+  "suite": "coverage",
+  "expect_failure": "bitwise operator &= on pointer prohibited"
+}

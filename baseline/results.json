@@ -56,6 +56,11 @@
       "insns": 36,
       "states": 3
     },
+    "bitmap_parselist": {
+      "verdict": "failure",
+      "insns": 244,
+      "states": 19
+    },
     "bitrev": {
       "verdict": "success",
       "insns": 63,
@@ -405,6 +410,11 @@
       "verdict": "success",
       "insns": 31,
       "states": 2
+    },
+    "find_cpio_data": {
+      "verdict": "failure",
+      "insns": 2298,
+      "states": 34
     },
     "fixups_prove": {
       "verdict": "success",
