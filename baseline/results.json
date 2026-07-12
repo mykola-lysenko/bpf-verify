@@ -6,6 +6,11 @@
       "insns": 14578,
       "states": 84
     },
+    "aesgcm": {
+      "verdict": "success",
+      "insns": 17403,
+      "states": 131
+    },
     "arc4": {
       "verdict": "success",
       "insns": 2,

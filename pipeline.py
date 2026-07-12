@@ -481,6 +481,11 @@ def capture_verifier_log(obj_path):
     Used for expect_failure targets: the CSV pass carries no rejection message,
     so the documented-boundary check re-runs the one object verbosely to match
     the expected diagnostic. One extra UML boot per expect_failure target.
+
+    Flags: plain -v intermittently reports "0 programs" with an empty log
+    (verifier log-rotation quirk); an explicit log level plus a large fixed
+    buffer is reliable, and also survives multi-MB logs (aesgcm-sized programs
+    overflow the default and lose the whole log).
     """
     if not os.path.isfile(VERISTAT):
         return ""
@@ -488,8 +493,9 @@ def capture_verifier_log(obj_path):
     if os.environ.get("BPF_VERISTAT_SUDO", ""):
         cmd = ["sudo"] + cmd
     try:
-        result = subprocess.run(cmd + ["-v", str(obj_path)],
-                                capture_output=True, timeout=600)
+        result = subprocess.run(
+            cmd + ["-v", "-l", "1", "--log-size", "33554432", str(obj_path)],
+            capture_output=True, timeout=600)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return ""
     return result.stdout.decode("utf-8", errors="replace")
