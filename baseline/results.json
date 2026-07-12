@@ -1,6 +1,11 @@
 {
   "schema": 1,
   "targets": {
+    "aescfb": {
+      "verdict": "success",
+      "insns": 14578,
+      "states": 84
+    },
     "arc4": {
       "verdict": "success",
       "insns": 2,

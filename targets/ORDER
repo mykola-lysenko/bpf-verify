@@ -216,3 +216,4 @@ find_cpio_data
 bitmap_parselist
 bm_find
 int_sqrt_global
+aescfb
