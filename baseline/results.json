@@ -816,6 +816,11 @@
       "insns": 10,
       "states": 1
     },
+    "poly1305": {
+      "verdict": "failure",
+      "insns": 536,
+      "states": 17
+    },
     "polynomial": {
       "verdict": "success",
       "insns": 229,

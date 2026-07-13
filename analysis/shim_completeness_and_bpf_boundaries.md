@@ -193,6 +193,33 @@ pinned as a live `expect_failure` target:
 | `bm_find` (ts_bm) | callback through a struct function pointer (`conf->get_next_block(...)`) — the standard kernel ops-table idiom | `unknown opcode 8d` (clang emits the indirect-call `callx` insn; the verifier rejects the opcode outright) |
 | `int_sqrt_global` | `EXPORT_SYMBOL` scalar function verified as a **global function** (`.BTF.ext` kept) — all-inputs verification of its bit loop | `BPF program is too large. Processed 1000001 insn` (the same function verifies easily as a static subprogram — see the plain `int_sqrt` target) |
 | `gcd_symbolic` | value-dependent loop (binary GCD) on **symbolic** operands | `The sequence of 8193 jumps is too complex` — the jump-history limit; 8/16/32-bit input masks all fail identically because value ranges don't bound the loop's termination proof. The plain `gcd` target passes only via literal inputs that constant-fold the loop. Found naturally while building the `gcd` differential target (dropped as undiffable) |
+| `poly1305` | streaming MAC **partial-buffer state** on a seeded message | `invalid unbounded variable-offset write to stack` — `poly1305_final` writes a pad byte at `desc->buf[buflen]`, and the verifier can't prove `buflen == 0`: `poly1305_update` ends with `nbytes %= 16`, tracked as unbounded even for a compile-time 32-byte message, so the partial-block branch is explored with an unbounded `buflen`. Inlining the call graph doesn't help; a constant message folds `buflen` to 0 but makes the target born-trivial. This is WireGuard's authenticator (`lib/crypto/poly1305.c`). Found while building `chacha20poly1305` |
+
+### `chacha20poly1305` (WireGuard AEAD): the wrapper is boundary-bound too (not pinned)
+
+The full AEAD (`lib/crypto/chacha20poly1305.c`) does not cleanly verify either,
+for a *different* reason, and it resists a clean single-diagnostic pin:
+
+- `chacha20poly1305_encrypt`/`decrypt` take **7 arguments**. Out-of-line, args
+  6–7 pass on the stack, which the verifier only accepts with `.BTF.ext` kept
+  (`invalid read from stack arg` otherwise) — but keeping it makes them
+  **global functions** verified for all inputs, where the unknown `src_len`
+  yields `invalid unbounded variable-offset write to stack`.
+- **Inlining** the wrappers to concretize the args (and `src_len == 16`) instead
+  trips the **512-byte stack limit**: the internal `chacha_state` +
+  `poly1305_desc_ctx` + block-function locals sum into one frame
+  (`-inline-threshold` sweep: at 300 the wrappers don't inline and the stack-arg
+  read persists; at 800 they do and the frame overflows — no middle setting).
+- `always_inline` on the extern wrapper declarations is silently ignored here
+  (measured: identical insn counts), as it was for the `bitmap_parselist`
+  helpers.
+
+So the AEAD is caught between the >5-arg stack-read (needs `.BTF.ext` → global →
+unbounded) and the stack limit — plus its poly1305 core hits the streaming
+boundary above regardless. The block-mm.h unblock works (mm.h is needed only for
+`page_address(ZERO_PAGE(0))` as a zero-pad source, replaced by a static array);
+what remains is intrinsic. Not pinned as a single boundary because the failure
+mode depends on the `.BTF.ext`/inlining knobs rather than a fixed diagnostic.
 
 Findings that fell out of building these:
 

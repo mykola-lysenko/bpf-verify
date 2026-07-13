@@ -1,0 +1,16 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/poly1305.c"
+  ],
+  "suite": "coverage",
+  "extra_includes": [
+    [
+      "{ksrc}/lib/crypto/poly1305-donna32.c"
+    ]
+  ],
+  "extra_cflags": [
+    "-U__SIZEOF_INT128__",
+    "-DCONFIG_CRYPTO_LIB_POLY1305_RSIZE=1"
+  ],
+  "expect_failure": "unbounded variable-offset write to stack"
+}

@@ -219,3 +219,4 @@ int_sqrt_global
 aescfb
 aesgcm
 gcd_symbolic
+poly1305
