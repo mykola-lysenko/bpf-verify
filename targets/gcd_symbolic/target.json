@@ -1,0 +1,7 @@
+{
+  "src": [
+    "{ksrc}/lib/math/gcd.c"
+  ],
+  "suite": "coverage",
+  "expect_failure": "jumps is too complex"
+}

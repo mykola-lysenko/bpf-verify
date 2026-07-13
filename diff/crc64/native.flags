@@ -1,0 +1,1 @@
+-I${REPO}/userspace/shim -I${KSRC}/include -D__LINUX_CACHE_H -DL1_CACHE_BYTES=64 -D____cacheline_aligned= -DDIFF_KSRC=\"${KSRC}/lib/crc/crc64-main.c\"

@@ -69,8 +69,25 @@ including one introduced by a clang-23 nightly bump -- fails the build.
 | `xxh32` | `xxh32` | 32-bit multiply-by-prime + rotate (reuses the `xxhash` base) |
 | `aescfb` | `aescfb_encrypt` (+ `aes.c`) | AES key schedule, S-box table indexing, CFB feedback xor |
 | `aesgcm` | `aesgcm_encrypt` (+ `aes.c`, `gf128hash.c`) | CTR keystream + GF(2^128) GHASH: 32-bit clmul route on BPF vs native host path |
+| `crc32` | `crc32_le` + `crc32_be` | table indexing + shift/xor in both byte orders |
+| `crc64` | `crc64_be` + `crc64_nvme` | 64-bit table CRC, two polynomials |
+| `crc_t10dif` | `crc_t10dif_update` | T10-DIF CRC16 |
+| `base64` | `base64_encode` + `base64_decode` | 6-bit repacking shifts, encode->decode roundtrip |
+| `bcd` | `_bin2bcd` + `_bcd2bin` | div/mod-by-10 codegen |
+| `int_sqrt` | `int_sqrt` | fls + shift-subtract loop (24/16-bit domain; wider symbolic inputs exceed the verifier insn budget) |
+| `hweight` | `__sw_hweight32/64` | SWAR popcount mask/add/multiply tricks |
+| `int_log` | `intlog2` + `intlog10` | fixed-point log, iterative shift/compare |
 
 All agree with native (100k inputs each historically; 20k per CI run).
+
+### Not diffable: `gcd`
+
+`gcd()` on symbolic operands trips the verifier's jump-history complexity
+limit ("The sequence of 8193 jumps is too complex") at ANY operand width --
+8/16/32-bit masks all fail identically, because value ranges don't bound the
+binary-GCD loop's termination proof. Pinned as the documented-boundary target
+`gcd_symbolic` (the 5th boundary class); the plain `gcd` coverage target
+passes only because literal inputs constant-fold the loop away.
 
 ## Targets that can't be differentially tested (boundary findings)
 

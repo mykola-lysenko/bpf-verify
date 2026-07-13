@@ -192,6 +192,7 @@ pinned as a live `expect_failure` target:
 | `bitmap_parselist` | parse helper returns a `const char*` cursor into the caller's buffer | `cannot return stack pointer to the caller` (force-inlined instead: 8192-jump complexity limit) |
 | `bm_find` (ts_bm) | callback through a struct function pointer (`conf->get_next_block(...)`) — the standard kernel ops-table idiom | `unknown opcode 8d` (clang emits the indirect-call `callx` insn; the verifier rejects the opcode outright) |
 | `int_sqrt_global` | `EXPORT_SYMBOL` scalar function verified as a **global function** (`.BTF.ext` kept) — all-inputs verification of its bit loop | `BPF program is too large. Processed 1000001 insn` (the same function verifies easily as a static subprogram — see the plain `int_sqrt` target) |
+| `gcd_symbolic` | value-dependent loop (binary GCD) on **symbolic** operands | `The sequence of 8193 jumps is too complex` — the jump-history limit; 8/16/32-bit input masks all fail identically because value ranges don't bound the loop's termination proof. The plain `gcd` target passes only via literal inputs that constant-fold the loop. Found naturally while building the `gcd` differential target (dropped as undiffable) |
 
 Findings that fell out of building these:
 

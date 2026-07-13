@@ -1,0 +1,1 @@
+-I${REPO}/userspace/shim -I${KSRC}/include -D____cacheline_aligned= -DDIFF_KSRC=\"${KSRC}/lib/crc/crc32-main.c\"

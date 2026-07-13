@@ -451,6 +451,11 @@
       "insns": 23,
       "states": 2
     },
+    "gcd_symbolic": {
+      "verdict": "failure",
+      "insns": 40985,
+      "states": 499
+    },
     "gf128hash": {
       "verdict": "success",
       "insns": 977,
