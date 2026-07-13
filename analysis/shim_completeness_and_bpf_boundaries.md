@@ -205,6 +205,13 @@ Findings that fell out of building these:
   (pipeline default), `&func` fails earlier with `missing btf func_info` — an
   artifact of our strip, not an intrinsic boundary; the `bm_find` target keeps
   `.BTF.ext` to pin the real one.
+- **`asn1_ber_decoder` is callx-bound (confirmed, not pinned).** Its action
+  dispatch is a runtime-indexed function-pointer table
+  (`actions[act](context, ...)` at three sites) — probed with a minimal
+  machine + stub action table (`.BTF.ext` kept): rejected with
+  `unknown opcode 8d` after 0 insns, the same indirect-call class `bm_find`
+  pins. The BER parser itself is out of reach until the verifier accepts
+  indirect calls; a duplicate pin adds nothing.
 - **`decompress_method` is NOT pinnable as a distinct boundary.** With our
   autoconf, `decompress.c` `#define`s every absent `CONFIG_DECOMPRESS_*`
   decompressor to `NULL`, so `compressed_formats[]` holds no function pointers

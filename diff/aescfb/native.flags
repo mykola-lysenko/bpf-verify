@@ -1,0 +1,1 @@
+-I${REPO}/userspace/shim -I${KSRC}/include -D_LINUX_SCHED_H -D_CRYPTO_ALGAPI_H -D_LINUX_CRYPTO_H -D__LINUX_CACHE_H -D____cacheline_aligned= -D__ro_after_init= -DL1_CACHE_BYTES=64 -fplan9-extensions -Dat_least= -D_LINUX_LIST_H -DDIFF_KSRC=\"${KSRC}/lib/crypto/aescfb.c\" -DDIFF_AES_C=\"${KSRC}/lib/crypto/aes.c\"
