@@ -275,6 +275,22 @@ jobs:
         run: bash userspace/run.sh --iters 2000000
 
       # -----------------------------------------------------------------------
+      # 4d. Native-vs-BPF differential leg: compile each diff/<name> target's
+      #     kernel function both natively (host gcc + userspace shim) and to
+      #     BPF (real pipeline config), run both on identical seeded inputs,
+      #     and fail on any divergence -- a divergence means the BPF backend
+      #     miscompiled real kernel code. Deterministic (fixed seed base), so
+      #     it belongs in this pinned gate; iteration count bounds wall-clock.
+      # -----------------------------------------------------------------------
+      - name: Native-vs-BPF differential leg
+        working-directory: bpf-verify
+        env:
+          BPF_KSRC:         ${{ env.UML_VERISTAT_DIR }}/.build/bpf-next
+          BPF_CLANG:        /usr/bin/clang-23
+          BPF_LLVM_OBJCOPY: /usr/bin/llvm-objcopy-23
+        run: bash tools/diff_all.sh --iters 20000
+
+      # -----------------------------------------------------------------------
       # 5. Report results as a job summary
       # -----------------------------------------------------------------------
       - name: Report results

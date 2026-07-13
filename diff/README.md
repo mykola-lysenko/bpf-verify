@@ -44,7 +44,15 @@ Run one target:
 ```bash
 # same BPF_* env as the pipeline; BPF_KSRC etc. auto-default to the submodule build
 bash tools/diff.sh <name> --iters 200000
+
+# all targets (what CI runs); exits non-zero on any build failure or divergence
+bash tools/diff_all.sh --iters 20000
 ```
+
+The differential leg is a **gating step in the pinned CI job** (`4d` in
+`.github/workflows/bpf-verify.yml`): every `diff/*/` target runs at 20k
+iterations per push, so a BPF-backend miscompile of any covered function --
+including one introduced by a clang-23 nightly bump -- fails the build.
 
 ## Current targets
 
@@ -59,8 +67,10 @@ bash tools/diff.sh <name> --iters 200000
 | `siphash` | `siphash_2u64` | keyed ARX PRF: 64-bit add / rotate / xor lowering |
 | `hsiphash` | `hsiphash_2u32` | 32-bit-output keyed ARX PRF (reuses the `siphash` base) |
 | `xxh32` | `xxh32` | 32-bit multiply-by-prime + rotate (reuses the `xxhash` base) |
+| `aescfb` | `aescfb_encrypt` (+ `aes.c`) | AES key schedule, S-box table indexing, CFB feedback xor |
+| `aesgcm` | `aesgcm_encrypt` (+ `aes.c`, `gf128hash.c`) | CTR keystream + GF(2^128) GHASH: 32-bit clmul route on BPF vs native host path |
 
-All agree with native over 100k inputs each.
+All agree with native (100k inputs each historically; 20k per CI run).
 
 ## Targets that can't be differentially tested (boundary findings)
 
