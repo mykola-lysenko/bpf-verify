@@ -3,7 +3,11 @@
      * aesgcm_encrypt (CTR encrypt + GHASH over assoc/ciphertext -> auth tag)
      * and aesgcm_decrypt (tag verify + decrypt). Key/plaintext are map-seeded;
      * BPF_ASSERT pins both properties: the tag authenticates (decrypt returns
-     * true) and decrypt(encrypt(p)) == p. */
+     * true) and decrypt(encrypt(p)) == p.
+     *
+     * execute:true -- Phase 3 fuzz-runs this via BPF_PROG_TEST_RUN with fresh
+     * random map seeds per iteration, under the strict return contract:
+     * 0 = pass, non-zero = property failure (the BPF_ASSERTs / early -1s). */
     __u32 k0 = 0, k1 = 1;
     __u64 *ka = bpf_map_lookup_elem(&input_map, &k0);
     __u64 *pa = bpf_map_lookup_elem(&input_map, &k1);
@@ -34,4 +38,4 @@
     for (i = 0; i < 16; i++)
         BPF_ASSERT(__bpf_gcm.out[i] == __bpf_gcm.pt[i]);
 
-    return __bpf_gcm.ct[0];
+    return 0;

@@ -33,4 +33,4 @@
     for (i = 0; i < 16; i++)
         BPF_ASSERT(__bpf_cfb.out[i] == __bpf_cfb.pt[i]);
 
-    return __bpf_cfb.ct[0];
+    return 0;

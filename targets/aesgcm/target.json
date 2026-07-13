@@ -13,5 +13,6 @@
     "-inline-threshold=100000",
     "-mllvm",
     "-inlinehint-threshold=100000"
-  ]
+  ],
+  "execute": true
 }

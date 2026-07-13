@@ -3,12 +3,12 @@
   "targets": {
     "aescfb": {
       "verdict": "success",
-      "insns": 14578,
-      "states": 84
+      "insns": 14544,
+      "states": 83
     },
     "aesgcm": {
       "verdict": "success",
-      "insns": 17403,
+      "insns": 17415,
       "states": 131
     },
     "arc4": {
