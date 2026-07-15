@@ -1,0 +1,7 @@
+{
+  "src": [
+    "{ksrc}/kernel/kexec_elf.c"
+  ],
+  "suite": "coverage",
+  "execute": true
+}

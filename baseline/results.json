@@ -521,6 +521,11 @@
       "insns": 977,
       "states": 71
     },
+    "kexec_elf": {
+      "verdict": "success",
+      "insns": 1582,
+      "states": 50
+    },
     "kmem_cache_iter": {
       "verdict": "success",
       "insns": 353,
