@@ -1,0 +1,1 @@
+-I${REPO}/userspace/shim -I${KSRC}/include -include ${HERE}/../diff/kexec_elf/native_pre.h -DDIFF_KSRC=\"${KSRC}/kernel/kexec_elf.c\"
