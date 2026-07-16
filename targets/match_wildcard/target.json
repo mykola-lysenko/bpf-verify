@@ -1,0 +1,7 @@
+{
+  "src": [
+    "{ksrc}/lib/parser.c"
+  ],
+  "suite": "coverage",
+  "execute": true
+}

@@ -686,6 +686,11 @@
       "insns": 341,
       "states": 11
     },
+    "match_wildcard": {
+      "verdict": "success",
+      "insns": 129940,
+      "states": 5593
+    },
     "memneq": {
       "verdict": "success",
       "insns": 145,
