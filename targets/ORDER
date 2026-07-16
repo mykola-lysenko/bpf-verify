@@ -224,3 +224,6 @@ kexec_elf
 match_wildcard
 lib_sha512
 lib_sha3
+lib_sm3
+lib_md5
+lib_blake2b

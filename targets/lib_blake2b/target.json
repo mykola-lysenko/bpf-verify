@@ -1,0 +1,11 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/blake2b.c"
+  ],
+  "suite": "coverage",
+  "execute": true,
+  "extra_cflags": [
+    "-std=gnu11",
+    "-fno-unroll-loops"
+  ]
+}

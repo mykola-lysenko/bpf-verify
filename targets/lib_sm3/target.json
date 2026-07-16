@@ -1,0 +1,6 @@
+{
+  "src": [ "{ksrc}/lib/crypto/sm3.c" ],
+  "suite": "coverage",
+  "execute": true,
+  "extra_cflags": [ "-std=gnu11" ]
+}

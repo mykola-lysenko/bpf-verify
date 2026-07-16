@@ -1,0 +1,1 @@
+-I${REPO}/userspace/shim -I${KSRC}/include -std=gnu11 -Dat_least= "-D__aligned(x)=" -D__must_check= "-D____cacheline_aligned=" -DDIFF_KSRC=\"${KSRC}/lib/crypto/sm3.c\"

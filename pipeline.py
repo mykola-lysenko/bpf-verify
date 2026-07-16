@@ -530,8 +530,17 @@ def run_execution(exec_objs):
     by_base = {f"{name}.bpf.o": name for name in exec_objs}
     cmd = ["bash", BPF_UML_RUN, BPF_RUNNER, "--iters", BPF_EXECUTE_ITERS]
     cmd += [str(exec_objs[name]) for name in exec_objs]
+    # All objects are loaded in a single UML boot, so guest memory scales with
+    # the execute:true target count (each program + its maps stays resident).
+    # The uml-run.sh default (512M) OOM-kills the guest partway once there are
+    # several large crypto targets; give the execution leg more headroom unless
+    # the caller already pinned UML_MEM. (The diff leg loads one object per boot,
+    # so it is unaffected and keeps the small default.)
+    exec_env = dict(os.environ)
+    exec_env.setdefault("UML_MEM", "4G")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1200,
+                              env=exec_env)
     except subprocess.TimeoutExpired:
         return {name: {"executed": False, "error": "runner timed out"}
                 for name in exec_objs}

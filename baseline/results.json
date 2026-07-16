@@ -546,6 +546,11 @@
       "insns": 2,
       "states": 0
     },
+    "lib_blake2b": {
+      "verdict": "success",
+      "insns": 27092,
+      "states": 223
+    },
     "lib_blake2s": {
       "verdict": "success",
       "insns": 2,
@@ -555,6 +560,11 @@
       "verdict": "success",
       "insns": 2,
       "states": 0
+    },
+    "lib_md5": {
+      "verdict": "success",
+      "insns": 7772,
+      "states": 85
     },
     "lib_poly1305": {
       "verdict": "success",
@@ -580,6 +590,11 @@
       "verdict": "success",
       "insns": 27985,
       "states": 203
+    },
+    "lib_sm3": {
+      "verdict": "success",
+      "insns": 17974,
+      "states": 75
     },
     "linear_ranges": {
       "verdict": "success",

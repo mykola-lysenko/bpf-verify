@@ -1,0 +1,6 @@
+{
+  "src": [ "{ksrc}/lib/crypto/md5.c" ],
+  "suite": "coverage",
+  "execute": true,
+  "extra_cflags": [ "-std=gnu11" ]
+}
