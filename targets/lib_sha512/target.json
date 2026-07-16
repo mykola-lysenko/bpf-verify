@@ -1,0 +1,10 @@
+{
+  "src": [
+    "{ksrc}/lib/crypto/sha512.c"
+  ],
+  "suite": "coverage",
+  "execute": true,
+  "extra_cflags": [
+    "-std=gnu11"
+  ]
+}

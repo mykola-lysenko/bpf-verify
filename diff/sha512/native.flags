@@ -1,0 +1,1 @@
+-I${REPO}/userspace/shim -I${KSRC}/include -std=gnu11 -Dat_least= -D__must_check= "-D__aligned(x)=" -DDIFF_KSRC=\"${KSRC}/lib/crypto/sha512.c\"

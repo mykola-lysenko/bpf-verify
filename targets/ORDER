@@ -222,3 +222,4 @@ gcd_symbolic
 poly1305
 kexec_elf
 match_wildcard
+lib_sha512

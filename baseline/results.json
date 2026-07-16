@@ -571,6 +571,11 @@
       "insns": 6350,
       "states": 15
     },
+    "lib_sha512": {
+      "verdict": "success",
+      "insns": 27985,
+      "states": 203
+    },
     "linear_ranges": {
       "verdict": "success",
       "insns": 2,
