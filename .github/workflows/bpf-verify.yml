@@ -262,8 +262,12 @@ jobs:
           BPF_CLANG:        /usr/bin/clang-23
           BPF_LLVM_OBJCOPY: /usr/bin/llvm-objcopy-23
           BPF_VERISTAT:     ${{ env.UML_VERISTAT_DIR }}/uml-veristat
-          # capture full verifier logs as a debugging artifact (extra veristat pass)
-          BPF_VERISTAT_VERBOSE: "1"
+          # BPF_VERISTAT_VERBOSE intentionally OFF: it runs a second full
+          # veristat -v pass over every target (doubling the verify step) to
+          # write veristat_verbose_step1.txt, which nothing consumes -- gating
+          # is off results.json, and the expect_failure boundary targets
+          # capture their own diagnostics on demand (capture_verifier_log). To
+          # debug an unexpected verify regression, re-run with the flag set.
         run: |
           set -o pipefail
           python3 pipeline.py 2>&1 | tee pipeline.log
@@ -360,6 +364,5 @@ jobs:
             bpf-verify/output/results.txt
             bpf-verify/output/results.json
             bpf-verify/output/veristat.csv
-            bpf-verify/output/veristat_verbose_step1.txt
             bpf-verify/output/execution.log
           if-no-files-found: ignore
