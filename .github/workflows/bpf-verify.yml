@@ -39,6 +39,24 @@ jobs:
           submodules: recursive
 
       # -----------------------------------------------------------------------
+      # 1b. Free runner disk. The pinned job fills / with the bpf-next checkout
+      #     + build, the LLVM toolchain, 200+ verified objects, the diff leg's
+      #     per-target native binaries, and the full-verifier-log artifact
+      #     (1M-insn boundary targets make that alone ~100s of MB). ubuntu-24.04
+      #     ships ~25-30GB of preinstalled SDKs we never use; removing them
+      #     keeps the disk from filling as the target count grows (a run failed
+      #     with "No space left on device" once the diff leg reached 23 targets).
+      # -----------------------------------------------------------------------
+      - name: Free disk space
+        run: |
+          echo "Before:"; df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/powershell /usr/share/swift || true
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          echo "After:"; df -h / | tail -1
+
+      # -----------------------------------------------------------------------
       # 2. Build uml-veristat (provides LLVM, kernel source, UML kernel, veristat)
       #    The .build/ directory contains the LLVM toolchain and bpf-next kernel
       #    source used for BPF compilation.  ~/.local/share/uml-veristat/ contains
