@@ -223,3 +223,4 @@ poly1305
 kexec_elf
 match_wildcard
 lib_sha512
+lib_sha3
